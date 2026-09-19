@@ -176,9 +176,15 @@ function M.run_step(step)
     local mod = open(plugin)
     local remote = step.__qwe
     local ctx = {
-      backend = remote and require("backend.ssh").for_target(remote.target, step.env)
-        or require("backend.local").new({ env = step.env }),
+      backend = remote and require("backend.ssh").for_target(remote.target, step.env, step.become)
+        or require("backend.local").new({ env = step.env, become = step.become }),
     }
+    -- sudo must let the step through before anything of it runs
+    local why = require("qwe.become").check(ctx.backend)
+    if why then
+      io.stderr:write("qwe: become refused: ", why, "\n")
+      return nil, { status = "failed", reason = "become-denied", changed = false, outputs = {} }
+    end
     if type(mod.argv) == "function" then return mod.argv(with, ctx) end
     return nil, require("qwe.checkapply").run(mod, with, ctx)
   end)

@@ -1,0 +1,6 @@
+jobs:
+  j:
+    target: self
+    steps:
+      - run: id -u
+        become: true

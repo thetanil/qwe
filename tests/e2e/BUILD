@@ -187,3 +187,9 @@ e2e_test(name = "ssh_master_closed")
 e2e_test(name = "ssh_env_and_stdin")
 
 e2e_test(name = "on_local_override")
+
+e2e_test(name = "ssh_become_denied")
+
+e2e_test(name = "local_become")
+
+e2e_test(name = "validate_become_type")

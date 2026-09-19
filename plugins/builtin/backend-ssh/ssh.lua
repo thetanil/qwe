@@ -9,6 +9,7 @@
 --     (in its own session, outside every step's process group), close_all()
 --     ends them, kill() stops a step's processes on the remote host. A forked
 --     step only inherits the socket's path, never a connection.
+local become = require("qwe.become")
 local exec = require("qwe.exec")
 
 local M = {}
@@ -16,6 +17,12 @@ local M = {}
 -- Quotes s as one word for a POSIX shell.
 local function quote(s)
   return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+-- A word that needs no quoting stays as it is, so the remote command reads well.
+local function word(s)
+  if s:match("^[A-Za-z0-9_./=+-]+$") then return s end
+  return quote(s)
 end
 
 -- Stops what a step started on the remote host. sshd gives a command run
@@ -51,8 +58,12 @@ end
 
 -- The argv that runs a command remotely: sh -c <bootstrap> sh <script>, as one
 -- string for the remote shell to parse.
-function M.command_argv(host, sock, script)
-  local remote = "sh -c " .. quote(exec.bootstrap) .. " sh " .. quote(script)
+function M.command_argv(host, sock, script, become_value)
+  local words = {}
+  for _, w in ipairs(become.prefix(become_value)) do words[#words + 1] = word(w) end
+  -- sudo (if any) wraps the shell that reads the preamble
+  words[#words + 1] = "sh -c " .. quote(exec.bootstrap) .. " sh " .. quote(script)
+  local remote = table.concat(words, " ")
   -- ProxyCommand=false: a step never opens a connection of its own. Without it, a
   -- client whose master died mid-session falls back to a new direct connection
   -- (ControlMaster=no allows that), and the step runs on, unowned, instead of
@@ -88,7 +99,7 @@ Backend.__index = Backend
 -- Translates a shell script into what starts it on the target: the argv, and
 -- the stdin (the env preamble, then the command's own stdin, unchanged).
 function Backend:command(script, stdin)
-  return M.command_argv(self.host, self.sock, script), exec.preamble(self.env) .. (stdin or "")
+  return M.command_argv(self.host, self.sock, script, self.become), exec.preamble(self.env) .. (stdin or "")
 end
 
 -- Runs a shell script, with stdin (a string, or nil for none) as its input.
@@ -102,7 +113,9 @@ end
 
 -- opts: host, sock, env (the step's declared env, a { NAME = "value" } table).
 function M.new(opts)
-  return setmetatable({ host = opts.host, sock = opts.sock, env = opts.env or {} }, Backend)
+  return setmetatable({
+    host = opts.host, sock = opts.sock, env = opts.env or {}, become = opts.become, remote = true,
+  }, Backend)
 end
 
 -- ---- the connection lifecycle (the parent) ----
@@ -155,10 +168,10 @@ end
 
 -- The backend for a step on the target, in the step's child: the socket path
 -- is what it inherited from the parent.
-function M.for_target(name, env)
+function M.for_target(name, env, become_value)
   local m = masters[name]
   if not m then error("no ssh connection to target " .. name, 0) end
-  return M.new({ host = m.host, sock = m.sock, env = env })
+  return M.new({ host = m.host, sock = m.sock, env = env, become = become_value })
 end
 
 -- Stops the processes of the step with this token on the target's host.

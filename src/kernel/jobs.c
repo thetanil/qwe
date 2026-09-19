@@ -26,7 +26,7 @@ static int cmp_job(const void *a, const void *b)
 /* Keys the engine accepts in the schema but does not act on yet. Running a
  * workflow that uses one would silently do the wrong thing, so it is refused. */
 static const char *const unimplemented_job_keys[] = {NULL};
-static const char *const unimplemented_step_keys[] = {"become", "secret-outputs", NULL};
+static const char *const unimplemented_step_keys[] = {"secret-outputs", NULL};
 
 static int refuse(const char *path, const char *what, const char *id, const char *key, const char *why)
 {

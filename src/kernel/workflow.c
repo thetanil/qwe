@@ -1080,7 +1080,8 @@ static struct step_msg read_step_msg(struct job *job)
 		lua_pop(L, 1);
 		lua_getfield(L, -1, "reason");
 		reason = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
-		m.reason = strcmp(reason, "not-converged") == 0 ? "not-converged" : "plugin-error";
+		m.reason = strcmp(reason, "not-converged") == 0 ? "not-converged"
+			: strcmp(reason, "become-denied") == 0 ? "become-denied" : "plugin-error";
 		lua_pop(L, 1);
 		lua_getfield(L, -1, "changed");
 		if (lua_isboolean(L, -1))
@@ -1111,7 +1112,15 @@ static enum qwe_lc_event leader_exit_event(struct job *job, int status, struct q
 	pl->reason = "exit-code";
 	r->step_changed = 1; /* run: steps always count as changed */
 	if (!live_step_is_plugin(job)) {
+		/* a run: step says only "exec", unless sudo refused it before it ran */
+		drain_result(r);
+		m = read_step_msg(job);
 		collect_file_outputs(job);
+		if (m.status == MSG_FAILED) {
+			r->step_changed = m.changed;
+			pl->reason = m.reason;
+			return QWE_LC_EV_LEADER_EXIT_FAIL;
+		}
 		if (remote_lost(job, status))
 			pl->reason = "connection-lost";
 		return exited_ok ? QWE_LC_EV_LEADER_EXIT_OK : QWE_LC_EV_LEADER_EXIT_FAIL;

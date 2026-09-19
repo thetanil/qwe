@@ -1,0 +1,1 @@
+qwe validate: w.yaml:6:17: become: must be true (root), a user name or an integer uid

@@ -18,6 +18,7 @@ MODULES = {
     "plugin.run": "//plugins/builtin:run/plugin.lua",
     "plugin_schema.file.ensure": "//plugins/builtin:file.ensure/schema.json",
     "plugin_schema.run": "//plugins/builtin:run/schema.json",
+    "qwe.become": ":become.lua",
     "qwe.checkapply": ":checkapply.lua",
     "qwe.inventory": ":inventory.lua",
     "qwe.plugincheck": ":plugincheck.lua",
@@ -95,6 +96,7 @@ LUACHECK = {
 }
 
 exports_files([
+    "become.lua",
     "checkapply.lua",
     "validate_test.lua",
     "compat53.lua",

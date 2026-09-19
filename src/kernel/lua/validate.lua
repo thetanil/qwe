@@ -96,6 +96,8 @@ local function describe(doc, err, plugin_list)
     }
   elseif ends_with(kw, "/properties/on/const") then
     return { pointer = ptr, kind = "value", message = "on: can only be \"local\" (a step runs on its job's target, or on the operator host)" }
+  elseif ends_with(kw, "/properties/become/type") then
+    return { pointer = ptr, kind = "value", message = "become: must be true (root), a user name or an integer uid" }
   elseif ends_with(kw, "/else/required") then
     return { pointer = ptr, kind = "value", message = "a step needs either run: or uses:" }
   elseif ends_with(kw, "/then/not") then
@@ -161,6 +163,20 @@ local function structure(doc, plugin_list, inventory)
         else
           seen[id] = i - 1
         end
+      end
+    end
+  end
+  for _, job_id in ipairs(ids) do
+    for i, step in ipairs(doc.jobs[job_id].steps) do
+      local at = "/jobs/" .. esc(job_id) .. "/steps/" .. (i - 1) .. "/become"
+      local value = step.become
+      if type(value) == "string" and not value:match("^[A-Za-z_][A-Za-z0-9_.%-]*$") then
+        errors[#errors + 1] = {
+          pointer = at, kind = "value",
+          message = 'become: "' .. value .. '" is not a user name (use a name like runner, an integer uid, or true for root)',
+        }
+      elseif type(value) == "number" and value < 0 then
+        errors[#errors + 1] = { pointer = at, kind = "value", message = "become: a uid cannot be negative" }
       end
     end
   end

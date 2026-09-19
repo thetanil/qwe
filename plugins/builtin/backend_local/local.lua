@@ -1,6 +1,7 @@
 -- The `local` execution backend: commands run on the operator host itself.
 -- Every command gets the step's declared env through the stdin preamble, the
 -- same path the ssh backend uses.
+local become = require("qwe.become")
 local exec = require("qwe.exec")
 
 local M = {}
@@ -11,7 +12,9 @@ Backend.__index = Backend
 -- Translates a shell script into what starts it on the target: the argv, and
 -- the stdin (the env preamble, then the command's own stdin, unchanged).
 function Backend:command(script, stdin)
-  return { "sh", "-c", exec.bootstrap, "sh", script }, exec.preamble(self.env) .. (stdin or "")
+  local argv = become.prefix(self.become)
+  for _, word in ipairs({ "sh", "-c", exec.bootstrap, "sh", script }) do argv[#argv + 1] = word end
+  return argv, exec.preamble(self.env) .. (stdin or "")
 end
 
 -- Runs a shell script, with stdin (a string, or nil for none) as its input.
@@ -24,9 +27,9 @@ function Backend:run(script, stdin)
 end
 
 -- The backend a job on the operator host uses. opts.env is the step's declared
--- env, a { NAME = "value" } table.
+-- env, a { NAME = "value" } table; opts.become is the step's become: value.
 function M.new(opts)
-  return setmetatable({ env = opts and opts.env or {} }, Backend)
+  return setmetatable({ env = opts and opts.env or {}, become = opts and opts.become }, Backend)
 end
 
 return M

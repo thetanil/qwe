@@ -1,0 +1,6 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: id
+        become: [root]

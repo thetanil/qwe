@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: id -u
+        become: true
+        continue-on-error: true
