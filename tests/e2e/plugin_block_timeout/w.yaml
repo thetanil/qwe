@@ -1,0 +1,8 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: stuck
+        uses: stuck
+        timeout-minutes: 0.005
+      - run: echo NEVER

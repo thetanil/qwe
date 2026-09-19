@@ -9,12 +9,14 @@ package(default_visibility = ["//src:__subpackages__"])
 # added below from the vendored trees.
 MODULES = {
     "backend.local": "//plugins/builtin:backend_local/local.lua",
+    "backend.recording": "//plugins/builtin:recording/recording.lua",
     "compat53": ":compat53.lua",
     "dkjson": "//third_party/dkjson:dkjson.lua",
     "plugin.file.ensure": "//plugins/builtin:file.ensure/plugin.lua",
     "plugin.run": "//plugins/builtin:run/plugin.lua",
     "plugin_schema.file.ensure": "//plugins/builtin:file.ensure/schema.json",
     "plugin_schema.run": "//plugins/builtin:run/schema.json",
+    "qwe.checkapply": ":checkapply.lua",
     "qwe.plugincheck": ":plugincheck.lua",
     "qwe.plugins": ":plugins.lua",
     "qwe.strict": ":strict.lua",
@@ -89,6 +91,7 @@ LUACHECK = {
 }
 
 exports_files([
+    "checkapply.lua",
     "validate_test.lua",
     "compat53.lua",
     "plugincheck.lua",

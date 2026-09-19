@@ -1,0 +1,47 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "first": {
+      "outcome": "success",
+      "reason": null,
+      "started": "TIME",
+      "ended": "TIME",
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "create",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        }
+      ]
+    },
+    "second": {
+      "outcome": "success",
+      "reason": null,
+      "started": "TIME",
+      "ended": "TIME",
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "again",
+          "outcome": "success",
+          "reason": null,
+          "changed": false,
+          "started": "TIME",
+          "ended": "TIME"
+        },
+        {
+          "id": null,
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        }
+      ]
+    }
+  }
+}

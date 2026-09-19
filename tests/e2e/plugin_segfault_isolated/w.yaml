@@ -1,0 +1,11 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - id: crash
+        uses: crash
+      - run: echo NEVER
+  b:
+    target: local
+    steps:
+      - run: echo b runs normally

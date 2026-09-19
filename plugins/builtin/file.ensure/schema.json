@@ -10,5 +10,8 @@
       "content": {"type": "string"},
       "mode": {"type": "string", "minLength": 1}
     }
+  },
+  "outputs": {
+    "mode": {"type": "string", "secret": false}
   }
 }

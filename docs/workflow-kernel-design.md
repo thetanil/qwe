@@ -349,6 +349,8 @@ This is a *best-effort* interleave, not a byte-exact global order. If both pipes
 
 qwe is idempotent in the Ansible sense: running a workflow a second time should change nothing. A step plugin provides **check** (is the target already in the desired state? It never changes anything) and **apply** (move it there). The kernel runs check, runs apply only if check reports a change is needed, then runs check again. The step's **changed** flag records whether apply ran. If the second check still reports a change is needed, the step fails with reason `not-converged`. `run:` steps can't be checked, so they always report changed. A future `--check` mode is "run only check."
 
+In code: a plugin exports `check(with, ctx) -> needs_change, outputs` and `apply(with, ctx)`, where `ctx.backend` is the job's execution backend (`backend:run(script, stdin) -> { code, stdout, stderr }`). `qwe.checkapply` runs the sequence in the step's forked child, which sends `{ status, reason, changed, outputs }` to the parent over the result pipe. A `uses:` step that dies without sending a result (a crash, a signal) fails with reason `plugin-error`, and one that never returns is ended by its timeout. Apart from `changed`, the parent uses only the status and, for a failure, the reason `not-converged` or `plugin-error`: a plugin cannot report any other outcome.
+
 ### 12.4 Inputs and outputs
 
 - **Inputs:** a step's `with:` block, validated against the plugin's schema when the workflow is loaded. Values may use `${{ env.* }}`, `${{ secrets.* }}` and `${{ steps.<id>.outputs.* }}`, which are evaluated in the parent just before the step starts.

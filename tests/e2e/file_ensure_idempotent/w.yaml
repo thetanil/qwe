@@ -1,0 +1,21 @@
+jobs:
+  first:
+    target: local
+    steps:
+      - id: create
+        uses: file.ensure
+        with:
+          path: out.txt
+          content: "hello\n"
+          mode: "0640"
+  second:
+    target: local
+    needs: [first]
+    steps:
+      - id: again
+        uses: file.ensure
+        with:
+          path: out.txt
+          content: "hello\n"
+          mode: "0640"
+      - run: cat out.txt; stat -c %a out.txt

@@ -39,11 +39,6 @@ struct child_arg {
 	int step_ref; /* registry ref of the step's table */
 };
 
-/* A uses: step whose plugin fails (it raises an error, or breaks strict
- * globals) exits with this status, which the parent reads as reason
- * plugin-error. It is only looked at for a uses: step. */
-#define PLUGIN_ERROR_EXIT 125
-
 /* Whether the step table at idx is a uses: step. */
 static int step_uses_plugin(lua_State *L, int idx)
 {
@@ -55,10 +50,50 @@ static int step_uses_plugin(lua_State *L, int idx)
 	return uses;
 }
 
+/* Writes the CBOR encoding of the Lua value at idx to the result pipe: the
+ * step's result, apart from its stdout and stderr (ADR-0005). */
+static void send_result(lua_State *L, int idx, int fd)
+{
+	uint8_t *buf;
+	size_t len, off = 0;
+	char err[128];
+
+	if (qwe_lua_to_cbor(L, idx, &buf, &len, err, sizeof err) < 0) {
+		fprintf(stderr, "qwe: cannot encode the step result: %s\n", err);
+		return;
+	}
+	while (off < len) {
+		ssize_t n = write(fd, buf + off, len - off);
+
+		if (n < 0 && errno == EINTR)
+			continue;
+		if (n < 0)
+			break;
+		off += (size_t)n;
+	}
+	free(buf);
+}
+
+/* Sends { status = status [, reason = reason] } over the result pipe. */
+static void send_status(lua_State *L, int fd, const char *status, const char *reason)
+{
+	lua_newtable(L);
+	lua_pushstring(L, status);
+	lua_setfield(L, -2, "status");
+	if (reason) {
+		lua_pushstring(L, reason);
+		lua_setfield(L, -2, "reason");
+	}
+	send_result(L, lua_gettop(L), fd);
+	lua_pop(L, 1);
+}
+
 /* Runs in the child: hands the step to its plugin (qwe.plugins.run_step). A
  * run: step or a run-like plugin gives back the argv to exec. A check/apply
- * plugin does its work here and the child exits. */
-static char **child_argv(void *arg)
+ * plugin does its work here, sends its result to the parent and the child
+ * exits. Whatever happens, the parent learns it from the result pipe (or from
+ * its absence, if the child dies). */
+static char **child_argv(void *arg, int result_fd)
 {
 	struct child_arg *a = arg;
 	lua_State *L = a->L;
@@ -77,22 +112,30 @@ static char **child_argv(void *arg)
 		goto fail;
 	lua_getfield(L, -1, "run_step");
 	lua_rawgeti(L, LUA_REGISTRYINDEX, a->step_ref);
-	if (lua_pcall(L, 1, 1, 0) != 0)
+	if (lua_pcall(L, 1, 2, 0) != 0)
 		goto fail;
-	if (!lua_istable(L, -1)) {
-		if (is_plugin && lua_isnil(L, -1)) {
-			fflush(stdout);
-			_exit(0);
-		}
+	/* stack: module, argv or nil, result or nil */
+	if (lua_istable(L, -1)) {
+		int ok;
+
+		lua_getfield(L, -1, "status");
+		ok = lua_isstring(L, -1) && strcmp(lua_tostring(L, -1), "ok") == 0;
+		lua_pop(L, 1);
+		send_result(L, lua_gettop(L), result_fd);
+		fflush(stdout);
+		_exit(ok ? 0 : 1);
+	}
+	if (!lua_istable(L, -2)) {
 		fprintf(stderr, "qwe: the plugin returned no argv\n");
 		return NULL;
 	}
-	n = lua_objlen(L, -1);
+	send_status(L, result_fd, "exec", NULL);
+	n = lua_objlen(L, -2);
 	argv = calloc(n + 1, sizeof *argv);
 	if (!argv)
 		return NULL;
 	for (i = 0; i < n; i++) {
-		lua_rawgeti(L, -1, (int)i + 1);
+		lua_rawgeti(L, -2, (int)i + 1);
 		argv[i] = strdup(lua_tostring(L, -1));
 		lua_pop(L, 1);
 	}
@@ -100,8 +143,9 @@ static char **child_argv(void *arg)
 fail:
 	fprintf(stderr, "qwe: plugin failed: %s\n", lua_tostring(L, -1));
 	if (is_plugin) {
+		send_status(L, result_fd, "failed", "plugin-error");
 		fflush(stdout);
-		_exit(PLUGIN_ERROR_EXIT);
+		_exit(1);
 	}
 	return NULL;
 }
@@ -183,10 +227,52 @@ static int drain(int fd, struct qwe_ring *ring, struct qwe_sink *sink)
 	}
 }
 
+/* The result pipe carries a few hundred bytes. A step that sends more than this
+ * is broken, and its result is treated as missing. */
+#define RESULT_MAX (1024 * 1024)
+
+/* Reads whatever is on the step's result pipe into the job's buffer. Returns 1
+ * at end of file, 0 if it would block. */
+static int drain_result(struct job_run *r)
+{
+	char buf[4096];
+
+	for (;;) {
+		ssize_t n = read(r->proc.res_fd, buf, sizeof buf);
+
+		if (n < 0 && errno == EINTR)
+			continue;
+		if (n < 0)
+			return 0;
+		if (n == 0)
+			return 1;
+		if (r->res_len + (size_t)n > RESULT_MAX) {
+			r->res_overflow = 1;
+			continue;
+		}
+		if (r->res_len + (size_t)n > r->res_cap) {
+			size_t cap = r->res_cap ? r->res_cap * 2 : 1024;
+			char *grown;
+
+			while (cap < r->res_len + (size_t)n)
+				cap *= 2;
+			grown = realloc(r->res_buf, cap);
+			if (!grown) {
+				r->res_overflow = 1;
+				continue;
+			}
+			r->res_buf = grown;
+			r->res_cap = cap;
+		}
+		memcpy(r->res_buf + r->res_len, buf, (size_t)n);
+		r->res_len += (size_t)n;
+	}
+}
+
 /* What an epoll event is about. Every fd in the loop carries a tag: which job,
  * what kind, and the step it was opened for. The step is what lets a late
  * event from a step that has ended be told from an event of the live one. */
-enum evkind { EV_OUT, EV_STEP_TIMER, EV_JOB_TIMER, EV_GRACE_TIMER, EV_CHILD, EV_CANCEL };
+enum evkind { EV_OUT, EV_RESULT, EV_STEP_TIMER, EV_JOB_TIMER, EV_GRACE_TIMER, EV_CHILD, EV_CANCEL };
 
 #define TAG_NO_JOB 0xFFFFFFFFu
 
@@ -361,6 +447,9 @@ static void job_release(struct run_ctx *ctx, struct job *job)
 		qwe_ring_free(&r->ring);
 		r->ring_ok = 0;
 	}
+	free(r->res_buf);
+	r->res_buf = NULL;
+	r->res_len = r->res_cap = 0;
 }
 
 /* Action: open the job's log, ring and timer, and arm its timeout. */
@@ -428,6 +517,9 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 	res->started = time(NULL);
 	r->live_step = (long)r->cur;
 	r->leader_reaped = 0;
+	r->res_len = 0;
+	r->res_overflow = 0;
+	r->step_changed = 1;
 	arg.L = L;
 	arg.step_ref = r->cur_ref;
 	if (qwe_timer_open(&r->step_timer) < 0) {
@@ -450,6 +542,7 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 	if (step_ms > 0)
 		qwe_timer_arm(&r->step_timer, step_ms);
 	ev_add(ctx, job, EV_OUT, r->proc.out_fd, r->live_step);
+	ev_add(ctx, job, EV_RESULT, r->proc.res_fd, r->live_step);
 	ev_add(ctx, job, EV_STEP_TIMER, r->step_timer.fd, r->live_step);
 	ev_add(ctx, job, EV_GRACE_TIMER, r->grace_timer.fd, r->live_step);
 	r->proc_ok = 1;
@@ -468,6 +561,8 @@ static void step_finish(struct run_ctx *ctx, struct job *job)
 		drain(r->proc.out_fd, &r->ring, &r->sink);
 		ev_del(ctx, r->proc.out_fd);
 		close(r->proc.out_fd);
+		ev_del(ctx, r->proc.res_fd);
+		close(r->proc.res_fd);
 		ev_del(ctx, r->step_timer.fd);
 		ev_del(ctx, r->grace_timer.fd);
 		qwe_timer_close(&r->step_timer);
@@ -485,7 +580,7 @@ static void record_step(struct job *job, const struct qwe_lc_result *res)
 	struct qwe_step_result *s = &job->steps[job->run.cur];
 
 	s->ended = time(NULL);
-	s->changed = 1; /* run: steps always count as changed */
+	s->changed = job->run.step_changed;
 	s->outcome = qwe_lc_step_outcome(res);
 	s->reason = res->reason;
 }
@@ -643,6 +738,82 @@ static int live_step_is_plugin(struct job *job)
 	return uses;
 }
 
+/* What a step child reported on its result pipe. */
+enum msg_status { MSG_NONE, MSG_EXEC, MSG_OK, MSG_FAILED };
+
+struct step_msg {
+	enum msg_status status;
+	const char *reason; /* MSG_FAILED: not-converged or plugin-error */
+	int changed;
+};
+
+/* Reads the step's result message. It is absent if the child died before
+ * sending one, and ignored if it is malformed or too big: a broken child
+ * gets no say in the outcome. The reason is checked against what a plugin may
+ * report, so no plugin can invent an outcome for the engine. */
+static struct step_msg read_step_msg(struct job *job)
+{
+	struct job_run *r = &job->run;
+	lua_State *L = job->L;
+	struct step_msg m = {MSG_NONE, NULL, 1};
+	char err[128];
+
+	if (r->res_len == 0 || r->res_overflow)
+		return m;
+	if (qwe_cbor_to_lua(L, (const uint8_t *)r->res_buf, r->res_len, err, sizeof err) < 0)
+		return m;
+	if (lua_istable(L, -1)) {
+		const char *status, *reason;
+
+		lua_getfield(L, -1, "status");
+		status = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+		if (strcmp(status, "exec") == 0)
+			m.status = MSG_EXEC;
+		else if (strcmp(status, "ok") == 0)
+			m.status = MSG_OK;
+		else if (strcmp(status, "failed") == 0)
+			m.status = MSG_FAILED;
+		lua_pop(L, 1);
+		lua_getfield(L, -1, "reason");
+		reason = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+		m.reason = strcmp(reason, "not-converged") == 0 ? "not-converged" : "plugin-error";
+		lua_pop(L, 1);
+		lua_getfield(L, -1, "changed");
+		if (lua_isboolean(L, -1))
+			m.changed = lua_toboolean(L, -1);
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 1);
+	return m;
+}
+
+/* How a step's leader ending is told to the table: the event and its reason.
+ * A run: step, or a run-like plugin (it sent "exec"), succeeds if the command
+ * exited 0. A check/apply plugin succeeds only if it said so and exited 0; if
+ * it failed, it says why; if it died without saying (a crash, a signal), it
+ * failed with plugin-error. */
+static enum qwe_lc_event leader_exit_event(struct job *job, int status, struct qwe_lc_payload *pl)
+{
+	struct job_run *r = &job->run;
+	int exited_ok = WIFEXITED(status) && WEXITSTATUS(status) == 0;
+	struct step_msg m;
+
+	pl->reason = "exit-code";
+	r->step_changed = 1; /* run: steps always count as changed */
+	if (!live_step_is_plugin(job))
+		return exited_ok ? QWE_LC_EV_LEADER_EXIT_OK : QWE_LC_EV_LEADER_EXIT_FAIL;
+	drain_result(r);
+	m = read_step_msg(job);
+	if (m.status == MSG_EXEC)
+		return exited_ok ? QWE_LC_EV_LEADER_EXIT_OK : QWE_LC_EV_LEADER_EXIT_FAIL;
+	if (m.status != MSG_NONE)
+		r->step_changed = m.changed;
+	if (m.status == MSG_OK && exited_ok)
+		return QWE_LC_EV_LEADER_EXIT_OK;
+	pl->reason = m.status == MSG_FAILED ? m.reason : "plugin-error";
+	return QWE_LC_EV_LEADER_EXIT_FAIL;
+}
+
 /* Reaps everything that has exited. qwe is a subreaper, so that includes
  * processes reparented to it when their parent died, not only step leaders.
  * A leader's exit is an event. A step ends when its whole group is empty: a
@@ -667,12 +838,7 @@ static void reap_children(struct run_ctx *ctx)
 			if (r->live_step < 0 || !r->proc_ok || r->leader_reaped || r->proc.pid != pid)
 				continue;
 			r->leader_reaped = 1;
-			if (WIFEXITED(status) && WEXITSTATUS(status) == PLUGIN_ERROR_EXIT && live_step_is_plugin(job))
-				pl.reason = "plugin-error";
-			job_send(ctx, job,
-				 WIFEXITED(status) && WEXITSTATUS(status) == 0 ? QWE_LC_EV_LEADER_EXIT_OK
-									       : QWE_LC_EV_LEADER_EXIT_FAIL,
-				 pl, r->live_step);
+			job_send(ctx, job, leader_exit_event(job, status, &pl), pl, r->live_step);
 			break;
 		}
 		/* no match: an orphan of some step's group, reaped and forgotten */
@@ -698,6 +864,10 @@ static void job_event(struct run_ctx *ctx, struct job *job, enum evkind kind, lo
 	case EV_OUT:
 		if (live && drain(r->proc.out_fd, &r->ring, &r->sink))
 			ev_del(ctx, r->proc.out_fd);
+		break;
+	case EV_RESULT:
+		if (live && drain_result(r))
+			ev_del(ctx, r->proc.res_fd);
 		break;
 	case EV_STEP_TIMER:
 		if (live && !qwe_timer_expired(&r->step_timer))

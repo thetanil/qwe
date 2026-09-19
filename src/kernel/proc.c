@@ -10,7 +10,7 @@
 
 int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 {
-	int fds[2];
+	int fds[2], res[2];
 	pid_t pid;
 
 	if (pipe(fds) < 0) {
@@ -18,6 +18,15 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 		return -1;
 	}
 	fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+	if (pipe2(res, O_CLOEXEC) < 0) {
+		int saved = errno;
+
+		p->fail_op = "pipe";
+		close(fds[0]);
+		close(fds[1]);
+		errno = saved;
+		return -1;
+	}
 
 	pid = fork();
 	if (pid < 0) {
@@ -26,6 +35,8 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 		p->fail_op = "fork";
 		close(fds[0]);
 		close(fds[1]);
+		close(res[0]);
+		close(res[1]);
 		errno = saved;
 		return -1;
 	}
@@ -46,7 +57,8 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 		dup2(fds[1], 2);
 		close(fds[0]);
 		close(fds[1]);
-		argv = fn(arg);
+		close(res[0]);
+		argv = fn(arg, res[1]);
 		if (!argv)
 			_exit(126);
 		execvp(argv[0], argv);
@@ -55,7 +67,10 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 	/* Both sides call setpgid so the group exists before either proceeds. */
 	setpgid(pid, pid);
 	close(fds[1]);
+	close(res[1]);
 	fcntl(fds[0], F_SETFL, O_NONBLOCK);
+	fcntl(res[0], F_SETFL, O_NONBLOCK);
+	p->res_fd = res[0];
 	p->pid = pid;
 	p->out_fd = fds[0];
 	return 0;

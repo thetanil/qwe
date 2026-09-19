@@ -5,12 +5,15 @@
 #include <sys/types.h>
 
 /* Runs in the forked child. Returns a NULL-terminated argv to exec, or NULL
- * to abort the step. The child has the parent's whole Lua state. */
-typedef char **(*qwe_child_fn)(void *arg);
+ * to abort the step. The child has the parent's whole Lua state. result_fd is
+ * the write end of the step's result pipe (close-on-exec, so nothing the child
+ * execs inherits it). */
+typedef char **(*qwe_child_fn)(void *arg, int result_fd);
 
 struct qwe_proc {
 	pid_t pid;
 	int out_fd; /* read end: child's stdout and stderr, merged in arrival order */
+	int res_fd; /* read end of the result pipe, apart from stdout and stderr (non-blocking) */
 	const char *fail_op; /* after a failed spawn: "pipe" or "fork" */
 };
 

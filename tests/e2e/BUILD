@@ -111,3 +111,13 @@ e2e_test(name = "plugin_contract_missing_apply")
 e2e_test(name = "plugin_contract_output_flags")
 
 e2e_test(name = "plugin_luacheck")
+
+e2e_test(name = "file_ensure_idempotent")
+
+e2e_test(name = "not_converged")
+
+e2e_test(name = "plugin_segfault_isolated")
+
+e2e_test(name = "plugin_block_timeout")
+
+e2e_test(name = "run_always_changed")

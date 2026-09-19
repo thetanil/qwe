@@ -11,10 +11,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-static char **argv_true(void *arg)
+static char **argv_true(void *arg, int result_fd)
 {
 	static char *argv[] = {"sh", "-c", "exit 0", NULL};
 	(void)arg;
+	(void)result_fd;
 	return argv;
 }
 
@@ -41,10 +42,11 @@ TEST child_is_group_leader(void)
 	PASS();
 }
 
-static char **argv_two_sleeps(void *arg)
+static char **argv_two_sleeps(void *arg, int result_fd)
 {
 	static char *argv[] = {"sh", "-c", "sleep 1000 & sleep 1000", NULL};
 	(void)arg;
+	(void)result_fd;
 	return argv;
 }
 
@@ -138,12 +140,13 @@ static pid_t getppid_of(pid_t pid)
 	return ppid;
 }
 
-static char **argv_orphan(void *arg)
+static char **argv_orphan(void *arg, int result_fd)
 {
 	/* The leader starts a background sleep, prints its pid and exits: the
 	 * sleep is an orphan in the leader's group. */
 	static char *argv[] = {"sh", "-c", "sleep 1000 & echo $!; exit 0", NULL};
 	(void)arg;
+	(void)result_fd;
 	return argv;
 }
 

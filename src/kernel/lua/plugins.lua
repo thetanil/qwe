@@ -145,23 +145,45 @@ local function open(plugin)
   return plugin.mod
 end
 
--- Runs in the forked step child. For a run: step or a run-like plugin, returns
--- the argv the child execs. For a check/apply plugin it does the step's work
--- and returns nil. An error means the step failed.
+local function ensure_registry()
+  if registry == nil then
+    registry = {}
+    for _, p in ipairs(M.builtin_all()) do registry[p.name] = p end
+  end
+  return registry
+end
+
+-- The module of a built-in plugin, loaded under strict globals like any
+-- plugin. For plugin tests.
+function M.builtin_module(name)
+  local plugin = ensure_registry()[name]
+  if not plugin or not plugin.builtin then error("no built-in plugin " .. name, 0) end
+  return open(plugin)
+end
+
+-- Runs in the forked step child. Returns
+--   argv          a run: step or a run-like plugin: the command the child execs
+--   nil, result   a check/apply plugin ran here: { status = "ok" | "failed",
+--                 reason, changed, outputs }, which the child sends to the
+--                 parent over the result pipe. A plugin that raises an error,
+--                 or breaks strict globals, fails with reason plugin-error.
 function M.run_step(step)
-  registry = registry or (function()
-    local all = {}
-    for _, p in ipairs(M.builtin_all()) do all[p.name] = p end
-    return all
-  end)()
   local name = step.uses or "run"
-  local plugin = registry[name]
+  local plugin = ensure_registry()[name]
   if not plugin then error("plugin " .. name .. " is not loaded", 0) end
-  local mod = open(plugin)
   local with = step.uses and (step["with"] or cbor.map({})) or { run = step.run }
-  if type(mod.argv) == "function" then return mod.argv(with) end
-  mod.apply(with)
-  return nil
+  local ok, argv, result = pcall(function()
+    local mod = open(plugin)
+    if type(mod.argv) == "function" then return mod.argv(with) end
+    -- Only the operator host exists as a target so far.
+    return nil, require("qwe.checkapply").run(mod, with, { backend = require("backend.local").new() })
+  end)
+  if not ok then
+    io.stderr:write("qwe: plugin failed: ", tostring(argv), "\n")
+    -- Whether apply ran is not known: count it as changed, like a crash.
+    return nil, { status = "failed", reason = "plugin-error", changed = true, outputs = {} }
+  end
+  return argv, result
 end
 
 return M

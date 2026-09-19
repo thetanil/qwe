@@ -25,6 +25,10 @@ struct job_run {
 	int ring_ok, sink_ok, timer_ok; /* which of the job's resources are held */
 	int proc_ok;                 /* the live step's pipe and timers are open */
 	int leader_reaped;           /* the live step's leader has been waited for */
+	char *res_buf;               /* what the live step has sent on its result pipe */
+	size_t res_len, res_cap;
+	int res_overflow;            /* it sent more than the engine keeps */
+	int step_changed;            /* whether the live step changed the target */
 	int timeout_told;            /* the job timeout has been sent as an event */
 	int cancel_told;             /* the operator's cancel has been sent as an event */
 	size_t cur;                  /* the step in flight, or the next to run */

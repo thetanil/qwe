@@ -34,5 +34,27 @@ sh_test(
 
 filegroup(
     name = "plugin_lua",
-    srcs = glob(["*/*.lua"]),
+    srcs = glob(["*/*.lua"], exclude = ["*/test.lua"]),
 )
+
+# Runs plugins/builtin/<name>/test.lua in qwe's Lua state.
+[
+    sh_test(
+        name = name + "_plugin_test",
+        srcs = ["//tests:run_lua_test.sh"],
+        args = [
+            "$(location //src/kernel:luarun)",
+            "$(location run_plugin_test.lua)",
+            "$(location " + name + "/test.lua)",
+        ],
+        data = [
+            "run_plugin_test.lua",
+            name + "/test.lua",
+            "//src/kernel:luarun",
+        ],
+    )
+    for name in [
+        "file.ensure",
+        "recording",
+    ]
+]

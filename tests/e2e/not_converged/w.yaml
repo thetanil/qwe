@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: never
+        uses: never
+      - run: echo NEVER

@@ -1,7 +1,7 @@
 local M = {}
 
 function M.check(_with)
-  return false
+  return true
 end
 
 function M.apply(_with)
