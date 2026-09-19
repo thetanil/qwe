@@ -1,0 +1,38 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "a": {
+      "outcome": "cancelled",
+      "reason": "cancel-requested",
+      "started": "TIME",
+      "ended": "TIME",
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "wait",
+          "outcome": "cancelled",
+          "reason": "cancel-requested",
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        }
+      ]
+    },
+    "b": {
+      "outcome": "skipped",
+      "reason": "cancel-requested",
+      "started": null,
+      "ended": null,
+      "dropped_bytes": 0,
+      "steps": []
+    },
+    "c": {
+      "outcome": "skipped",
+      "reason": "cancel-requested",
+      "started": null,
+      "ended": null,
+      "dropped_bytes": 0,
+      "steps": []
+    }
+  }
+}

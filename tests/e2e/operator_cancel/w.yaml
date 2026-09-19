@@ -1,0 +1,15 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - id: wait
+        run: echo started; sleep $QWE_E2E_MARK
+  b:
+    target: local
+    needs: [a]
+    steps:
+      - run: echo NEVER b
+  c:
+    target: local
+    steps:
+      - run: echo NEVER c

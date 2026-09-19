@@ -51,3 +51,8 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 	p->out_fd = fds[0];
 	return 0;
 }
+
+int qwe_proc_kill_group(const struct qwe_proc *p, int sig)
+{
+	return kill(-p->pid, sig);
+}

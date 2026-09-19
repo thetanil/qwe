@@ -1,0 +1,30 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "j": {
+      "outcome": "failed",
+      "reason": "timeout",
+      "started": "TIME",
+      "ended": "TIME",
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "slow",
+          "outcome": "failed",
+          "reason": "timeout",
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        },
+        {
+          "id": "after",
+          "outcome": "skipped",
+          "reason": null,
+          "changed": false,
+          "started": null,
+          "ended": null
+        }
+      ]
+    }
+  }
+}

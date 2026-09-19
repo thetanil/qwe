@@ -162,6 +162,38 @@ static int is_int(const char *s, size_t n)
 	return 1;
 }
 
+/* YAML core-schema float: [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?
+ * with at least a "." or an exponent (a plain run of digits is an integer). */
+static int is_float(const char *s, size_t n)
+{
+	size_t i = 0, digits = 0;
+	int dot = 0, exp = 0;
+
+	if (n > 0 && (s[0] == '-' || s[0] == '+'))
+		i = 1;
+	for (; i < n && s[i] >= '0' && s[i] <= '9'; i++)
+		digits++;
+	if (i < n && s[i] == '.') {
+		dot = 1;
+		for (i++; i < n && s[i] >= '0' && s[i] <= '9'; i++)
+			digits++;
+	}
+	if (digits == 0)
+		return 0;
+	if (i < n && (s[i] == 'e' || s[i] == 'E')) {
+		size_t ed = 0;
+		exp = 1;
+		i++;
+		if (i < n && (s[i] == '-' || s[i] == '+'))
+			i++;
+		for (; i < n && s[i] >= '0' && s[i] <= '9'; i++)
+			ed++;
+		if (ed == 0)
+			return 0;
+	}
+	return i == n && (dot || exp);
+}
+
 static int scalar(struct ctx *c, const yaml_event_t *ev, int as_key)
 {
 	CborEncoder *enc = &c->stack[c->depth];
@@ -183,6 +215,8 @@ static int scalar(struct ctx *c, const yaml_event_t *ev, int as_key)
 			return cbor_rc(cbor_encode_boolean(enc, 0));
 		if (is_int(v, n))
 			return cbor_rc(cbor_encode_int(enc, strtoll(v, NULL, 10)));
+		if (is_float(v, n))
+			return cbor_rc(cbor_encode_double(enc, strtod(v, NULL)));
 	}
 	return cbor_rc(cbor_encode_text_string(enc, v, n));
 }

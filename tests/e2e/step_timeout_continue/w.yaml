@@ -1,0 +1,10 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: slow
+        run: echo start; sleep 30
+        timeout-minutes: 0.005
+        continue-on-error: true
+      - id: after
+        run: echo after

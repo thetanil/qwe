@@ -1,0 +1,22 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "j": {
+      "outcome": "failed",
+      "reason": "timeout",
+      "started": "TIME",
+      "ended": "TIME",
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "stubborn",
+          "outcome": "failed",
+          "reason": "timeout",
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        }
+      ]
+    }
+  }
+}

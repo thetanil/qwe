@@ -7,6 +7,10 @@
 #   expected/stderr   golden stderr   (optional; checked if present)
 #   expected/exit     expected exit code (default 0)
 #   expected/<path>   any other file: compared with <path> in the work dir
+#   env               optional KEY=VALUE lines, exported to qwe
+#                     (QWE_E2E_MARK, a number unique to the run, is always set)
+#   signal            optional "<seconds> <SIGNAME>": qwe runs in the background
+#                     and gets that signal (kill -SIGNAME) after the delay
 #   check.sh          optional extra assertions, run in the work dir after qwe;
 #                     sees $QWE_STDOUT (qwe's stdout) and must exit 0
 #   everything else   input files, copied to a scratch work dir where qwe runs
@@ -27,7 +31,7 @@ work=$(mktemp -d) || exit 3
 trap 'rm -rf "$work"' EXIT
 cp -R "$case_dir"/. "$work"/ || exit 3
 rm -rf "$work/expected" "$work/args"
-rm -f "$work/check.sh"
+rm -f "$work/check.sh" "$work/env" "$work/signal"
 
 set --
 if [ -f "$case_dir/args" ]; then
@@ -37,8 +41,25 @@ fi
 want_exit=0
 [ -f "$case_dir/expected/exit" ] && want_exit=$(cat "$case_dir/expected/exit")
 
-(cd "$work" && "$qwe" "$@" >"$work.stdout" 2>"$work.stderr")
-got_exit=$?
+# A number unique to this run, for a step to sleep on, so a check can tell its
+# own leftovers from those of tests running alongside.
+export QWE_E2E_MARK=7$$
+if [ -f "$case_dir/env" ]; then
+	while IFS= read -r line; do [ -n "$line" ] && export "$line"; done < "$case_dir/env"
+fi
+if [ -f "$case_dir/signal" ]; then
+	# Run qwe in the background, send it a signal after a delay, wait for it.
+	read -r sig_delay sig_name < "$case_dir/signal"
+	(cd "$work" && exec "$qwe" "$@" >"$work.stdout" 2>"$work.stderr") &
+	qwe_pid=$!
+	sleep "$sig_delay"
+	kill "-$sig_name" "$qwe_pid"
+	wait "$qwe_pid"
+	got_exit=$?
+else
+	(cd "$work" && "$qwe" "$@" >"$work.stdout" 2>"$work.stderr")
+	got_exit=$?
+fi
 
 # Give the one run directory a fixed name and blank its run id and times.
 if [ -d "$work/.qwe/runs" ] && [ "$(ls "$work/.qwe/runs" | wc -l)" = 1 ]; then

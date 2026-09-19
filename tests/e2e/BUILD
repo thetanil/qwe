@@ -48,3 +48,13 @@ e2e_test(name = "step_failure_stops_job")
 e2e_test(name = "continue_on_error")
 
 e2e_test(name = "needs_skip_chain")
+
+e2e_test(name = "step_timeout_fails")
+
+e2e_test(name = "step_timeout_continue")
+
+e2e_test(name = "job_timeout_cancels")
+
+e2e_test(name = "grace_then_sigkill")
+
+e2e_test(name = "operator_cancel")

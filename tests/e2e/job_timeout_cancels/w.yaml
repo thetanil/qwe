@@ -1,0 +1,12 @@
+jobs:
+  j:
+    target: local
+    timeout-minutes: 0.02
+    steps:
+      - id: one
+        run: echo one
+      - id: two
+        run: echo two; sleep 30
+        continue-on-error: true
+      - id: three
+        run: echo NEVER

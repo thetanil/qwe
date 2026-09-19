@@ -21,6 +21,7 @@ cc_library(
         ":luacbor",
         ":luavm",
         ":proc",
+        ":timer",
         ":result",
         ":ring",
         ":sink",
@@ -66,6 +67,7 @@ cc_test(
     srcs = ["proc_test.c"],
     deps = [
         ":proc",
+        ":timer",
         "//third_party/greatest",
     ],
 )
@@ -162,6 +164,22 @@ cc_test(
     srcs = ["job_state_test.c"],
     deps = [
         ":job_state",
+        "//third_party/greatest",
+    ],
+)
+
+cc_library(
+    name = "timer",
+    srcs = ["timer.c"],
+    hdrs = ["timer.h"],
+)
+
+# Uses real timerfds and sleeps briefly, so it is its own test binary.
+cc_test(
+    name = "timer_test",
+    srcs = ["timer_test.c"],
+    deps = [
+        ":timer",
         "//third_party/greatest",
     ],
 )

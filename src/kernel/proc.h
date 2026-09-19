@@ -17,4 +17,10 @@ struct qwe_proc {
  * the child restores an empty mask. Returns 0, or -1 with errno set. */
 int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg);
 
+
+/* Signals the step's whole process group, so the shell's pipeline and any
+ * background children get it too. Returns 0, or -1 with errno set (ESRCH once
+ * the group is gone). */
+int qwe_proc_kill_group(const struct qwe_proc *p, int sig);
+
 #endif
