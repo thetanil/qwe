@@ -1,0 +1,6 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: export FOO=1; echo "first sees FOO=$FOO"
+      - run: echo "second sees FOO=${FOO-unset}"

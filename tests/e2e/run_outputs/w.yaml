@@ -1,0 +1,11 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: a
+        run: |
+          echo who=me >> "$QWE_OUTPUT"
+          printf 'key<<EOF\nline one\nline two\nEOF\n' >> "$QWE_OUTPUT"
+      - run: |
+          echo "who=${{ steps.a.outputs.who }}"
+          echo "key=${{ steps.a.outputs.key }}"

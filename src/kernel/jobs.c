@@ -25,8 +25,8 @@ static int cmp_job(const void *a, const void *b)
 
 /* Keys the engine accepts in the schema but does not act on yet. Running a
  * workflow that uses one would silently do the wrong thing, so it is refused. */
-static const char *const unimplemented_job_keys[] = {"env", NULL};
-static const char *const unimplemented_step_keys[] = {"env", "become", "on", "secret-outputs", NULL};
+static const char *const unimplemented_job_keys[] = {NULL};
+static const char *const unimplemented_step_keys[] = {"become", "on", "secret-outputs", NULL};
 
 static int refuse(const char *path, const char *what, const char *id, const char *key, const char *why)
 {
@@ -43,10 +43,6 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 	size_t n = 0, cap = 0, i, k;
 	int bad = 0;
 
-	lua_getfield(L, -1, "env");
-	if (!lua_isnil(L, -1))
-		bad = refuse(path, "workflow", "", "env", "not implemented yet");
-	lua_pop(L, 1);
 	lua_getfield(L, -1, "jobs");
 	lua_pushnil(L);
 	while (!bad && lua_next(L, -2)) {
@@ -56,6 +52,7 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 		jobs[n].run.timer.fd = jobs[n].run.step_timer.fd = jobs[n].run.grace_timer.fd = -1;
 		jobs[n].run.proc.out_fd = -1;
 		jobs[n].run.live_step = -1;
+		jobs[n].run.outputs_ref = LUA_NOREF;
 		lua_pushvalue(L, -2);
 		jobs[n].id = strdup(lua_tostring(L, -1));
 		lua_pop(L, 1);

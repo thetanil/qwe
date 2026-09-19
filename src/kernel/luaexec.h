@@ -11,6 +11,8 @@
  * nil, message if the command could not be started. Blocks until the command
  * exits, which is harmless in a step's forked child. The command joins the
  * caller's process group, so a step's teardown reaches it. */
+/* qwe.exec.preamble(env) -> the stdin preamble that carries a { NAME = "value" }
+ * table (see preamble.h); qwe.exec.bootstrap is the shell script that reads it. */
 int luaopen_qwe_exec(lua_State *L);
 
 #endif

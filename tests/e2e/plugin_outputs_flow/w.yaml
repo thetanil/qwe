@@ -1,0 +1,11 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: f
+        uses: file.ensure
+        with:
+          path: made.txt
+          content: "x\n"
+          mode: "0640"
+      - run: echo "mode is ${{ steps.f.outputs.mode }}"

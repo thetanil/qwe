@@ -20,6 +20,7 @@ MODULES = {
     "qwe.plugincheck": ":plugincheck.lua",
     "qwe.plugins": ":plugins.lua",
     "qwe.strict": ":strict.lua",
+    "qwe.template": ":template.lua",
     "qwe.validate": ":validate.lua",
     "re": "//third_party/lpeg:re.lua",
     "strict_metaschema": "//src/kernel/schema:strict-metaschema.json",
@@ -97,6 +98,8 @@ exports_files([
     "plugincheck.lua",
     "plugins.lua",
     "strict.lua",
+    "template.lua",
+    "template_test.lua",
     "validate.lua",
     "workflow.schema.json",
 ])
@@ -120,6 +123,19 @@ cc_library(
     name = "modules",
     srcs = [":gen_modules"],
     hdrs = ["embedded.h"],
+)
+
+sh_test(
+    name = "template_test",
+    srcs = ["//tests:run_lua_test.sh"],
+    args = [
+        "$(location //src/kernel:luarun)",
+        "$(location template_test.lua)",
+    ],
+    data = [
+        "template_test.lua",
+        "//src/kernel:luarun",
+    ],
 )
 
 sh_test(

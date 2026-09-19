@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: a
+        run: echo x=1
+      - run: echo "[${{ steps.a.outputs.x }}]"

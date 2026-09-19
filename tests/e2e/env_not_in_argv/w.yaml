@@ -1,0 +1,14 @@
+env:
+  SECRET_ENV: zq7v-env-value-not-in-argv
+jobs:
+  j:
+    target: local
+    steps:
+      - run: |
+          # Every process's command line, read while this step runs.
+          for f in /proc/[0-9]*/cmdline; do
+            case "$(tr '\0' ' ' 2>/dev/null < "$f")" in
+              *"$SECRET_ENV"*) echo "FOUND in $f"; exit 1 ;;
+            esac
+          done
+          echo "clean, and the step still sees $SECRET_ENV"

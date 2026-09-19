@@ -1,0 +1,11 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - id: s
+        run: echo who=me >> "$QWE_OUTPUT"
+  b:
+    target: local
+    needs: [a]
+    steps:
+      - run: echo "${{ steps.s.outputs.who }}"

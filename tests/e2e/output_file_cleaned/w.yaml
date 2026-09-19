@@ -1,0 +1,11 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: a
+        run: |
+          echo "p=$QWE_OUTPUT" >> "$QWE_OUTPUT"
+          test -f "$QWE_OUTPUT"
+      - run: |
+          p="${{ steps.a.outputs.p }}"
+          [ -n "$p" ] && [ ! -e "$p" ] && echo "the output file is gone"

@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/mman.h>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -130,6 +131,18 @@ static char **child_argv(void *arg, int result_fd)
 		return NULL;
 	}
 	send_status(L, result_fd, "exec", NULL);
+	if (lua_type(L, -1) == LUA_TSTRING) {
+		size_t sl;
+		const char *s = lua_tolstring(L, -1, &sl);
+		int fd = memfd_create("qwe-stdin", 0);
+
+		/* the bootstrap shell reads exactly the preamble; the rest is the command's */
+		if (fd < 0 || write(fd, s, sl) != (ssize_t)sl || lseek(fd, 0, SEEK_SET) < 0 || dup2(fd, 0) < 0) {
+			fprintf(stderr, "qwe: cannot set up the step's stdin: %s\n", strerror(errno));
+			return NULL;
+		}
+		close(fd);
+	}
 	n = lua_objlen(L, -2);
 	argv = calloc(n + 1, sizeof *argv);
 	if (!argv)
@@ -293,6 +306,8 @@ struct run_ctx {
 	struct job *jobs;
 	size_t njobs;
 	const char *run_dir;
+	char *run_dir_abs;    /* run_dir as an absolute path: $QWE_OUTPUT files go there */
+	int wf_ref;           /* registry ref of the decoded workflow */
 	lua_State *L;
 };
 
@@ -447,6 +462,13 @@ static void job_release(struct run_ctx *ctx, struct job *job)
 		qwe_ring_free(&r->ring);
 		r->ring_ok = 0;
 	}
+	if (r->outputs_ref != LUA_NOREF) {
+		luaL_unref(job->L, LUA_REGISTRYINDEX, r->outputs_ref);
+		r->outputs_ref = LUA_NOREF;
+	}
+	free(r->out_path);
+	free(r->step_json);
+	r->out_path = r->step_json = NULL;
 	free(r->res_buf);
 	r->res_buf = NULL;
 	r->res_len = r->res_cap = 0;
@@ -460,6 +482,8 @@ static void job_start(struct run_ctx *ctx, struct job *job)
 	int err = 0;
 
 	job->L = ctx->L;
+	lua_newtable(job->L);
+	r->outputs_ref = luaL_ref(job->L, LUA_REGISTRYINDEX);
 	if (qwe_ring_init(&r->ring, QWE_RING_CAPACITY) < 0) {
 		op = "ring";
 		err = errno;
@@ -494,6 +518,91 @@ static void job_start(struct run_ctx *ctx, struct job *job)
 	ev_add(ctx, job, EV_JOB_TIMER, r->timer.fd, -1);
 }
 
+/* Makes the live step's table for the child: templates evaluated, env merged
+ * (qwe.template.resolve). Returns the step's timeout in milliseconds (0 for
+ * none), or -1 after printing why. Sets cur_ref. */
+static long resolve_step(struct run_ctx *ctx, struct job *job)
+{
+	struct job_run *r = &job->run;
+	lua_State *L = job->L;
+	int top = lua_gettop(L);
+	long ms;
+
+	r->cur_ref = LUA_NOREF;
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "qwe.template");
+	if (lua_pcall(L, 1, 1, 0) != 0)
+		goto fail;
+	lua_getfield(L, -1, "resolve");
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->wf_ref);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, job->ref);
+	lua_pushinteger(L, (lua_Integer)r->cur + 1);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, r->outputs_ref);
+	if (r->out_path)
+		lua_pushstring(L, r->out_path);
+	else
+		lua_pushnil(L);
+	if (lua_pcall(L, 5, 1, 0) != 0)
+		goto fail;
+	ms = qwe_timeout_ms_at(L, -1);
+	r->cur_ref = luaL_ref(L, LUA_REGISTRYINDEX); /* pops the step table */
+	lua_settop(L, top);
+	return ms;
+fail:
+	fprintf(stderr, "qwe run: job %s: cannot prepare step %lu: %s\n", job->id, (unsigned long)r->cur + 1,
+		lua_tostring(L, -1));
+	lua_settop(L, top);
+	return -1;
+}
+
+/* Records the outputs table at index tbl for the live step (qwe.template.store):
+ * later steps of the job can read them, and result.json gets them as JSON. */
+static void store_outputs(struct job *job, int tbl)
+{
+	struct job_run *r = &job->run;
+	lua_State *L = job->L;
+	int top = lua_gettop(L);
+
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "qwe.template");
+	if (lua_pcall(L, 1, 1, 0) != 0)
+		goto out;
+	lua_getfield(L, -1, "store");
+	lua_rawgeti(L, LUA_REGISTRYINDEX, r->outputs_ref);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, r->cur_ref);
+	lua_getfield(L, -1, "id");
+	lua_remove(L, -2);
+	lua_pushvalue(L, tbl);
+	if (lua_pcall(L, 3, 1, 0) == 0 && lua_isstring(L, -1)) {
+		free(r->step_json);
+		r->step_json = strdup(lua_tostring(L, -1));
+	}
+out:
+	lua_settop(L, top);
+}
+
+/* A run: step's outputs: read back from its $QWE_OUTPUT file, which is then
+ * deleted (qwe.template.take_output_file). */
+static void collect_file_outputs(struct job *job)
+{
+	struct job_run *r = &job->run;
+	lua_State *L = job->L;
+	int top = lua_gettop(L);
+
+	if (!r->out_path)
+		return;
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "qwe.template");
+	if (lua_pcall(L, 1, 1, 0) != 0)
+		goto out;
+	lua_getfield(L, -1, "take_output_file");
+	lua_pushstring(L, r->out_path);
+	if (lua_pcall(L, 1, 1, 0) == 0 && lua_istable(L, -1))
+		store_outputs(job, lua_gettop(L));
+out:
+	lua_settop(L, top);
+}
+
 /* Action: fork step cur. The state is already step-running; if the fork or
  * one of its timers fails, the job is owed a start-failed. */
 static void step_spawn(struct run_ctx *ctx, struct job *job)
@@ -507,12 +616,18 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 	int err = 0;
 
 	res->id = step_id(job, r->cur);
-	lua_rawgeti(L, LUA_REGISTRYINDEX, job->ref);
-	lua_getfield(L, -1, "steps");
-	lua_rawgeti(L, -1, (int)r->cur + 1);
-	step_ms = qwe_timeout_ms_at(L, -1);
-	r->cur_ref = luaL_ref(L, LUA_REGISTRYINDEX); /* pops the step table */
-	lua_pop(L, 2);
+	free(r->out_path);
+	free(r->step_json);
+	r->step_json = NULL;
+	if (asprintf(&r->out_path, "%s/%s.%lu.output", ctx->run_dir_abs, job->id, (unsigned long)r->cur) < 0)
+		r->out_path = NULL;
+	step_ms = resolve_step(ctx, job);
+	if (step_ms < 0) {
+		/* no step table was made, so there is nothing to run */
+		op = "template";
+		err = EINVAL;
+		step_ms = 0;
+	}
 
 	res->started = time(NULL);
 	r->live_step = (long)r->cur;
@@ -522,7 +637,9 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 	r->step_changed = 1;
 	arg.L = L;
 	arg.step_ref = r->cur_ref;
-	if (qwe_timer_open(&r->step_timer) < 0) {
+	if (op) {
+		/* resolve_step failed */
+	} else if (qwe_timer_open(&r->step_timer) < 0) {
 		op = "timer";
 		err = errno;
 	} else if (qwe_timer_open(&r->grace_timer) < 0) {
@@ -581,6 +698,8 @@ static void record_step(struct job *job, const struct qwe_lc_result *res)
 
 	s->ended = time(NULL);
 	s->changed = job->run.step_changed;
+	s->outputs_json = job->run.step_json;
+	job->run.step_json = NULL;
 	s->outcome = qwe_lc_step_outcome(res);
 	s->reason = res->reason;
 }
@@ -782,6 +901,12 @@ static struct step_msg read_step_msg(struct job *job)
 		if (lua_isboolean(L, -1))
 			m.changed = lua_toboolean(L, -1);
 		lua_pop(L, 1);
+		if (m.status == MSG_OK) {
+			lua_getfield(L, -1, "outputs");
+			if (lua_istable(L, -1))
+				store_outputs(job, lua_gettop(L));
+			lua_pop(L, 1);
+		}
 	}
 	lua_pop(L, 1);
 	return m;
@@ -800,8 +925,10 @@ static enum qwe_lc_event leader_exit_event(struct job *job, int status, struct q
 
 	pl->reason = "exit-code";
 	r->step_changed = 1; /* run: steps always count as changed */
-	if (!live_step_is_plugin(job))
+	if (!live_step_is_plugin(job)) {
+		collect_file_outputs(job);
 		return exited_ok ? QWE_LC_EV_LEADER_EXIT_OK : QWE_LC_EV_LEADER_EXIT_FAIL;
+	}
 	drain_result(r);
 	m = read_step_msg(job);
 	if (m.status == MSG_EXEC)
@@ -1052,6 +1179,11 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	ctx.run_dir = run_dir;
 	ctx.L = L;
 
+	ctx.run_dir_abs = realpath(run_dir, NULL);
+	if (!ctx.run_dir_abs)
+		ctx.run_dir_abs = strdup(run_dir);
+	lua_pushvalue(L, -1);
+	ctx.wf_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	lua_getfield(L, -1, "max-parallel");
 	max_parallel = lua_isnumber(L, -1) ? (long)lua_tonumber(L, -1) : 0;
 	lua_pop(L, 1);
@@ -1086,6 +1218,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	}
 	qwe_lc_set_abort_hook(NULL, NULL);
 	qwe_trace_close(&ctx.trace);
+	free(ctx.run_dir_abs);
 	lua_close(L);
 	free(results);
 	free(run_dir);

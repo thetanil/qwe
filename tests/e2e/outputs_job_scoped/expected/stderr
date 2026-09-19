@@ -1,0 +1,1 @@
+qwe validate: w.yaml:11:14: no step "s" before this one in the job: ${{ steps.s.outputs.who }} (outputs are visible only within the same job, to later steps)

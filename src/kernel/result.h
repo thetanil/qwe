@@ -10,6 +10,7 @@ struct qwe_step_result {
 	const char *outcome;
 	const char *reason; /* may be NULL */
 	int changed;
+	char *outputs_json; /* the step's outputs as a JSON object; NULL if it has none */
 	time_t started, ended; /* 0 if it never started */
 };
 

@@ -1,0 +1,14 @@
+env:
+  A: wf
+  B: wf
+  C: wf
+jobs:
+  j:
+    target: local
+    env:
+      B: job
+      C: job
+    steps:
+      - run: echo "$A $B $C"
+        env:
+          C: step

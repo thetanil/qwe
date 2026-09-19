@@ -1,0 +1,31 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "j": {
+      "outcome": "success",
+      "reason": null,
+      "started": "TIME",
+      "ended": "TIME",
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "a",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME",
+          "outputs": {"key":"line one\nline two","who":"me"}
+        },
+        {
+          "id": null,
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        }
+      ]
+    }
+  }
+}

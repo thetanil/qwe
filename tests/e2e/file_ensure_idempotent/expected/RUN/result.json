@@ -14,7 +14,8 @@
           "reason": null,
           "changed": true,
           "started": "TIME",
-          "ended": "TIME"
+          "ended": "TIME",
+          "outputs": {"mode":"0640"}
         }
       ]
     },
@@ -31,7 +32,8 @@
           "reason": null,
           "changed": false,
           "started": "TIME",
-          "ended": "TIME"
+          "ended": "TIME",
+          "outputs": {"mode":"0640"}
         },
         {
           "id": null,

@@ -105,6 +105,7 @@ cc_library(
     hdrs = ["luavm.h", "luafs.h", "luaexec.h"],
     deps = [
         ":luacbor",
+        ":preamble",
         "//src/kernel/lua:modules",
         "//third_party/lpeg",
         "//third_party/luajit",
@@ -216,4 +217,20 @@ cc_library(
     srcs = ["trace.c"],
     hdrs = ["trace.h"],
     deps = [":lifecycle"],
+)
+
+# The stdin preamble that carries env to a command (design §12).
+cc_library(
+    name = "preamble",
+    srcs = ["preamble.c"],
+    hdrs = ["preamble.h"],
+)
+
+cc_test(
+    name = "preamble_test",
+    srcs = ["preamble_test.c"],
+    deps = [
+        ":preamble",
+        "//third_party/greatest",
+    ],
 )

@@ -117,7 +117,7 @@ local function id_problem(id)
 end
 
 -- Checks the schema cannot express. Assumes the schema passed.
-local function structure(doc)
+local function structure(doc, plugin_list)
   local errors = {}
   local ids = {}
   for id in pairs(doc.jobs) do ids[#ids + 1] = id end
@@ -155,6 +155,11 @@ local function structure(doc)
       end
     end
   end
+  local outputs = {}
+  for _, p in ipairs(plugin_list) do
+    if p.outputs then outputs[p.name] = p.outputs end
+  end
+  for _, e in ipairs(require("qwe.template").check(doc, outputs)) do errors[#errors + 1] = e end
   return errors
 end
 
@@ -164,7 +169,7 @@ function M.validate(doc, plugin_list)
   local result = kernel_validator(plugin_list):validate(doc)
   local errors = {}
   if result.valid then
-    return structure(doc)
+    return structure(doc, plugin_list)
   end
   for _, err in ipairs(result.errors or {}) do
     -- The allOf line only says that some branch inside it failed.

@@ -1,0 +1,5 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: echo "${{ vars.arch }}"

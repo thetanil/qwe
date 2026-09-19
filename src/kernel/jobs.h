@@ -29,6 +29,9 @@ struct job_run {
 	size_t res_len, res_cap;
 	int res_overflow;            /* it sent more than the engine keeps */
 	int step_changed;            /* whether the live step changed the target */
+	int outputs_ref;             /* registry ref of the job's { step id -> { key -> value } } */
+	char *out_path;              /* the live run: step's $QWE_OUTPUT file */
+	char *step_json;             /* the live step's outputs, as JSON, for result.json */
 	int timeout_told;            /* the job timeout has been sent as an event */
 	int cancel_told;             /* the operator's cancel has been sent as an event */
 	size_t cur;                  /* the step in flight, or the next to run */

@@ -1,0 +1,8 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: f
+        uses: file.ensure
+        with: {path: x}
+      - run: echo "${{ steps.f.outputs.nope }}"

@@ -89,6 +89,8 @@ int qwe_result_write(FILE *fp, const char *run_id, const struct qwe_job_result *
 			put_time(fp, s->started);
 			fputs(",\n          \"ended\": ", fp);
 			put_time(fp, s->ended);
+			if (s->outputs_json)
+				fprintf(fp, ",\n          \"outputs\": %s", s->outputs_json);
 			fputs("\n        }", fp);
 		}
 		fputs(j->nsteps ? "\n      ]\n    }" : "]\n    }", fp);

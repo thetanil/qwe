@@ -121,3 +121,23 @@ e2e_test(name = "plugin_segfault_isolated")
 e2e_test(name = "plugin_block_timeout")
 
 e2e_test(name = "run_always_changed")
+
+e2e_test(name = "env_scopes")
+
+e2e_test(name = "env_not_in_argv")
+
+e2e_test(name = "run_outputs")
+
+e2e_test(name = "stdout_is_not_output")
+
+e2e_test(name = "outputs_job_scoped")
+
+e2e_test(name = "no_runtime_env_carryover")
+
+e2e_test(name = "output_file_cleaned")
+
+e2e_test(name = "plugin_outputs_flow")
+
+e2e_test(name = "validate_unknown_context")
+
+e2e_test(name = "validate_unknown_output_key")

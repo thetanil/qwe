@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "src/kernel/luaexec.h"
+#include "src/kernel/preamble.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -186,9 +187,65 @@ spawn_failed:
 	return 2;
 }
 
+/* qwe.exec.preamble(env) -> the stdin preamble for a { NAME = "value" } table. */
+static int exec_preamble(lua_State *L)
+{
+	const char **names = NULL, **values = NULL;
+	size_t n = 0, cap = 0, bad = 0, len;
+	char *out;
+	int rc;
+
+	luaL_checktype(L, 1, LUA_TTABLE);
+	lua_pushnil(L);
+	while (lua_next(L, 1)) {
+		if (n == cap) {
+			cap = cap ? cap * 2 : 8;
+			names = realloc(names, cap * sizeof *names);
+			values = realloc(values, cap * sizeof *values);
+		}
+		/* the strings stay valid: the table holds them */
+		names[n] = luaL_checkstring(L, -2);
+		values[n] = luaL_checkstring(L, -1);
+		n++;
+		lua_pop(L, 1);
+	}
+	/* sorted by name, so the preamble does not depend on table order */
+	{
+		size_t i, j;
+
+		for (i = 1; i < n; i++)
+			for (j = i; j > 0 && strcmp(names[j - 1], names[j]) > 0; j--) {
+				const char *t = names[j];
+
+				names[j] = names[j - 1];
+				names[j - 1] = t;
+				t = values[j];
+				values[j] = values[j - 1];
+				values[j - 1] = t;
+			}
+	}
+	rc = qwe_preamble_build(names, values, n, &out, &len, &bad);
+	if (rc < 0) {
+		const char *name = n ? names[bad < n ? bad : 0] : "";
+
+		free(names);
+		free(values);
+		return luaL_error(L, "env variable '%s': not a valid name", name);
+	}
+	free(names);
+	free(values);
+	lua_pushlstring(L, out, len);
+	free(out);
+	return 1;
+}
+
 int luaopen_qwe_exec(lua_State *L)
 {
-	lua_createtable(L, 0, 1);
+	lua_createtable(L, 0, 3);
+	lua_pushcfunction(L, exec_preamble);
+	lua_setfield(L, -2, "preamble");
+	lua_pushstring(L, qwe_preamble_bootstrap);
+	lua_setfield(L, -2, "bootstrap");
 	lua_pushcfunction(L, exec_run);
 	lua_setfield(L, -2, "run");
 	return 1;
