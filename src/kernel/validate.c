@@ -152,20 +152,50 @@ static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, st
 	free(ids);
 }
 
+/* The directory the workflow is in, "" for the current one. */
+static char *workflow_dir(const char *path)
+{
+	const char *slash = strrchr(path, '/');
+
+	return slash ? strndup(path, (size_t)(slash - path)) : strdup("");
+}
+
+/* Prints the list of { where, message } at idx, the problems found in the
+ * project's plugins, in the order the plugins were loaded. Returns how many. */
+static size_t print_plugin_problems(lua_State *L, const char *cmd, int idx)
+{
+	size_t i, n = lua_objlen(L, idx);
+
+	for (i = 1; i <= n; i++) {
+		lua_rawgeti(L, idx, (int)i);
+		lua_getfield(L, -1, "where");
+		lua_getfield(L, -2, "message");
+		fprintf(stderr, "%s: %s: %s\n", cmd, lua_tostring(L, -2), lua_tostring(L, -1));
+		lua_pop(L, 3);
+	}
+	return n;
+}
+
 int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const struct qwe_positions *pos)
 {
 	struct problems ps = {0};
 	int doc = lua_gettop(L);
-	size_t i, n;
+	size_t i, n, nplugin;
+	char *dir;
 
 	lua_getglobal(L, "require");
 	lua_pushstring(L, "qwe.validate");
 	if (lua_pcall(L, 1, 1, 0) != 0)
 		goto internal;
-	lua_getfield(L, -1, "validate");
+	lua_getfield(L, -1, "validate_project");
 	lua_pushvalue(L, doc);
-	if (lua_pcall(L, 1, 1, 0) != 0)
+	dir = workflow_dir(path);
+	lua_pushstring(L, dir);
+	free(dir);
+	if (lua_pcall(L, 2, 2, 0) != 0)
 		goto internal;
+	nplugin = print_plugin_problems(L, cmd, lua_gettop(L));
+	lua_pop(L, 1); /* the plugin problems; the workflow's errors are on top */
 
 	n = lua_objlen(L, -1);
 	for (i = 1; i <= n; i++) {
@@ -193,7 +223,7 @@ int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const stru
 		free(ps.v[i].message);
 	}
 	free(ps.v);
-	return (int)ps.n;
+	return (int)(ps.n + nplugin);
 
 internal:
 	fprintf(stderr, "%s: internal error in the validator: %s\n", cmd, lua_tostring(L, -1));

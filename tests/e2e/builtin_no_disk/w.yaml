@@ -1,0 +1,7 @@
+# The run: step's plugin is embedded in the binary. Decoys with its name are
+# on LUA_PATH and in the work dir, and none of them may be loaded.
+jobs:
+  j:
+    target: local
+    steps:
+      - run: echo from the built-in

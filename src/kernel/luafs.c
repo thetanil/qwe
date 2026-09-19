@@ -1,0 +1,64 @@
+#define _POSIX_C_SOURCE 200809L
+#include "src/kernel/luafs.h"
+
+#include <dirent.h>
+#include <errno.h>
+#include <lauxlib.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+
+static int cmp_name(const void *a, const void *b)
+{
+	return strcmp(*(char *const *)a, *(char *const *)b);
+}
+
+static int fs_list(lua_State *L)
+{
+	const char *path = luaL_checkstring(L, 1);
+	DIR *d = opendir(path);
+	struct dirent *e;
+	char **names = NULL;
+	size_t n = 0, cap = 0, i;
+
+	if (!d) {
+		lua_pushnil(L);
+		lua_pushstring(L, strerror(errno));
+		return 2;
+	}
+	while ((e = readdir(d))) {
+		if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0)
+			continue;
+		if (n == cap)
+			names = realloc(names, (cap = cap ? cap * 2 : 16) * sizeof *names);
+		names[n++] = strdup(e->d_name);
+	}
+	closedir(d);
+	qsort(names, n, sizeof *names, cmp_name);
+	lua_createtable(L, (int)n, 0);
+	for (i = 0; i < n; i++) {
+		lua_pushstring(L, names[i]);
+		lua_rawseti(L, -2, (int)i + 1);
+		free(names[i]);
+	}
+	free(names);
+	return 1;
+}
+
+static int fs_isdir(lua_State *L)
+{
+	struct stat st;
+
+	lua_pushboolean(L, stat(luaL_checkstring(L, 1), &st) == 0 && S_ISDIR(st.st_mode));
+	return 1;
+}
+
+int luaopen_qwe_fs(lua_State *L)
+{
+	lua_createtable(L, 0, 2);
+	lua_pushcfunction(L, fs_list);
+	lua_setfield(L, -2, "list");
+	lua_pushcfunction(L, fs_isdir);
+	lua_setfield(L, -2, "isdir");
+	return 1;
+}

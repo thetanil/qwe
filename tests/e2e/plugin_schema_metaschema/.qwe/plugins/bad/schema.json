@@ -1,0 +1,10 @@
+{
+  "with": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "requried": ["name"],
+    "properties": {
+      "name": {"type": "string", "minLenght": 1}
+    }
+  }
+}

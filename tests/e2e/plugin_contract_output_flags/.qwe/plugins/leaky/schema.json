@@ -1,0 +1,11 @@
+{
+  "with": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {}
+  },
+  "outputs": {
+    "token": {"type": "string"},
+    "count": {"type": "integer", "secret": false}
+  }
+}

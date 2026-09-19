@@ -1,0 +1,2 @@
+qwe validate: .qwe/plugins/file.ensure: project plugin "file.ensure" has the name of the built-in plugin "file.ensure" (built-in); a project plugin cannot shadow a built-in one
+qwe validate: .qwe/plugins/run: project plugin "run" has the name of the built-in plugin "run" (built-in); a project plugin cannot shadow a built-in one

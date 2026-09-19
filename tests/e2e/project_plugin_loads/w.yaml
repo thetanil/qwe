@@ -1,0 +1,9 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: greet
+        uses: hello
+        with:
+          name: world
+      - run: echo after

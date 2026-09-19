@@ -26,7 +26,7 @@ static int cmp_job(const void *a, const void *b)
 /* Keys the engine accepts in the schema but does not act on yet. Running a
  * workflow that uses one would silently do the wrong thing, so it is refused. */
 static const char *const unimplemented_job_keys[] = {"env", NULL};
-static const char *const unimplemented_step_keys[] = {"env", "become", "on", "secret-outputs", "with", NULL};
+static const char *const unimplemented_step_keys[] = {"env", "become", "on", "secret-outputs", NULL};
 
 static int refuse(const char *path, const char *what, const char *id, const char *key, const char *why)
 {
@@ -101,9 +101,10 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 
 			lua_rawgeti(L, -1, (int)k);
 			lua_getfield(L, -1, "run");
-			if (!lua_isstring(L, -1))
-				bad = refuse(path, "job", j->id, "uses", "plugin steps are not implemented yet");
-			lua_pop(L, 1);
+			lua_getfield(L, -2, "uses");
+			if (!lua_isstring(L, -2) && !lua_isstring(L, -1))
+				bad = refuse(path, "job", j->id, "steps", "a step needs run: or uses:");
+			lua_pop(L, 2);
 			for (m = 0; unimplemented_step_keys[m]; m++) {
 				lua_getfield(L, -1, unimplemented_step_keys[m]);
 				if (!lua_isnil(L, -1))

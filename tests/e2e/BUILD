@@ -93,3 +93,21 @@ e2e_test(name = "straggler_after_success")
 e2e_test(name = "grace_outlives_leader")
 
 e2e_test(name = "harness_selftest_signal_on_file")
+
+e2e_test(name = "builtin_no_disk")
+
+e2e_test(name = "project_plugin_loads")
+
+e2e_test(name = "project_plugin_no_shadowing")
+
+e2e_test(name = "strict_globals_write")
+
+e2e_test(name = "strict_globals_read")
+
+e2e_test(name = "plugin_schema_metaschema")
+
+e2e_test(name = "plugin_contract_missing_apply")
+
+e2e_test(name = "plugin_contract_output_flags")
+
+e2e_test(name = "plugin_luacheck")

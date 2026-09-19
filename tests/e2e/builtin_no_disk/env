@@ -1,0 +1,2 @@
+LUA_PATH=./?.lua;./plugins/builtin/run/?.lua
+LUA_CPATH=./?.so

@@ -1,0 +1,1 @@
+qwe validate: .qwe/plugins/half/plugin.lua: the plugin must export check and apply functions, or argv (a run-like plugin)

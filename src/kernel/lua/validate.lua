@@ -83,11 +83,16 @@ local function describe(doc, err, plugin_list)
   if ends_with(kw, "/additionalProperties") then
     return { pointer = ptr, kind = "key", message = 'unknown key "' .. last_token(ptr) .. '"' }
   elseif ends_with(kw, "/properties/uses/enum") then
-    local names = {}
-    for _, p in ipairs(plugin_list) do names[#names + 1] = p.name end
+    local builtin, project = {}, {}
+    for _, p in ipairs(plugin_list) do
+      local into = p.project and project or builtin
+      into[#into + 1] = p.name
+    end
+    local known = "built-in: " .. table.concat(builtin, ", ")
+    if #project > 0 then known = known .. "; project: " .. table.concat(project, ", ") end
     return {
       pointer = ptr, kind = "value",
-      message = 'unknown plugin "' .. tostring(resolve(doc, ptr)) .. '" (built-in: ' .. table.concat(names, ", ") .. ")",
+      message = 'unknown plugin "' .. tostring(resolve(doc, ptr)) .. '" (' .. known .. ")",
     }
   elseif ends_with(kw, "/properties/on/const") then
     return { pointer = ptr, kind = "value", message = "on: can only be \"local\" (a step runs on its job's target, or on the operator host)" }
@@ -168,6 +173,34 @@ function M.validate(doc, plugin_list)
     end
   end
   return errors
+end
+
+-- Checks data against any schema (a decoded table). Returns a list of
+-- { pointer, kind, message }, empty if the data is valid.
+function M.check(schema_tbl, data)
+  local result = schema.new(schema_tbl):validate(data)
+  local list = {}
+  if result.valid then return list end
+  for _, err in ipairs(result.errors or {}) do
+    local kw = err.keywordLocation
+    -- These lines only say that some branch inside them failed.
+    if not (ends_with(kw, "/allOf") or ends_with(kw, "/anyOf") or ends_with(kw, "/oneOf")) then
+      if ends_with(kw, "/additionalProperties") then
+        list[#list + 1] = { pointer = err.instanceLocation, kind = "key", message = "unknown key" }
+      else
+        list[#list + 1] = { pointer = err.instanceLocation, kind = "value", message = err.error or "invalid value" }
+      end
+    end
+  end
+  return list
+end
+
+-- Loads the project's plugins (next to the workflow, in dir) and validates doc
+-- against the built-in and project plugins together. Returns the workflow's
+-- errors and the plugins' problems ({ where, message }).
+function M.validate_project(doc, dir)
+  local list, problems = plugins.load(dir)
+  return M.validate(doc, list), problems
 end
 
 return M

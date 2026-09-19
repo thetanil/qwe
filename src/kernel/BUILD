@@ -101,8 +101,8 @@ cc_library(
 
 cc_library(
     name = "luavm",
-    srcs = ["luavm.c"],
-    hdrs = ["luavm.h"],
+    srcs = ["luavm.c", "luafs.c"],
+    hdrs = ["luavm.h", "luafs.h"],
     deps = [
         ":luacbor",
         "//src/kernel/lua:modules",

@@ -1,0 +1,1 @@
+luacheck 1.2.0 (lunarmodules/luacheck, tag v1.2.0), MIT. Used through its API only (luacheck.check_strings); the CLI (main, runner, config, cache, fs, ...) and lfs/argparse are not embedded.

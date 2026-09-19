@@ -17,6 +17,7 @@
 
 #include <errno.h>
 #include <stdint.h>
+#include <stdio_ext.h>
 #include <lauxlib.h>
 #include <lualib.h>
 #include <signal.h>
@@ -38,24 +39,52 @@ struct child_arg {
 	int step_ref; /* registry ref of the step's table */
 };
 
-/* Runs in the child: asks the step's plugin for the argv to exec. */
+/* A uses: step whose plugin fails (it raises an error, or breaks strict
+ * globals) exits with this status, which the parent reads as reason
+ * plugin-error. It is only looked at for a uses: step. */
+#define PLUGIN_ERROR_EXIT 125
+
+/* Whether the step table at idx is a uses: step. */
+static int step_uses_plugin(lua_State *L, int idx)
+{
+	int uses;
+
+	lua_getfield(L, idx, "uses");
+	uses = lua_isstring(L, -1);
+	lua_pop(L, 1);
+	return uses;
+}
+
+/* Runs in the child: hands the step to its plugin (qwe.plugins.run_step). A
+ * run: step or a run-like plugin gives back the argv to exec. A check/apply
+ * plugin does its work here and the child exits. */
 static char **child_argv(void *arg)
 {
 	struct child_arg *a = arg;
 	lua_State *L = a->L;
 	char **argv;
 	size_t n, i;
+	int is_plugin;
 
+	lua_rawgeti(L, LUA_REGISTRYINDEX, a->step_ref);
+	is_plugin = step_uses_plugin(L, -1);
+	lua_pop(L, 1);
+	/* The parent's unwritten stdout is not this step's output. */
+	__fpurge(stdout);
 	lua_getglobal(L, "require");
-	lua_pushstring(L, "run");
+	lua_pushstring(L, "qwe.plugins");
 	if (lua_pcall(L, 1, 1, 0) != 0)
 		goto fail;
-	lua_getfield(L, -1, "argv");
+	lua_getfield(L, -1, "run_step");
 	lua_rawgeti(L, LUA_REGISTRYINDEX, a->step_ref);
 	if (lua_pcall(L, 1, 1, 0) != 0)
 		goto fail;
 	if (!lua_istable(L, -1)) {
-		fprintf(stderr, "qwe: plugin run returned no argv\n");
+		if (is_plugin && lua_isnil(L, -1)) {
+			fflush(stdout);
+			_exit(0);
+		}
+		fprintf(stderr, "qwe: the plugin returned no argv\n");
 		return NULL;
 	}
 	n = lua_objlen(L, -1);
@@ -69,7 +98,11 @@ static char **child_argv(void *arg)
 	}
 	return argv;
 fail:
-	fprintf(stderr, "qwe: plugin run: %s\n", lua_tostring(L, -1));
+	fprintf(stderr, "qwe: plugin failed: %s\n", lua_tostring(L, -1));
+	if (is_plugin) {
+		fflush(stdout);
+		_exit(PLUGIN_ERROR_EXIT);
+	}
 	return NULL;
 }
 
@@ -598,6 +631,18 @@ static void job_send_plain(struct run_ctx *ctx, struct job *job, enum qwe_lc_eve
 	job_send(ctx, job, ev, none, ev_step);
 }
 
+/* Whether the live step of the job is a uses: step. */
+static int live_step_is_plugin(struct job *job)
+{
+	lua_State *L = job->L;
+	int uses;
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, job->run.cur_ref);
+	uses = step_uses_plugin(L, -1);
+	lua_pop(L, 1);
+	return uses;
+}
+
 /* Reaps everything that has exited. qwe is a subreaper, so that includes
  * processes reparented to it when their parent died, not only step leaders.
  * A leader's exit is an event. A step ends when its whole group is empty: a
@@ -622,6 +667,8 @@ static void reap_children(struct run_ctx *ctx)
 			if (r->live_step < 0 || !r->proc_ok || r->leader_reaped || r->proc.pid != pid)
 				continue;
 			r->leader_reaped = 1;
+			if (WIFEXITED(status) && WEXITSTATUS(status) == PLUGIN_ERROR_EXIT && live_step_is_plugin(job))
+				pl.reason = "plugin-error";
 			job_send(ctx, job,
 				 WIFEXITED(status) && WEXITSTATUS(status) == 0 ? QWE_LC_EV_LEADER_EXIT_OK
 									       : QWE_LC_EV_LEADER_EXIT_FAIL,

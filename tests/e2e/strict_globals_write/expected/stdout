@@ -1,0 +1,1 @@
+[j] qwe: plugin failed: .qwe/plugins/sloppy/plugin.lua:8: plugin sloppy: assignment to undeclared global "leaked"

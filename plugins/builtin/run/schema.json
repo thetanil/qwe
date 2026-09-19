@@ -1,0 +1,12 @@
+{
+  "with": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "description": "The run: step kind: a shell script, run on the job's target. Not named by uses:.",
+    "type": "object",
+    "required": ["run"],
+    "additionalProperties": false,
+    "properties": {
+      "run": {"type": "string"}
+    }
+  }
+}

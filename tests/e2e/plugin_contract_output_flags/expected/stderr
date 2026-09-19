@@ -1,0 +1,1 @@
+qwe validate: .qwe/plugins/leaky/schema.json: at /outputs/token: output "token" must declare "secret": true or false

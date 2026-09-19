@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://qwe.invalid/strict-metaschema",
+  "title": "qwe strict metaschema",
+  "$comment": "draft-07's metaschema with additionalProperties: false at every level (each subschema is a $ref to the root), pattern, patternProperties and format removed until a regex engine exists (ADR-0009), secret added for output schemas, and $schema pinned to draft-07.",
+  "definitions": {
+    "schemaArray": {"type": "array", "minItems": 1, "items": {"$ref": "#"}},
+    "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "nonNegativeIntegerDefault0": {"allOf": [{"$ref": "#/definitions/nonNegativeInteger"}, {"default": 0}]},
+    "simpleTypes": {"enum": ["array", "boolean", "integer", "null", "number", "object", "string"]},
+    "stringArray": {"type": "array", "items": {"type": "string"}, "uniqueItems": true, "default": []}
+  },
+  "type": ["object", "boolean"],
+  "additionalProperties": false,
+  "properties": {
+    "$id": {"type": "string"},
+    "$schema": {"const": "http://json-schema.org/draft-07/schema#"},
+    "$ref": {"type": "string"},
+    "$comment": {"type": "string"},
+    "title": {"type": "string"},
+    "description": {"type": "string"},
+    "default": true,
+    "readOnly": {"type": "boolean", "default": false},
+    "examples": {"type": "array", "items": true},
+    "multipleOf": {"type": "number", "exclusiveMinimum": 0},
+    "maximum": {"type": "number"},
+    "exclusiveMaximum": {"type": "number"},
+    "minimum": {"type": "number"},
+    "exclusiveMinimum": {"type": "number"},
+    "maxLength": {"$ref": "#/definitions/nonNegativeInteger"},
+    "minLength": {"$ref": "#/definitions/nonNegativeIntegerDefault0"},
+    "additionalItems": {"$ref": "#"},
+    "items": {"anyOf": [{"$ref": "#"}, {"$ref": "#/definitions/schemaArray"}], "default": true},
+    "maxItems": {"$ref": "#/definitions/nonNegativeInteger"},
+    "minItems": {"$ref": "#/definitions/nonNegativeIntegerDefault0"},
+    "uniqueItems": {"type": "boolean", "default": false},
+    "contains": {"$ref": "#"},
+    "maxProperties": {"$ref": "#/definitions/nonNegativeInteger"},
+    "minProperties": {"$ref": "#/definitions/nonNegativeIntegerDefault0"},
+    "required": {"$ref": "#/definitions/stringArray"},
+    "additionalProperties": {"$ref": "#"},
+    "definitions": {"type": "object", "additionalProperties": {"$ref": "#"}, "default": {}},
+    "properties": {"type": "object", "additionalProperties": {"$ref": "#"}, "default": {}},
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": {"anyOf": [{"$ref": "#"}, {"$ref": "#/definitions/stringArray"}]}
+    },
+    "propertyNames": {"$ref": "#"},
+    "const": true,
+    "enum": {"type": "array", "items": true},
+    "type": {
+      "anyOf": [
+        {"$ref": "#/definitions/simpleTypes"},
+        {"type": "array", "items": {"$ref": "#/definitions/simpleTypes"}, "minItems": 1, "uniqueItems": true}
+      ]
+    },
+    "contentMediaType": {"type": "string"},
+    "contentEncoding": {"type": "string"},
+    "if": {"$ref": "#"},
+    "then": {"$ref": "#"},
+    "else": {"$ref": "#"},
+    "allOf": {"$ref": "#/definitions/schemaArray"},
+    "anyOf": {"$ref": "#/definitions/schemaArray"},
+    "oneOf": {"$ref": "#/definitions/schemaArray"},
+    "not": {"$ref": "#"},
+    "secret": {"type": "boolean"}
+  },
+  "default": true
+}

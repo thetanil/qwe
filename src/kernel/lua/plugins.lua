@@ -1,11 +1,21 @@
--- The built-in step plugins that `uses:` can name, with their with: schemas.
--- (`run:` is a step kind, not a `uses:` plugin.)
+-- The plugin registry: built-in plugins (embedded bytecode) and project
+-- plugins (source in <workflow dir>/.qwe/plugins/<name>/), each with its
+-- schema.json ({ with, outputs }) and plugin.lua. All plugin code runs under
+-- strict globals (qwe.strict).
 local cbor = require("qwe.cbor")
+local fs = require("qwe.fs")
 local json = require("dkjson")
+local strict = require("qwe.strict")
 
-local names = { "file.ensure" }
+-- uses = false marks a plugin that is a step kind, not something `uses:` names.
+local BUILTIN = {
+  { name = "run", uses = false },
+  { name = "file.ensure", uses = true },
+}
 
 local M = {}
+
+local registry -- name -> plugin, of the last load()
 
 -- Decodes a JSON schema so that objects and arrays carry qwe.cbor's metatables,
 -- which is how lua-schema tells them apart.
@@ -13,16 +23,145 @@ function M.decode_schema(text)
   return assert(json.decode(text, 1, cbor.null, cbor.map_mt, cbor.array_mt))
 end
 
--- Returns a list of { name = "file.ensure", schema = <decoded with: schema> }.
-function M.builtin()
+-- Every built-in plugin: { name, uses, builtin, source, schema (its with:
+-- schema), outputs }.
+function M.builtin_all()
   local list = {}
-  for _, name in ipairs(names) do
+  for _, b in ipairs(BUILTIN) do
+    local doc = M.decode_schema(require("plugin_schema." .. b.name))
     list[#list + 1] = {
-      name = name,
-      schema = M.decode_schema(require("plugin_schema." .. name)),
+      name = b.name,
+      uses = b.uses,
+      builtin = true,
+      source = "built-in",
+      schema = doc.with,
+      outputs = doc.outputs,
     }
   end
   return list
+end
+
+-- The built-in plugins `uses:` can name.
+function M.builtin()
+  local list = {}
+  for _, p in ipairs(M.builtin_all()) do
+    if p.uses then list[#list + 1] = p end
+  end
+  return list
+end
+
+local function read_file(path)
+  local f, err = io.open(path, "rb")
+  if not f then return nil, err end
+  local text = f:read("*a")
+  f:close()
+  return text
+end
+
+local function join(dir, rest)
+  if dir == "" then return rest end
+  return dir .. "/" .. rest
+end
+
+local function is_builtin_name(name)
+  for _, b in ipairs(BUILTIN) do
+    if b.name == name then return true end
+  end
+  return false
+end
+
+-- One project plugin directory. Returns the plugin, or nil and its problems.
+local function load_project(name, path)
+  local problems = {}
+  if is_builtin_name(name) then
+    return nil, { {
+      where = path,
+      message = 'project plugin "' .. name .. '" has the name of the built-in plugin "' .. name
+        .. '" (built-in); a project plugin cannot shadow a built-in one',
+    } }
+  end
+  if not name:match("^[A-Za-z_][A-Za-z0-9_.%-]*$") then
+    return nil, { { where = path, message = 'the plugin name "' .. name .. '" must match [A-Za-z_][A-Za-z0-9_.-]*' } }
+  end
+  local lua_path, schema_path = path .. "/plugin.lua", path .. "/schema.json"
+  local lua_src, lua_err = read_file(lua_path)
+  local schema_text, schema_err = read_file(schema_path)
+  if not lua_src then problems[#problems + 1] = { where = lua_path, message = "cannot read: " .. tostring(lua_err) } end
+  if not schema_text then problems[#problems + 1] = { where = schema_path, message = "cannot read: " .. tostring(schema_err) } end
+  if #problems > 0 then return nil, problems end
+  local found, doc = require("qwe.plugincheck").check(name, lua_path, lua_src, schema_path, schema_text)
+  if #found > 0 then return nil, found end
+  return {
+    name = name,
+    uses = true,
+    project = true,
+    source = path,
+    schema = doc.with,
+    outputs = doc.outputs,
+    lua_path = lua_path,
+    lua_src = lua_src,
+  }
+end
+
+-- Loads the built-in plugins and the project plugins under dir/.qwe/plugins
+-- (dir is the workflow's directory, "" for the current one). Returns the list
+-- of plugins `uses:` can name, and a list of problems ({ where, message }) in
+-- the project plugins. A project plugin with a problem is left out.
+function M.load(dir)
+  registry = {}
+  local list, problems = {}, {}
+  for _, p in ipairs(M.builtin_all()) do
+    registry[p.name] = p
+    if p.uses then list[#list + 1] = p end
+  end
+  local root = join(dir, ".qwe/plugins")
+  local names = fs.isdir(root) and fs.list(root) or {}
+  for _, name in ipairs(names) do
+    local path = root .. "/" .. name
+    if fs.isdir(path) then
+      local plugin, found = load_project(name, path)
+      if plugin then
+        registry[name] = plugin
+        list[#list + 1] = plugin
+      else
+        for _, p in ipairs(found) do problems[#problems + 1] = p end
+      end
+    end
+  end
+  return list, problems
+end
+
+-- The plugin's module, loaded under strict globals.
+local function open(plugin)
+  if plugin.mod == nil then
+    local chunk
+    if plugin.builtin then
+      chunk = package.preload["plugin." .. plugin.name]
+    else
+      chunk = assert(loadstring(plugin.lua_src, "@" .. plugin.lua_path))
+    end
+    plugin.mod = strict.run(plugin.name, chunk)
+  end
+  return plugin.mod
+end
+
+-- Runs in the forked step child. For a run: step or a run-like plugin, returns
+-- the argv the child execs. For a check/apply plugin it does the step's work
+-- and returns nil. An error means the step failed.
+function M.run_step(step)
+  registry = registry or (function()
+    local all = {}
+    for _, p in ipairs(M.builtin_all()) do all[p.name] = p end
+    return all
+  end)()
+  local name = step.uses or "run"
+  local plugin = registry[name]
+  if not plugin then error("plugin " .. name .. " is not loaded", 0) end
+  local mod = open(plugin)
+  local with = step.uses and (step["with"] or cbor.map({})) or { run = step.run }
+  if type(mod.argv) == "function" then return mod.argv(with) end
+  mod.apply(with)
+  return nil
 end
 
 return M

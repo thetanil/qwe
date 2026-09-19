@@ -155,7 +155,9 @@ The terminal shows each job's lines prefixed with the job id. E2e golden tests c
     - A project plugin with the same name as a built-in plugin is a validation error.
     - Plugin code runs with strict globals: reading or writing an undeclared global is an error.
     - `qwe validate` checks every plugin's schemas against the JSON Schema metaschema, checks every project plugin's contract (it exports check/apply or is `run`-like, has a `with:` schema, and declares outputs with secret flags), and runs luacheck on project plugins.
-    - Built-in plugins go through the same checks as Bazel tests.
+    - Built-in plugins go through the same checks as Bazel tests (`//plugins/builtin:lint_test`).
+    - A plugin is `<name>/plugin.lua` plus `<name>/schema.json`, which is `{"with": <schema>, "outputs": {<name>: <schema with "secret": true|false>}}`. A step plugin exports `check` and `apply`; a run-like plugin exports `argv`. `qwe.fs`, not luafilesystem, lists the plugin directory, and `require()` never loads from disk (`package.path` is empty).
+    - A `uses:` plugin that raises an error, or reads or writes an undeclared global, fails its step with reason `plugin-error`.
 13. **Positions.** Every validation error names `file:line:column`. The YAML→CBOR transcoder keeps a side table from each node to its position (needed later for the `qwe serve` LSP).
 
 ## Built-in plugins in M1

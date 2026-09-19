@@ -1,0 +1,2 @@
+qwe validate: .qwe/plugins/bad/schema.json: at /with/properties/name/minLenght: unknown keyword "minLenght"
+qwe validate: .qwe/plugins/bad/schema.json: at /with/requried: unknown keyword "requried"
