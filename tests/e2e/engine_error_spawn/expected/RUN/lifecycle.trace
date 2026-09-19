@@ -1,0 +1,4 @@
+TIME j - pending needs-met ready transition -
+TIME j - ready slot-granted between-steps transition -
+TIME j 0 between-steps next-step step-running-coe transition -
+TIME j 0 step-running-coe start-failed failed transition engine-error op=fork errno=EAGAIN

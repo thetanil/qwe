@@ -11,6 +11,7 @@ typedef char **(*qwe_child_fn)(void *arg);
 struct qwe_proc {
 	pid_t pid;
 	int out_fd; /* read end: child's stdout and stderr, merged in arrival order */
+	const char *fail_op; /* after a failed spawn: "pipe" or "fork" */
 };
 
 /* SIGCHLD must be blocked by the caller (it is read through a signalfd), and

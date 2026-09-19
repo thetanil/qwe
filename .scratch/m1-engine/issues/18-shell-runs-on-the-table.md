@@ -1,6 +1,6 @@
 # 18: The engine runs on the lifecycle table
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 17, 21
@@ -13,14 +13,14 @@ Until ticket 19 lands, the shell sends `group-empty` straight after the leader i
 
 ## Acceptance criteria
 
-- [ ] Every e2e case that exists before this ticket passes with its goldens unchanged. `e2e: tests/e2e/` (the whole suite)
-- [ ] No job state changes outside the lifecycle lookup. The old job state machine and the outcome flags are deleted, and so are the old job-state tests: the lifecycle tests replace them. `unit: src/kernel/lifecycle_test.c` (whole suite)
-- [ ] A step-scoped event whose step index is not the live step's is dropped before the table, and it is written to the trace as stale. `unit: src/kernel/lifecycle_test.c::stale_step_event_filtered` (the filter is a pure function next to the table)
-- [ ] `lifecycle.trace` is written in the run directory. It has one line per record (monotonic time, job, step index, state, event, next state, cell kind, reason), and it always includes every transition and every ignored or stale event. `e2e: tests/e2e/trace_transitions/`
-- [ ] `qwe run --debug` adds every event to the trace. Without it, events that caused no change are absent. `e2e: tests/e2e/trace_debug/`
-- [ ] Before an impossible cell aborts, its trace line is flushed. `unit: src/kernel/lifecycle_test.c::impossible_cell_aborts` (extended to check the trace sink was flushed)
-- [ ] A step that cannot be started (the spawn fails) is `failed` with reason `engine-error`, `continue-on-error` does not rescue it, and the trace names the operation and errno. `e2e: tests/e2e/engine_error_spawn/` (make it fail for real, for example with `ulimit -u` in the case's env, with no test-only hook in the binary)
-- [ ] The e2e harness normalises the trace's times for goldens, the same way it already normalises `result.json`. `e2e: tests/e2e/trace_transitions/`
+- [x] Every e2e case that exists before this ticket passes with its goldens unchanged. `e2e: tests/e2e/` (the whole suite)
+- [x] No job state changes outside the lifecycle lookup. The old job state machine and the outcome flags are deleted, and so are the old job-state tests: the lifecycle tests replace them. `unit: src/kernel/lifecycle_test.c` (whole suite)
+- [x] A step-scoped event whose step index is not the live step's is dropped before the table, and it is written to the trace as stale. `unit: src/kernel/lifecycle_test.c::stale_step_event_filtered` (the filter is a pure function next to the table)
+- [x] `lifecycle.trace` is written in the run directory. It has one line per record (monotonic time, job, step index, state, event, next state, cell kind, reason), and it always includes every transition and every ignored or stale event. `e2e: tests/e2e/trace_transitions/`
+- [x] `qwe run --debug` adds every event to the trace. Without it, events that caused no change are absent. `e2e: tests/e2e/trace_debug/`
+- [x] Before an impossible cell aborts, its trace line is flushed. `unit: src/kernel/lifecycle_test.c::impossible_cell_aborts` (extended to check the trace sink was flushed)
+- [x] A step that cannot be started (the spawn fails) is `failed` with reason `engine-error`, `continue-on-error` does not rescue it, and the trace names the operation and errno. `e2e: tests/e2e/engine_error_spawn/` (make it fail for real, for example with `ulimit -u` in the case's env, with no test-only hook in the binary)
+- [x] The e2e harness normalises the trace's times for goldens, the same way it already normalises `result.json`. `e2e: tests/e2e/trace_transitions/`
 
 ## Comments
 
@@ -49,3 +49,14 @@ The loop's only decisions are "which event is this?" and "is it stale?". Every s
 - The subreaper and a real `group-empty` (ticket 19).
 - Signalling from a marker file in the e2e harness, and a trace golden for `grace_then_sigkill` (ticket 20).
 - Any change to `result.json`'s shape.
+
+### Resolution
+
+- `workflow.c` is now the shell: `dispatch_one` is the only place `job->state` changes (stale filter, lookup, trace line, actions). `job_send` adds what a job is owed while it waits for nothing (the cursor's `next-step`/`no-more-steps`, a `start-failed` after a failed action). Job loading moved to `jobs.c`/`jobs.h`; the trace to `trace.c`/`trace.h`. `job_state.*` and its tests are deleted.
+- The scheduler (`sched.c`) reads states and returns events. A pass returns `needs-*` events if any job has them, else `slot-granted` for ready jobs, so a newly ready job keeps its index priority. The caller passes until it returns 0.
+- epoll tags are packed `(job, kind, step)` in `data.u64`, so a late event of an ended step keeps the step it was opened for and the stale filter can drop it. A job timeout is stale once the job has ended (`qwe_lc_event_is_stale`).
+- An operator cancel is sent once to every job (`cancel_told`), so a finished job gets one ignore line and a job in `between-steps` is cancelled by the table.
+- `--debug` adds an `event` line for every event as it arrives, before the table. Without it the trace has every transition, ignore and stale line.
+- `engine-error`: a failed spawn (`pipe`/`fork`) or timer is `start-failed` in `step-running(-coe)`; a failed log/ring/timer is `start-failed` in `between-steps`. The trace line carries `op=<op> errno=<NAME>`. The old leak of the ring and timer on that path is gone (`job_release`).
+- Harness: `lifecycle.trace` times are normalised to `TIME`. A `ulimit` file (bash, because dash has no `ulimit -u`) runs qwe under a limit. `engine_error_spawn` uses `-u 1`, so the fork really fails; it needs a non-root user, because root ignores `RLIMIT_NPROC`.
+- Between this ticket and 19, `group-empty` is sent straight after the leader is reaped, so a step's stragglers now get one SIGTERM at leader exit (the table's `settling-*-term`) but are not waited for.

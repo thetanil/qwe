@@ -1,0 +1,11 @@
+TIME j - pending needs-met ready transition -
+TIME j - ready slot-granted between-steps transition -
+TIME j 0 between-steps next-step step-running transition -
+TIME j 0 step-running leader-exit-ok settling-continue-term transition -
+TIME j 0 settling-continue-term group-empty between-steps transition -
+TIME j 1 between-steps next-step step-running-coe transition -
+TIME j 1 step-running-coe leader-exit-fail settling-continue-term transition exit-code
+TIME j 1 settling-continue-term group-empty between-steps transition -
+TIME j 2 between-steps next-step step-running transition -
+TIME j 2 step-running leader-exit-fail settling-fail-term transition exit-code
+TIME j 2 settling-fail-term group-empty failed transition exit-code

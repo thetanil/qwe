@@ -1,0 +1,9 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: cannot-start
+        run: echo hi
+        continue-on-error: true
+      - id: after
+        run: echo no

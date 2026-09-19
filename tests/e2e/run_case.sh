@@ -9,6 +9,8 @@
 #   expected/<path>   any other file: compared with <path> in the work dir
 #   env               optional KEY=VALUE lines, exported to qwe
 #                     (QWE_E2E_MARK, a number unique to the run, is always set)
+#   ulimit            optional arguments for ulimit, e.g. "-u 1": qwe runs under that
+#                     limit, so a real fork can fail
 #   signal            optional "<seconds> <SIGNAME>": qwe runs in the background
 #                     and gets that signal (kill -SIGNAME) after the delay
 #   check.sh          optional extra assertions, run in the work dir after qwe;
@@ -17,8 +19,9 @@
 #
 #
 # If qwe left exactly one .qwe/runs/<id>/, that directory is renamed to RUN/ and
-# result.json has its run id and times replaced by RUN and TIME, so goldens can
-# say expected/RUN/j.log and expected/RUN/result.json.
+# result.json has its run id and times replaced by RUN and TIME, and the first
+# field (the time) of each lifecycle.trace line by TIME, so goldens can say
+# expected/RUN/j.log, expected/RUN/result.json and expected/RUN/lifecycle.trace.
 #
 # Exit: 0 pass, 1 golden mismatch, 3 harness error.
 qwe=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
@@ -31,7 +34,7 @@ work=$(mktemp -d) || exit 3
 trap 'rm -rf "$work"' EXIT
 cp -R "$case_dir"/. "$work"/ || exit 3
 rm -rf "$work/expected" "$work/args"
-rm -f "$work/check.sh" "$work/env" "$work/signal"
+rm -f "$work/check.sh" "$work/env" "$work/signal" "$work/ulimit"
 
 set --
 if [ -f "$case_dir/args" ]; then
@@ -44,20 +47,30 @@ want_exit=0
 # A number unique to this run, for a step to sleep on, so a check can tell its
 # own leftovers from those of tests running alongside.
 export QWE_E2E_MARK=7$$
+limit=
+[ -f "$case_dir/ulimit" ] && limit=$(cat "$case_dir/ulimit")
+# Replaces the calling shell with qwe, under the case's ulimit if it has one.
+# (bash: the /bin/sh here is dash, whose ulimit has no -u.)
+run_qwe() {
+	if [ -n "$limit" ]; then
+		exec bash -c 'ulimit $1 && shift && exec "$@"' bash "$limit" "$qwe" "$@"
+	fi
+	exec "$qwe" "$@"
+}
 if [ -f "$case_dir/env" ]; then
 	while IFS= read -r line; do [ -n "$line" ] && export "$line"; done < "$case_dir/env"
 fi
 if [ -f "$case_dir/signal" ]; then
 	# Run qwe in the background, send it a signal after a delay, wait for it.
 	read -r sig_delay sig_name < "$case_dir/signal"
-	(cd "$work" && exec "$qwe" "$@" >"$work.stdout" 2>"$work.stderr") &
+	(cd "$work" && run_qwe "$@" >"$work.stdout" 2>"$work.stderr") &
 	qwe_pid=$!
 	sleep "$sig_delay"
 	kill "-$sig_name" "$qwe_pid"
 	wait "$qwe_pid"
 	got_exit=$?
 else
-	(cd "$work" && "$qwe" "$@" >"$work.stdout" 2>"$work.stderr")
+	(cd "$work" && run_qwe "$@" >"$work.stdout" 2>"$work.stderr")
 	got_exit=$?
 fi
 
@@ -70,6 +83,11 @@ if [ -d "$work/.qwe/runs" ] && [ "$(ls "$work/.qwe/runs" | wc -l)" = 1 ]; then
 		    -e 's/"ended": "[^"]*"/"ended": "TIME"/' \
 		    "$work/RUN/result.json" >"$work/RUN/result.json.new" &&
 			mv "$work/RUN/result.json.new" "$work/RUN/result.json"
+	fi
+	if [ -f "$work/RUN/lifecycle.trace" ]; then
+		# the first field is the time since the run started
+		sed -e 's/^[0-9][0-9]*\.[0-9][0-9]* /TIME /' "$work/RUN/lifecycle.trace" >"$work/RUN/lifecycle.trace.new" &&
+			mv "$work/RUN/lifecycle.trace.new" "$work/RUN/lifecycle.trace"
 	fi
 fi
 

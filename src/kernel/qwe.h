@@ -13,8 +13,12 @@
 /* Returns "qwe <version>". */
 const char *qwe_version_string(void);
 
+struct qwe_run_options {
+	int debug; /* --debug: the lifecycle trace also records every event */
+};
+
 /* Runs the workflow at path to completion; returns the process exit code. */
-int qwe_run_workflow(const char *path);
+int qwe_run_workflow(const char *path, const struct qwe_run_options *opts);
 
 /* Validates the workflow at path, printing errors as file:line:col. Returns the exit code. */
 int qwe_validate_workflow(const char *path);

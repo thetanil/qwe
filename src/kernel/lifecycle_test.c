@@ -2,8 +2,10 @@
 #include "greatest.h"
 #include "src/kernel/lifecycle.h"
 #include "src/kernel/lifecycle_model.h"
+#include "src/kernel/trace.h"
 
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
@@ -330,21 +332,62 @@ TEST scenario_actions_of_a_step_timeout(void)
 	PASS();
 }
 
+TEST stale_step_event_filtered(void)
+{
+	/* A step-scoped event is stale unless it is about the live step. */
+	ASSERT(!qwe_lc_event_is_stale(QWE_LC_STEP_RUNNING, QWE_LC_EV_LEADER_EXIT_OK, 2, 2));
+	ASSERT(qwe_lc_event_is_stale(QWE_LC_STEP_RUNNING, QWE_LC_EV_LEADER_EXIT_OK, 1, 2));
+	ASSERT(qwe_lc_event_is_stale(QWE_LC_STEP_RUNNING, QWE_LC_EV_LEADER_EXIT_FAIL, 1, 2));
+	ASSERT(qwe_lc_event_is_stale(QWE_LC_STEP_RUNNING, QWE_LC_EV_STEP_TIMEOUT, 1, 2));
+	ASSERT(qwe_lc_event_is_stale(QWE_LC_STEP_RUNNING, QWE_LC_EV_GRACE_EXPIRED, 1, 2));
+	ASSERT(qwe_lc_event_is_stale(QWE_LC_SETTLING_FAIL_TERM, QWE_LC_EV_GROUP_EMPTY, 1, 2));
+	/* with no live step, every step-scoped event is stale */
+	ASSERT(qwe_lc_event_is_stale(QWE_LC_BETWEEN_STEPS, QWE_LC_EV_STEP_TIMEOUT, 1, -1));
+	ASSERT(qwe_lc_event_is_stale(QWE_LC_SUCCESS, QWE_LC_EV_GROUP_EMPTY, 0, -1));
+	/* a job timeout is stale once the job has ended, and not before */
+	ASSERT(qwe_lc_event_is_stale(QWE_LC_CANCELLED, QWE_LC_EV_JOB_TIMEOUT, -1, -1));
+	ASSERT(!qwe_lc_event_is_stale(QWE_LC_STEP_RUNNING, QWE_LC_EV_JOB_TIMEOUT, -1, 0));
+	/* the rest carry no step */
+	ASSERT(!qwe_lc_event_is_stale(QWE_LC_PENDING, QWE_LC_EV_CANCEL, -1, -1));
+	ASSERT(!qwe_lc_event_is_stale(QWE_LC_BETWEEN_STEPS, QWE_LC_EV_NEXT_STEP, -1, -1));
+	PASS();
+}
+
 TEST impossible_cell_aborts(void)
 {
-	/* The impossible lookup aborts, so it runs in a child. */
-	pid_t pid = fork();
+	/* The impossible lookup aborts, so it runs in a child. It has a trace
+	 * sink, and the sink must hold the impossible line once the child is
+	 * dead: the line is written before the abort. */
+	const char *dir = getenv("TEST_TMPDIR");
+	char path[256], line[256] = "";
+	struct qwe_trace trace;
+	FILE *fp;
+	pid_t pid;
 	int st;
 
+	snprintf(path, sizeof path, "%s/lifecycle.trace.%d", dir ? dir : "/tmp", (int)getpid());
+	pid = fork();
 	ASSERT(pid >= 0);
 	if (pid == 0) {
 		close(2); /* keep the expected message out of the test log */
+		if (qwe_trace_open(&trace, path, 0) < 0)
+			_exit(2);
+		qwe_trace_install_abort_hook(&trace);
+		trace.job = "j";
+		trace.step = 2;
 		qwe_lc_lookup(QWE_LC_PENDING, QWE_LC_EV_GRACE_EXPIRED, NULL);
 		_exit(0); /* not reached */
 	}
 	ASSERT_EQ(pid, waitpid(pid, &st, 0));
 	ASSERT(WIFSIGNALED(st));
 	ASSERT_EQ(SIGABRT, WTERMSIG(st));
+
+	fp = fopen(path, "r");
+	ASSERTm("the trace file was not written", fp != NULL);
+	ASSERT(fgets(line, sizeof line, fp) != NULL);
+	fclose(fp);
+	unlink(path);
+	ASSERTm(line, strstr(line, " j 2 pending grace-expired - impossible -\n") != NULL);
 	PASS();
 }
 
@@ -371,6 +414,7 @@ int main(int argc, char **argv)
 	RUN_TEST(scenario_cancel_in_pending_skips);
 	RUN_TEST(scenario_cancel_in_ready_skips);
 	RUN_TEST(scenario_actions_of_a_step_timeout);
+	RUN_TEST(stale_step_event_filtered);
 	RUN_TEST(impossible_cell_aborts);
 	GREATEST_MAIN_END();
 }

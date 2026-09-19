@@ -248,6 +248,43 @@ int qwe_lc_state_teardown_started(enum qwe_lc_state s)
 	return s >= QWE_LC_STEP_STOPPING && s <= QWE_LC_SETTLING_CANCEL_REQUESTED_KILL;
 }
 
+int qwe_lc_state_is_running(enum qwe_lc_state s)
+{
+	return s >= QWE_LC_BETWEEN_STEPS && s <= QWE_LC_SETTLING_CANCEL_REQUESTED_KILL;
+}
+
+int qwe_lc_event_is_stale(enum qwe_lc_state s, enum qwe_lc_event e, long event_step, long live_step)
+{
+	switch (e) {
+	case QWE_LC_EV_LEADER_EXIT_OK:
+	case QWE_LC_EV_LEADER_EXIT_FAIL:
+	case QWE_LC_EV_STEP_TIMEOUT:
+	case QWE_LC_EV_GRACE_EXPIRED:
+	case QWE_LC_EV_GROUP_EMPTY:
+		return event_step != live_step;
+	case QWE_LC_EV_JOB_TIMEOUT:
+		return qwe_lc_state_is_final(s);
+	default:
+		return 0;
+	}
+}
+
+const char *qwe_lc_step_outcome(const struct qwe_lc_result *r)
+{
+	if (r->next >= QWE_LC_SETTLING_CANCEL_TIMEOUT_TERM && r->next <= QWE_LC_SETTLING_CANCEL_REQUESTED_KILL)
+		return "cancelled";
+	return r->reason ? "failed" : "success";
+}
+
+static qwe_lc_abort_hook abort_hook;
+static void *abort_arg;
+
+void qwe_lc_set_abort_hook(qwe_lc_abort_hook fn, void *arg)
+{
+	abort_hook = fn;
+	abort_arg = arg;
+}
+
 struct qwe_lc_result qwe_lc_lookup(enum qwe_lc_state s, enum qwe_lc_event e, const struct qwe_lc_payload *p)
 {
 	static const struct qwe_lc_payload none;
@@ -257,6 +294,8 @@ struct qwe_lc_result qwe_lc_lookup(enum qwe_lc_state s, enum qwe_lc_event e, con
 
 	if ((unsigned)s >= QWE_LC_NSTATES || (unsigned)e >= QWE_LC_NEVENTS || table[s][e].kind == QWE_LC_IMPOSSIBLE ||
 	    table[s][e].kind == QWE_LC_UNSET) {
+		if (abort_hook)
+			abort_hook(s, e, abort_arg);
 		fprintf(stderr, "qwe: internal error: event %s cannot happen in state %s\n", qwe_lc_event_name(e),
 			qwe_lc_state_name(s));
 		abort();

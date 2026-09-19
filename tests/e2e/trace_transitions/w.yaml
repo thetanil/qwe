@@ -1,0 +1,13 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: ok
+        run: echo one
+      - id: soft
+        run: exit 3
+        continue-on-error: true
+      - id: boom
+        run: exit 4
+      - id: never
+        run: echo no

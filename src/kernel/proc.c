@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "src/kernel/proc.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
@@ -10,14 +11,20 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 	int fds[2];
 	pid_t pid;
 
-	if (pipe(fds) < 0)
+	if (pipe(fds) < 0) {
+		p->fail_op = "pipe";
 		return -1;
+	}
 	fcntl(fds[0], F_SETFD, FD_CLOEXEC);
 
 	pid = fork();
 	if (pid < 0) {
+		int saved = errno;
+
+		p->fail_op = "fork";
 		close(fds[0]);
 		close(fds[1]);
+		errno = saved;
 		return -1;
 	}
 	if (pid == 0) {

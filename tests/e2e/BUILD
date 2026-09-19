@@ -81,3 +81,9 @@ e2e_test(name = "validate_bad_job_id")
 e2e_test(name = "validate_bad_step_id")
 
 e2e_test(name = "run_refuses_bad_id")
+
+e2e_test(name = "trace_transitions")
+
+e2e_test(name = "trace_debug")
+
+e2e_test(name = "engine_error_spawn")

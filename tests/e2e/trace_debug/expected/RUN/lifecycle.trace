@@ -1,0 +1,12 @@
+TIME j - pending needs-met - event -
+TIME j - pending needs-met ready transition -
+TIME j - ready slot-granted - event -
+TIME j - ready slot-granted between-steps transition -
+TIME j 0 between-steps next-step - event -
+TIME j 0 between-steps next-step step-running transition -
+TIME j 0 step-running leader-exit-ok - event -
+TIME j 0 step-running leader-exit-ok settling-continue-term transition -
+TIME j 0 settling-continue-term group-empty - event -
+TIME j 0 settling-continue-term group-empty between-steps transition -
+TIME j - between-steps no-more-steps - event -
+TIME j - between-steps no-more-steps success transition -

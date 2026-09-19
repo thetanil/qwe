@@ -129,5 +129,25 @@ int qwe_lc_state_is_final(enum qwe_lc_state s);
 /* True when SIGTERM has been sent to the step's group and the grace timer is
  * running or expired: the stopping, killing and settling states. */
 int qwe_lc_state_teardown_started(enum qwe_lc_state s);
+/* True for the states of a started job that has not ended: between-steps
+ * through the settling states. These are the jobs that hold a parallel slot. */
+int qwe_lc_state_is_running(enum qwe_lc_state s);
+
+/* The stale filter, before the table. A step-scoped event (leader exit, step
+ * timeout, grace expiry, group empty) carries the index of the step it is
+ * about, and is stale unless that is the live step (live_step, or -1 for
+ * none). A job timeout is stale once the job has ended: its timer is gone.
+ * Every other event is never stale. */
+int qwe_lc_event_is_stale(enum qwe_lc_state s, enum qwe_lc_event e, long event_step, long live_step);
+
+/* The outcome of a step for a result that has a RECORD_STEP action:
+ * "cancelled" if the job is being cancelled or timed out, "success" if no
+ * reason was recorded, "failed" otherwise. */
+const char *qwe_lc_step_outcome(const struct qwe_lc_result *r);
+
+/* Called with the state and event just before an impossible lookup aborts,
+ * so that a trace line can be flushed. NULL clears it. */
+typedef void (*qwe_lc_abort_hook)(enum qwe_lc_state s, enum qwe_lc_event e, void *arg);
+void qwe_lc_set_abort_hook(qwe_lc_abort_hook fn, void *arg);
 
 #endif

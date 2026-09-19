@@ -8,16 +8,19 @@ cc_library(
     name = "kernel",
     srcs = [
         "kernel.c",
+        "jobs.c",
         "validate.c",
         "workflow.c",
     ],
     hdrs = [
         "qwe.h",
+        "jobs.h",
         "validate.h",
     ],
     deps = [
         ":dag",
-        ":job_state",
+        ":lifecycle",
+        ":trace",
         ":luacbor",
         ":luavm",
         ":proc",
@@ -119,7 +122,6 @@ cc_test(
     srcs = ["dag_test.c"],
     deps = [
         ":dag",
-        ":job_state",
         "//third_party/greatest",
     ],
 )
@@ -154,22 +156,6 @@ sh_test(
 )
 
 cc_library(
-    name = "job_state",
-    srcs = ["job_state.c"],
-    hdrs = ["job_state.h"],
-)
-
-# Forks to check that an illegal transition aborts.
-cc_test(
-    name = "job_state_test",
-    srcs = ["job_state_test.c"],
-    deps = [
-        ":job_state",
-        "//third_party/greatest",
-    ],
-)
-
-cc_library(
     name = "timer",
     srcs = ["timer.c"],
     hdrs = ["timer.h"],
@@ -189,14 +175,14 @@ cc_library(
     name = "sched",
     srcs = ["sched.c"],
     hdrs = ["sched.h"],
-    deps = [":job_state"],
+    deps = [":lifecycle"],
 )
 
 cc_test(
     name = "sched_test",
     srcs = ["sched_test.c"],
     deps = [
-        ":job_state",
+        ":lifecycle",
         ":sched",
         "//third_party/greatest",
     ],
@@ -219,6 +205,15 @@ cc_test(
     ],
     deps = [
         ":lifecycle",
+        ":trace",
         "//third_party/greatest",
     ],
+)
+
+# The lifecycle trace file (design §7); linked into the kernel and the lifecycle test.
+cc_library(
+    name = "trace",
+    srcs = ["trace.c"],
+    hdrs = ["trace.h"],
+    deps = [":lifecycle"],
 )

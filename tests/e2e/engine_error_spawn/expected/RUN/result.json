@@ -1,0 +1,30 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "j": {
+      "outcome": "failed",
+      "reason": "engine-error",
+      "started": "TIME",
+      "ended": "TIME",
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "cannot-start",
+          "outcome": "failed",
+          "reason": "engine-error",
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        },
+        {
+          "id": "after",
+          "outcome": "skipped",
+          "reason": null,
+          "changed": false,
+          "started": null,
+          "ended": null
+        }
+      ]
+    }
+  }
+}

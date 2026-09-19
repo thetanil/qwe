@@ -1,24 +1,31 @@
-/* Which jobs may start (design §7, §9). A pure decision over the job states
- * and the `needs:` graph: it runs nothing and owns no state. */
+/* Which jobs may move on (design §7, §9). A pure decision over the job states
+ * and the `needs:` graph: it runs nothing, owns no state, and changes no
+ * job's state. It says which event each job should be sent. */
 #ifndef QWE_KERNEL_SCHED_H
 #define QWE_KERNEL_SCHED_H
 
-#include "src/kernel/job_state.h"
+#include "src/kernel/lifecycle.h"
 
 #include <stddef.h>
 
 struct qwe_sched_job {
-	enum qwe_job_state *state; /* the job's live state; the scheduler moves it */
-	const size_t *needs;       /* indexes into the same array */
+	const enum qwe_lc_state *state; /* the job's live state; read only */
+	const size_t *needs;            /* indexes into the same array */
 	size_t nneeds;
 };
 
-/* One scheduling pass. Every pending job whose needs are all final moves to
- * skipped (some need is not success: the default join rule) or ready. Then
- * the ready jobs, lowest index first, that fit under max_parallel (0 for
- * unlimited) given the jobs already running or terminating are written to
- * starts[] (room for n). The caller moves each of those to running.
- * Returns how many were written. */
-size_t qwe_sched_pass(struct qwe_sched_job *jobs, size_t n, long max_parallel, size_t *starts);
+struct qwe_sched_event {
+	size_t job;
+	enum qwe_lc_event event; /* needs-met, needs-failed or slot-granted */
+};
+
+/* One scheduling pass. If some pending job has all its needs final, the pass
+ * is those jobs' needs-met (all needs success: the default join rule) or
+ * needs-failed. Otherwise it is slot-granted for the ready jobs, lowest index
+ * first, that fit under max_parallel (0 for unlimited) given the jobs already
+ * running. Events are written to out[] (room for n) and their count returned.
+ * The caller sends them, then passes again until a pass returns 0: a skip can
+ * unlock the jobs that need the skipped one. */
+size_t qwe_sched_pass(const struct qwe_sched_job *jobs, size_t n, long max_parallel, struct qwe_sched_event *out);
 
 #endif
