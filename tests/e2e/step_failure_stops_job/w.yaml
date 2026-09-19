@@ -1,0 +1,10 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: before
+        run: echo before
+      - id: boom
+        run: echo failing; exit 4
+      - id: after
+        run: echo NEVER

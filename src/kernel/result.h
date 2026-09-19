@@ -10,14 +10,14 @@ struct qwe_step_result {
 	const char *outcome;
 	const char *reason; /* may be NULL */
 	int changed;
-	time_t started, ended;
+	time_t started, ended; /* 0 if it never started */
 };
 
 struct qwe_job_result {
 	const char *id;
 	const char *outcome;
 	const char *reason; /* may be NULL */
-	time_t started, ended;
+	time_t started, ended; /* 0 if it never started */
 	unsigned long dropped_bytes;
 	const struct qwe_step_result *steps;
 	size_t nsteps;

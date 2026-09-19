@@ -1,0 +1,9 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: allowed
+        run: echo failing; exit 1
+        continue-on-error: true
+      - id: next
+        run: echo still running

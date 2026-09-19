@@ -1,0 +1,10 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: first
+        run: echo one
+      - id: second
+        run: echo two
+      - id: third
+        run: echo three

@@ -6,6 +6,11 @@ static void put_time(FILE *fp, time_t t)
 	char buf[32];
 	struct tm tm;
 
+	if (t == 0) { /* never started */
+		fputs("null", fp);
+		return;
+	}
+
 	gmtime_r(&t, &tm);
 	strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", &tm);
 	fprintf(fp, "\"%s\"", buf);

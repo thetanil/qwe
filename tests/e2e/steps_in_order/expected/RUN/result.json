@@ -1,0 +1,38 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "j": {
+      "outcome": "success",
+      "reason": null,
+      "started": "TIME",
+      "ended": "TIME",
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "first",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        },
+        {
+          "id": "second",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        },
+        {
+          "id": "third",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME"
+        }
+      ]
+    }
+  }
+}

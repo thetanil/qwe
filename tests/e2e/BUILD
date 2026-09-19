@@ -40,3 +40,11 @@ e2e_test(name = "validate_target_required")
 e2e_test(name = "validate_unknown_plugin")
 
 e2e_test(name = "run_refuses_invalid")
+
+e2e_test(name = "steps_in_order")
+
+e2e_test(name = "step_failure_stops_job")
+
+e2e_test(name = "continue_on_error")
+
+e2e_test(name = "needs_skip_chain")

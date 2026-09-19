@@ -17,6 +17,7 @@ cc_library(
     ],
     deps = [
         ":dag",
+        ":job_state",
         ":luacbor",
         ":luavm",
         ":proc",
@@ -115,6 +116,7 @@ cc_test(
     srcs = ["dag_test.c"],
     deps = [
         ":dag",
+        ":job_state",
         "//third_party/greatest",
     ],
 )
@@ -146,4 +148,20 @@ sh_test(
     srcs = ["luarun_test.sh"],
     args = ["$(location :luarun)"],
     data = [":luarun"],
+)
+
+cc_library(
+    name = "job_state",
+    srcs = ["job_state.c"],
+    hdrs = ["job_state.h"],
+)
+
+# Forks to check that an illegal transition aborts.
+cc_test(
+    name = "job_state_test",
+    srcs = ["job_state_test.c"],
+    deps = [
+        ":job_state",
+        "//third_party/greatest",
+    ],
 )

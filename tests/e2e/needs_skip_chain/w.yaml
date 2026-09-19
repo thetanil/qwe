@@ -1,0 +1,19 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - run: echo a fails; exit 1
+  b:
+    target: local
+    needs: [a]
+    steps:
+      - run: echo NEVER b
+  c:
+    target: local
+    needs: [b]
+    steps:
+      - run: echo NEVER c
+  d:
+    target: local
+    steps:
+      - run: echo d runs
