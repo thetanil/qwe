@@ -1,6 +1,6 @@
 # 20: Timing-free and trace-checked teardown e2e cases
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 18
@@ -15,10 +15,10 @@ With the lifecycle trace from ticket 18, both can be made exact.
 
 ## Acceptance criteria
 
-- [ ] The e2e harness can send qwe's signal when a named file appears in the work dir, as well as after a fixed delay. `e2e: tests/e2e/harness_selftest_signal_on_file/`
-- [ ] `operator_cancel` and `parallel_cancel` signal on a marker file that their steps create, not after a delay. `e2e: tests/e2e/operator_cancel/`, `e2e: tests/e2e/parallel_cancel/`
-- [ ] `grace_then_sigkill` checks the job's trace against a golden: step timeout, then `step-stopping`, then `grace-expired`, then `step-killing`, then `group-empty`. That golden would fail if SIGKILL came first. `e2e: tests/e2e/grace_then_sigkill/`
-- [ ] No teardown e2e case depends on a fixed delay to pass. `manual: grep the case dirs' signal files for a bare delay; there should be none left`
+- [x] The e2e harness can send qwe's signal when a named file appears in the work dir, as well as after a fixed delay. `e2e: tests/e2e/harness_selftest_signal_on_file/`
+- [x] `operator_cancel` and `parallel_cancel` signal on a marker file that their steps create, not after a delay. `e2e: tests/e2e/operator_cancel/`, `e2e: tests/e2e/parallel_cancel/`
+- [x] `grace_then_sigkill` checks the job's trace against a golden: step timeout, then `step-stopping`, then `grace-expired`, then `step-killing`, then `group-empty`. That golden would fail if SIGKILL came first. `e2e: tests/e2e/grace_then_sigkill/`
+- [x] No teardown e2e case depends on a fixed delay to pass. `manual: grep the case dirs' signal files for a bare delay; there should be none left`
 
 ## Comments
 
@@ -42,3 +42,10 @@ The harness can wait for a file to appear (with a generous upper bound that fail
 
 **Out of scope:**
 - New lifecycle behaviour. This ticket changes tests and the harness only.
+
+### Resolution
+
+- Harness: `signal` is now either `<seconds> <SIGNAME>` (still accepted) or `file <SIGNAME> <path>...`, which waits for every path to appear in the work dir. It gives up after 30 s with exit 3, and stops waiting if qwe has already exited. The header of `run_case.sh` documents it. Self-test: `harness_selftest_signal_on_file` (the step creates its marker after a second, so a signal on a delay guess would come first and the check would fail).
+- `operator_cancel` signals on `a.started`; `parallel_cancel` on `a.started b.started c.started`. Each step touches its marker after `echo started`, so the output is in the pipe before the signal.
+- `grace_then_sigkill` has a `lifecycle.trace` golden: `step-timeout` → `step-stopping`, `grace-expired` → `step-killing`, then the leader exit and `group-empty`. An immediate SIGKILL would omit `grace-expired` and fail it.
+- Checked: every `signal` file under `tests/e2e/` now starts with `file`. The e2e suite passes 20 runs each.

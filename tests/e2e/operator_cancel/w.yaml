@@ -4,7 +4,7 @@ jobs:
     target: local
     steps:
       - id: wait
-        run: echo started; sleep $QWE_E2E_MARK
+        run: echo started; touch a.started; sleep $QWE_E2E_MARK
   b:
     target: local
     needs: [a]

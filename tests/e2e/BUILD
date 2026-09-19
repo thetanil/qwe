@@ -91,3 +91,5 @@ e2e_test(name = "engine_error_spawn")
 e2e_test(name = "straggler_after_success")
 
 e2e_test(name = "grace_outlives_leader")
+
+e2e_test(name = "harness_selftest_signal_on_file")

@@ -2,12 +2,12 @@ jobs:
   a:
     target: local
     steps:
-      - run: echo started; sleep $QWE_E2E_MARK
+      - run: echo started; touch a.started; sleep $QWE_E2E_MARK
   b:
     target: local
     steps:
-      - run: echo started; sleep $QWE_E2E_MARK
+      - run: echo started; touch b.started; sleep $QWE_E2E_MARK
   c:
     target: local
     steps:
-      - run: echo started; sleep $QWE_E2E_MARK
+      - run: echo started; touch c.started; sleep $QWE_E2E_MARK

@@ -11,8 +11,11 @@
 #                     (QWE_E2E_MARK, a number unique to the run, is always set)
 #   ulimit            optional arguments for ulimit, e.g. "-u 1": qwe runs under that
 #                     limit, so a real fork can fail
-#   signal            optional "<seconds> <SIGNAME>": qwe runs in the background
-#                     and gets that signal (kill -SIGNAME) after the delay
+#   signal            optional: qwe runs in the background and gets a signal
+#                     (kill -SIGNAME). Either "<seconds> <SIGNAME>": after the delay,
+#                     or "file <SIGNAME> <path>...": once every path has appeared in
+#                     the work dir (the step creates it, so no delay guesses when it
+#                     is running). Waiting gives up after 30 s and fails the case.
 #   check.sh          optional extra assertions, run in the work dir after qwe;
 #                     sees $QWE_STDOUT (qwe's stdout) and must exit 0
 #   everything else   input files, copied to a scratch work dir where qwe runs
@@ -61,12 +64,31 @@ if [ -f "$case_dir/env" ]; then
 	while IFS= read -r line; do [ -n "$line" ] && export "$line"; done < "$case_dir/env"
 fi
 if [ -f "$case_dir/signal" ]; then
-	# Run qwe in the background, send it a signal after a delay, wait for it.
-	read -r sig_delay sig_name < "$case_dir/signal"
+	# Run qwe in the background, send it a signal, wait for it. The signal goes
+	# after a delay, or once the named files have appeared in the work dir.
+	read -r sig_first sig_second sig_files < "$case_dir/signal"
 	(cd "$work" && run_qwe "$@" >"$work.stdout" 2>"$work.stderr") &
 	qwe_pid=$!
-	sleep "$sig_delay"
-	kill "-$sig_name" "$qwe_pid"
+	if [ "$sig_first" = file ]; then
+		sig_name=$sig_second
+		waited=0
+		for f in $sig_files; do
+			while [ ! -e "$work/$f" ]; do
+				kill -0 "$qwe_pid" 2>/dev/null || break 2 # qwe is gone: nothing to signal
+				waited=$((waited + 1))
+				if [ "$waited" -gt 1500 ]; then # 30 s, only ever reached when the case is broken
+					kill -KILL "$qwe_pid" 2>/dev/null
+					echo "run_case: $f never appeared in the work dir" >&2
+					exit 3
+				fi
+				sleep 0.02
+			done
+		done
+	else
+		sig_name=$sig_second
+		sleep "$sig_first"
+	fi
+	kill "-$sig_name" "$qwe_pid" 2>/dev/null
 	wait "$qwe_pid"
 	got_exit=$?
 else

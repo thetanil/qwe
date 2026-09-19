@@ -1,0 +1,7 @@
+TIME j - pending needs-met ready transition -
+TIME j - ready slot-granted between-steps transition -
+TIME j 0 between-steps next-step step-running transition -
+TIME j 0 step-running step-timeout step-stopping transition timeout
+TIME j 0 step-stopping grace-expired step-killing transition -
+TIME j 0 step-killing leader-exit-fail settling-fail-kill transition timeout
+TIME j 0 settling-fail-kill group-empty failed transition timeout
