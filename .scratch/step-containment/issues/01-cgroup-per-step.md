@@ -2,11 +2,11 @@
 
 Status: needs-triage
 Type: task
-Blocked by: m1-engine/17
+Blocked by: m1-engine/19
 
 ## What
 
-In M1 a step's processes are tracked by process group: teardown signals the group, and a step is over when its group is empty (decided while grilling m1-engine ticket 17). A process that leaves the group escapes both. `setsid`, `setpgid` into a new group, or a daemonising double fork is enough. Such a process can outlive its step, its job and qwe itself, which breaks the "no processes left behind" claim that spec Behaviour 4 makes. M1 accepts this gap on purpose. It is recorded in `docs/workflow-kernel-design.md` §9.3.
+In M1 a step's processes are tracked by process group: teardown signals the group, and a step is over when its group is empty (ADR-0010, implemented in m1-engine ticket 19). A process that leaves the group escapes both. `setsid`, `setpgid` into a new group, or a daemonising double fork is enough. Such a process can outlive its step, its job and qwe itself, which breaks the "no processes left behind" claim that spec Behaviour 4 makes. M1 accepts this gap on purpose. It is recorded in `docs/workflow-kernel-design.md` §9.3.
 
 Closing it needs a cgroup v2 per step. Membership is inherited and cannot be left by `setsid`. `cgroup.kill` stops the whole tree at once, and `cgroup.events` `populated 0` is a pollable "step is empty" event that can replace the group-empty check.
 
