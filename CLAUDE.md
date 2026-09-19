@@ -34,6 +34,5 @@ Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/age
 
 - **Issues are raw markdown, not the `issues` CLI.** This project overrides the workspace rule: tickets live in `.scratch/<feature>/issues/NN-<slug>.md` and are edited by hand. Closing a ticket means `Status: resolved`, ticked `- [x]` acceptance criteria, and notes appended under `## Comments`.
 - **One commit per closed ticket.** This project overrides the workspace "never commit" rule, for this project only. Once `bazel test //...` is green and the ticket file is updated, commit (ticket update included). Never commit before both are true. **Never push.**
-- **Do not overwrite existing files wholesale** (for example `.gitignore`). Read and edit them. `.gitignore` already ignores `/bazel-*` and `.qwe/runs/`.
 - **e2e tests are named `<case>_test`.** The `e2e_test` macro in `tests/e2e/defs.bzl` adds the suffix, because a test named after its case directory shadows that directory in runfiles. Case layout is documented at the top of `tests/e2e/run_case.sh`.
 - **Stub subcommands** print `qwe <cmd>: not implemented` to stderr and exit 2.
