@@ -472,6 +472,7 @@ Every issue's acceptance criteria name the test that proves them (`docs/agents/i
 6. **`--check` mode.** Enabled by the check/apply split, but deferred.
 7. **Multi-process / IPC.** Out of scope. `qwe serve` calls the kernel in-process.
 8. **io_uring re-evaluation trigger.** Reconsider only if profiling shows `epoll` is the bottleneck *and* concurrency approaches ~1000 fds.
+9. **Running qwe as root.** Undecided, and a risk until it is. qwe is not meant to run as root, but it does not refuse to. A refusal at uid 0 would fit `become:` being the only route to root, but leaves open whether a local `become:` then needs sudo (ticket 14), which subcommands refuse (`validate` runs nothing), and whether containers and CI that default to root get an override. One consequence already exists: root ignores `RLIMIT_NPROC`, so the e2e harness skips `ulimit` cases (such as `engine_error_spawn`) as root.
 
 ---
 

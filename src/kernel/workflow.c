@@ -672,6 +672,23 @@ static void job_event(struct run_ctx *ctx, struct job *job, enum evkind kind, lo
 	}
 }
 
+/* Sends the operator's cancel, once it is requested, to every job not yet told.
+ * Returns whether any job was told. */
+static int broadcast_cancel(struct run_ctx *ctx)
+{
+	size_t i;
+	int sent = 0;
+
+	if (!ctx->cancel_requested)
+		return 0;
+	for (i = 0; i < ctx->njobs; i++)
+		if (!ctx->jobs[i].run.cancel_told) {
+			job_send_plain(ctx, &ctx->jobs[i], QWE_LC_EV_CANCEL, -1);
+			sent = 1;
+		}
+	return sent;
+}
+
 /* Runs every job to a final state on one event loop. The loop turns fds and
  * signals into events, and the lifecycle table decides what each one means. A
  * job whose needs are not all success is skipped (the default join rule); at
@@ -710,13 +727,15 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 		size_t running = 0, final = 0, got_n;
 		int ne;
 
-		if (ctx->cancel_requested)
-			for (i = 0; i < n; i++)
-				if (!jobs[i].run.cancel_told)
-					job_send_plain(ctx, &jobs[i], QWE_LC_EV_CANCEL, -1);
-		while ((got_n = qwe_sched_pass(sj, n, max_parallel, evs)) > 0)
-			for (i = 0; i < got_n; i++)
-				job_send_plain(ctx, &jobs[evs[i].job], evs[i].event, -1);
+		/* A job started by the pass can read the cancel off its signalfd
+		 * (between_steps_event), so the broadcast goes again after it:
+		 * otherwise the other jobs would not hear it until the next wakeup. */
+		broadcast_cancel(ctx);
+		do {
+			while ((got_n = qwe_sched_pass(sj, n, max_parallel, evs)) > 0)
+				for (i = 0; i < got_n; i++)
+					job_send_plain(ctx, &jobs[evs[i].job], evs[i].event, -1);
+		} while (broadcast_cancel(ctx));
 
 		for (i = 0; i < n; i++) {
 			final += qwe_lc_state_is_final(jobs[i].state);

@@ -10,7 +10,8 @@
 #   env               optional KEY=VALUE lines, exported to qwe
 #                     (QWE_E2E_MARK, a number unique to the run, is always set)
 #   ulimit            optional arguments for ulimit, e.g. "-u 1": qwe runs under that
-#                     limit, so a real fork can fail
+#                     limit, so a real fork can fail. Skipped (passes) as root,
+#                     which ignores the process limit.
 #   signal            optional: qwe runs in the background and gets a signal
 #                     (kill -SIGNAME). Either "<seconds> <SIGNAME>": after the delay,
 #                     or "file <SIGNAME> <path>...": once every path has appeared in
@@ -52,6 +53,12 @@ want_exit=0
 export QWE_E2E_MARK=7$$
 limit=
 [ -f "$case_dir/ulimit" ] && limit=$(cat "$case_dir/ulimit")
+# Root ignores RLIMIT_NPROC, so a limit case cannot fail its fork as root. qwe
+# is not meant to run as root anyway: the case is skipped (and passes).
+if [ -n "$limit" ] && [ "$(id -u)" = 0 ]; then
+	echo "run_case: skipped: a ulimit case cannot run as root" >&2
+	exit 0
+fi
 # Replaces the calling shell with qwe, under the case's ulimit if it has one.
 # (bash: the /bin/sh here is dash, whose ulimit has no -u.)
 run_qwe() {
