@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* NOMEM is only "the CBOR output buffer is too small", which the caller cures by
+ * retrying with a bigger buffer. Running out of heap is a plain ERR. */
 enum { OK = 0, ERR = -1, NOMEM = -2 };
 
 #define ENCRYPTED_TAG "!encrypted"
@@ -50,6 +52,13 @@ static struct qwe_pos to_pos(const yaml_mark_t *m)
 	return p;
 }
 
+/* Heap exhaustion: fatal, never retried. */
+static int oom(struct ctx *c)
+{
+	snprintf(c->err, c->err_size, "out of memory");
+	return ERR;
+}
+
 /* --- JSON Pointer bookkeeping --- */
 
 static int path_append(struct ctx *c, const char *s, size_t n)
@@ -61,7 +70,7 @@ static int path_append(struct ctx *c, const char *s, size_t n)
 			cap *= 2;
 		grown = realloc(c->path, cap);
 		if (!grown)
-			return NOMEM;
+			return oom(c);
 		c->path = grown;
 		c->path_cap = cap;
 	}
@@ -111,7 +120,7 @@ static int note_value(struct ctx *c, const yaml_mark_t *m)
 	if (c->depth == 0) {
 		c->path_len = 0;
 		if (qwe_positions_add(c->pos, "", 0, NULL, &p) < 0)
-			rc = NOMEM;
+			rc = oom(c);
 	} else if (c->is_map[c->depth]) {
 		/* The key already added the entry and set the pointer. */
 		qwe_positions_set_value(c->pos, c->key_entry[c->depth], p);
@@ -119,7 +128,7 @@ static int note_value(struct ctx *c, const yaml_mark_t *m)
 		path_reset(c);
 		rc = path_push_index(c, c->next_index[c->depth]++);
 		if (rc == OK && qwe_positions_add(c->pos, c->path, c->path_len, NULL, &p) < 0)
-			rc = NOMEM;
+			rc = oom(c);
 	}
 	return rc;
 }
@@ -134,7 +143,7 @@ static int note_key(struct ctx *c, const yaml_event_t *ev)
 	if (rc != OK)
 		return rc;
 	c->key_entry[c->depth] = qwe_positions_add(c->pos, c->path, c->path_len, &p, NULL);
-	return c->key_entry[c->depth] < 0 ? NOMEM : OK;
+	return c->key_entry[c->depth] < 0 ? oom(c) : OK;
 }
 
 /* --- scalars --- */
@@ -298,9 +307,10 @@ static int encode(const char *yaml, size_t len, uint8_t *buf, size_t cap, size_t
 	qwe_positions_free(c->pos);
 	c->pos = qwe_positions_new();
 	if (!c->pos)
-		return ERR;
+		return oom(c);
 	cbor_encoder_init(&c->stack[0], buf, cap, 0);
-	yaml_parser_initialize(&p);
+	if (!yaml_parser_initialize(&p))
+		return oom(c); /* it has already freed what it allocated */
 	yaml_parser_set_input_string(&p, (const unsigned char *)yaml, len);
 
 	while (!done && rc == OK) {

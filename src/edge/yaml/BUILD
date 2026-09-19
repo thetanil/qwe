@@ -33,3 +33,19 @@ cc_library(
     "tags",
     "transcode",
 ]]
+
+# Wraps the allocator to fail one call at a time.
+cc_test(
+    name = "alloc_test",
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    srcs = ["alloc_test.c"],
+    linkopts = [
+        "-Wl,--wrap=malloc",
+        "-Wl,--wrap=realloc",
+        "-Wl,--wrap=calloc",
+    ],
+    deps = [
+        ":yaml",
+        "//third_party/greatest",
+    ],
+)
