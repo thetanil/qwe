@@ -2,7 +2,9 @@
 #include "src/kernel/qwe.h"
 
 #include "src/edge/yaml/transcode.h"
-#include "src/kernel/luabridge.h"
+#include "src/kernel/luacbor.h"
+#include "src/kernel/luavm.h"
+#include "src/kernel/validate.h"
 #include "src/kernel/proc.h"
 #include "src/kernel/result.h"
 #include "src/kernel/ring.h"
@@ -200,6 +202,52 @@ static void fmt_run_id(char *buf, size_t n)
 	snprintf(buf + strlen(buf), n - strlen(buf), "-%d", (int)getpid());
 }
 
+/* Reads, transcodes, decodes and validates the workflow. On success returns 0
+ * with the decoded workflow on top of *L's stack. Otherwise it has printed
+ * every error (as file:line:col) and returns QWE_EXIT_USAGE, and *L is closed. */
+static int load_workflow(const char *cmd, const char *path, lua_State **L_out)
+{
+	char err[256], *yaml = NULL;
+	size_t yaml_len, cbor_len;
+	uint8_t *cbor;
+	struct qwe_positions *pos = NULL;
+	lua_State *L;
+	int errors;
+
+	if (read_file(path, &yaml, &yaml_len) < 0) {
+		fprintf(stderr, "%s: cannot read %s: %s\n", cmd, path, strerror(errno));
+		return QWE_EXIT_USAGE;
+	}
+	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, &pos, err, sizeof err) < 0) {
+		fprintf(stderr, "%s: %s:%s\n", cmd, path, err);
+		free(yaml);
+		return QWE_EXIT_USAGE;
+	}
+	free(yaml);
+
+	L = qwe_lua_new();
+	if (!L) {
+		fprintf(stderr, "%s: cannot start the Lua runtime\n", cmd);
+		return QWE_EXIT_USAGE;
+	}
+	if (qwe_cbor_to_lua(L, cbor, cbor_len, err, sizeof err) < 0) {
+		fprintf(stderr, "%s: %s: %s\n", cmd, path, err);
+		lua_close(L);
+		free(cbor);
+		qwe_positions_free(pos);
+		return QWE_EXIT_USAGE;
+	}
+	free(cbor);
+	errors = qwe_validate_doc(L, cmd, path, pos);
+	qwe_positions_free(pos);
+	if (errors > 0) {
+		lua_close(L);
+		return QWE_EXIT_USAGE;
+	}
+	*L_out = L;
+	return 0;
+}
+
 /* Leaves the workflow's only job table on top of the stack and stores its id
  * (malloc'd) in *job_id, or returns an error message. The tracer accepts
  * exactly one job. */
@@ -223,12 +271,10 @@ static const char *pick_job(lua_State *L, char **job_id)
 
 int qwe_run_workflow(const char *path)
 {
-	char err[256], *yaml = NULL, run_id[64], *dir, *run_dir;
-	size_t yaml_len, cbor_len;
-	uint8_t *cbor;
+	char run_id[64], *dir, *run_dir;
 	lua_State *L;
 	char *job_id = NULL;
-	const char *msg, *slash;
+	const char *msg = NULL, *slash;
 	struct qwe_ring ring;
 	struct qwe_sink sink;
 	struct qwe_step_result step;
@@ -237,27 +283,8 @@ int qwe_run_workflow(const char *path)
 	int status, step_ref, rc = QWE_EXIT_OK;
 	FILE *fp;
 
-	if (read_file(path, &yaml, &yaml_len) < 0) {
-		fprintf(stderr, "qwe run: cannot read %s: %s\n", path, strerror(errno));
+	if (load_workflow("qwe run", path, &L) != 0)
 		return QWE_EXIT_USAGE;
-	}
-	err[0] = '\0';
-	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, NULL, err, sizeof err) < 0) {
-		fprintf(stderr, "qwe run: %s:%s\n", path, err);
-		free(yaml);
-		return QWE_EXIT_USAGE;
-	}
-	free(yaml);
-
-	L = luaL_newstate();
-	luaL_openlibs(L);
-	if (qwe_lua_register_builtins(L) < 0)
-		return QWE_EXIT_USAGE;
-	if (qwe_cbor_to_lua(L, cbor, cbor_len, err, sizeof err) < 0) {
-		fprintf(stderr, "qwe run: %s: %s\n", path, err);
-		return QWE_EXIT_USAGE;
-	}
-	free(cbor);
 
 	/* Tracer scope: one job, target local, one `run:` step. */
 	if (!lua_istable(L, -1) || (msg = pick_job(L, &job_id)) != NULL) {
@@ -342,23 +369,12 @@ int qwe_run_workflow(const char *path)
 	return rc;
 }
 
-/* Parse-only for now; schema validation is ticket 05's. */
 int qwe_validate_workflow(const char *path)
 {
-	char err[256], *yaml = NULL;
-	size_t yaml_len, cbor_len;
-	uint8_t *cbor;
+	lua_State *L;
+	int rc = load_workflow("qwe validate", path, &L);
 
-	if (read_file(path, &yaml, &yaml_len) < 0) {
-		fprintf(stderr, "qwe validate: cannot read %s: %s\n", path, strerror(errno));
-		return QWE_EXIT_USAGE;
-	}
-	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, NULL, err, sizeof err) < 0) {
-		fprintf(stderr, "qwe validate: %s:%s\n", path, err);
-		free(yaml);
-		return QWE_EXIT_USAGE;
-	}
-	free(yaml);
-	free(cbor);
-	return qwe_not_implemented("validate");
+	if (rc == 0)
+		lua_close(L);
+	return rc == 0 ? QWE_EXIT_OK : rc;
 }

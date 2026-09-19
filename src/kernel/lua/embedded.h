@@ -1,6 +1,6 @@
-/* Built-in plugin sources, compiled into the binary. */
-#ifndef QWE_PLUGINS_BUILTIN_EMBEDDED_H
-#define QWE_PLUGINS_BUILTIN_EMBEDDED_H
+/* Lua modules (and JSON schemas as Lua strings), compiled to bytecode into the binary. */
+#ifndef QWE_KERNEL_LUA_EMBEDDED_H
+#define QWE_KERNEL_LUA_EMBEDDED_H
 
 #include <stddef.h>
 

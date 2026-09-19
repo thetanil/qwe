@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 package(default_visibility = ["//src:__subpackages__"])
 
@@ -7,11 +7,17 @@ cc_library(
     name = "kernel",
     srcs = [
         "kernel.c",
+        "validate.c",
         "workflow.c",
     ],
-    hdrs = ["qwe.h"],
+    hdrs = [
+        "qwe.h",
+        "validate.h",
+    ],
     deps = [
-        ":luabridge",
+        ":dag",
+        ":luacbor",
+        ":luavm",
         ":proc",
         ":result",
         ":ring",
@@ -75,12 +81,61 @@ cc_library(
 )
 
 cc_library(
-    name = "luabridge",
-    srcs = ["luabridge.c"],
-    hdrs = ["luabridge.h"],
+    name = "luacbor",
+    srcs = ["luacbor.c"],
+    hdrs = ["luacbor.h"],
     deps = [
-        "//plugins/builtin",
+        "//src/edge/yaml",
         "//third_party/luajit",
         "//third_party/tinycbor",
+    ],
+)
+
+cc_library(
+    name = "luavm",
+    srcs = ["luavm.c"],
+    hdrs = ["luavm.h"],
+    deps = [
+        ":luacbor",
+        "//src/kernel/lua:modules",
+        "//third_party/lpeg",
+        "//third_party/luajit",
+    ],
+)
+
+cc_library(
+    name = "dag",
+    srcs = ["dag.c"],
+    hdrs = ["dag.h"],
+)
+
+cc_test(
+    name = "dag_test",
+    srcs = ["dag_test.c"],
+    deps = [
+        ":dag",
+        "//third_party/greatest",
+    ],
+)
+
+# Runs a Lua script inside qwe's Lua state. Used by tests.
+cc_binary(
+    name = "luarun",
+    srcs = ["luarun.c"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":luavm",
+        "//third_party/luajit",
+    ],
+)
+
+cc_test(
+    name = "lua_cbor_test",
+    srcs = ["lua_cbor_test.c"],
+    deps = [
+        ":luacbor",
+        ":luavm",
+        "//third_party/greatest",
+        "//third_party/luajit",
     ],
 )

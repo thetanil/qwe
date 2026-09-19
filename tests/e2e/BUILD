@@ -22,3 +22,21 @@ e2e_test(name = "tracer_stderr_merged")
 
 e2e_test(name = "tracer_large_output")
 e2e_test(name = "validate_malformed_yaml")
+
+e2e_test(name = "validate_ok")
+
+e2e_test(name = "validate_unknown_key")
+
+e2e_test(name = "validate_with_schema")
+
+e2e_test(name = "validate_union_single_error")
+
+e2e_test(name = "validate_duplicate_step_id")
+
+e2e_test(name = "validate_on_only_local")
+
+e2e_test(name = "validate_target_required")
+
+e2e_test(name = "validate_unknown_plugin")
+
+e2e_test(name = "run_refuses_invalid")

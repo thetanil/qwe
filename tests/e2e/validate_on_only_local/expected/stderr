@@ -1,0 +1,1 @@
+qwe validate: w.yaml:5:13: on: can only be "local" (a step runs on its job's target, or on the operator host)

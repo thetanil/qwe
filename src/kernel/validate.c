@@ -1,0 +1,202 @@
+#define _POSIX_C_SOURCE 200809L
+#include "src/kernel/validate.h"
+
+#include "src/kernel/dag.h"
+
+#include <lauxlib.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct problem {
+	struct qwe_pos pos;
+	char *message;
+};
+
+struct problems {
+	struct problem *v;
+	size_t n, cap;
+};
+
+static void add(struct problems *ps, struct qwe_pos pos, const char *message)
+{
+	if (ps->n == ps->cap) {
+		ps->cap = ps->cap ? ps->cap * 2 : 16;
+		ps->v = realloc(ps->v, ps->cap * sizeof *ps->v);
+	}
+	ps->v[ps->n].pos = pos;
+	ps->v[ps->n].message = strdup(message);
+	ps->n++;
+}
+
+/* Finds the position an error should be reported at. A pointer with no entry
+ * of its own (for example a missing key) falls back to its nearest ancestor. */
+static struct qwe_pos locate(const struct qwe_positions *pos, const char *pointer, int want_key)
+{
+	char *p = strdup(pointer);
+	struct qwe_pos out = {1, 1};
+	int first = 1;
+
+	for (;;) {
+		char *slash;
+
+		if (first && want_key ? qwe_positions_key(pos, p, &out) == 0 : qwe_positions_value(pos, p, &out) == 0)
+			break;
+		first = 0;
+		slash = strrchr(p, '/');
+		if (!slash)
+			break;
+		*slash = '\0';
+	}
+	free(p);
+	return out;
+}
+
+static char *escape_token(const char *s)
+{
+	char *out = malloc(strlen(s) * 2 + 1), *o = out;
+
+	for (; *s; s++) {
+		if (*s == '~') {
+			*o++ = '~';
+			*o++ = '0';
+		} else if (*s == '/') {
+			*o++ = '~';
+			*o++ = '1';
+		} else {
+			*o++ = *s;
+		}
+	}
+	*o = '\0';
+	return out;
+}
+
+static int cmp_str(const void *a, const void *b)
+{
+	return strcmp(*(char *const *)a, *(char *const *)b);
+}
+
+static int cmp_problem(const void *a, const void *b)
+{
+	const struct problem *x = a, *y = b;
+
+	if (x->pos.line != y->pos.line)
+		return x->pos.line < y->pos.line ? -1 : 1;
+	if (x->pos.col != y->pos.col)
+		return x->pos.col < y->pos.col ? -1 : 1;
+	return strcmp(x->message, y->message);
+}
+
+/* Runs the needs: graph checks on doc (at stack index doc). */
+static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, struct problems *ps)
+{
+	char **ids = NULL;
+	struct qwe_dag_job *jobs;
+	size_t n = 0, cap = 0, i, k;
+	struct qwe_dag_error err;
+	enum qwe_dag_status st;
+
+	lua_getfield(L, doc, "jobs");
+	lua_pushnil(L);
+	while (lua_next(L, -2)) {
+		lua_pop(L, 1);
+		if (n == cap)
+			ids = realloc(ids, (cap = cap ? cap * 2 : 8) * sizeof *ids);
+		ids[n++] = strdup(lua_tostring(L, -1));
+	}
+	qsort(ids, n, sizeof *ids, cmp_str);
+
+	jobs = calloc(n ? n : 1, sizeof *jobs);
+	for (i = 0; i < n; i++) {
+		size_t nn = 0;
+		const char **needs = NULL;
+
+		lua_getfield(L, -1, ids[i]);
+		lua_getfield(L, -1, "needs");
+		if (lua_istable(L, -1)) {
+			nn = lua_objlen(L, -1);
+			needs = calloc(nn ? nn : 1, sizeof *needs);
+			for (k = 0; k < nn; k++) {
+				lua_rawgeti(L, -1, (int)k + 1);
+				needs[k] = strdup(lua_tostring(L, -1));
+				lua_pop(L, 1);
+			}
+		}
+		lua_pop(L, 2);
+		jobs[i].id = ids[i];
+		jobs[i].needs = needs;
+		jobs[i].nneeds = nn;
+	}
+	lua_pop(L, 1); /* jobs */
+
+	st = qwe_dag_check(jobs, n, &err);
+	if (st != QWE_DAG_OK) {
+		char *tok = escape_token(jobs[err.job].id);
+		char *ptr = malloc(strlen(tok) + 64);
+
+		if (st == QWE_DAG_UNKNOWN_NEED)
+			sprintf(ptr, "/jobs/%s/needs/%lu", tok, (unsigned long)err.need);
+		else
+			sprintf(ptr, "/jobs/%s", tok);
+		add(ps, locate(pos, ptr, st == QWE_DAG_CYCLE), err.message);
+		free(tok);
+		free(ptr);
+	}
+	for (i = 0; i < n; i++) {
+		for (k = 0; k < jobs[i].nneeds; k++)
+			free((char *)jobs[i].needs[k]);
+		free((void *)jobs[i].needs);
+		free(ids[i]);
+	}
+	free(jobs);
+	free(ids);
+}
+
+int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const struct qwe_positions *pos)
+{
+	struct problems ps = {0};
+	int doc = lua_gettop(L);
+	size_t i, n;
+
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "qwe.validate");
+	if (lua_pcall(L, 1, 1, 0) != 0)
+		goto internal;
+	lua_getfield(L, -1, "validate");
+	lua_pushvalue(L, doc);
+	if (lua_pcall(L, 1, 1, 0) != 0)
+		goto internal;
+
+	n = lua_objlen(L, -1);
+	for (i = 1; i <= n; i++) {
+		const char *pointer, *kind, *message;
+
+		lua_rawgeti(L, -1, (int)i);
+		lua_getfield(L, -1, "pointer");
+		lua_getfield(L, -2, "kind");
+		lua_getfield(L, -3, "message");
+		pointer = lua_tostring(L, -3);
+		kind = lua_tostring(L, -2);
+		message = lua_tostring(L, -1);
+		add(&ps, locate(pos, pointer ? pointer : "", kind && strcmp(kind, "key") == 0),
+		    message ? message : "invalid");
+		lua_pop(L, 4);
+	}
+	lua_pop(L, 2); /* the list and the module */
+
+	if (ps.n == 0)
+		check_dag(L, doc, pos, &ps);
+
+	qsort(ps.v, ps.n, sizeof *ps.v, cmp_problem);
+	for (i = 0; i < ps.n; i++) {
+		fprintf(stderr, "%s: %s:%u:%u: %s\n", cmd, path, ps.v[i].pos.line, ps.v[i].pos.col, ps.v[i].message);
+		free(ps.v[i].message);
+	}
+	free(ps.v);
+	return (int)ps.n;
+
+internal:
+	fprintf(stderr, "%s: internal error in the validator: %s\n", cmd, lua_tostring(L, -1));
+	lua_settop(L, doc);
+	return 1;
+}

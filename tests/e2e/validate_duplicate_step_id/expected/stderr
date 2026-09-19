@@ -1,0 +1,1 @@
+qwe validate: w.yaml:7:13: duplicate step id "same" (first used by step 0)

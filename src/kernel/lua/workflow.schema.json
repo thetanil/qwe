@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://qwe.invalid/workflow",
+  "description": "qwe workflow, M1 subset. The kernel adds each plugin's with: schema to definitions.step (see validate.lua).",
+  "type": "object",
+  "required": ["jobs"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {"type": "string"},
+    "max-parallel": {"type": "integer", "minimum": 1},
+    "env": {"$ref": "#/definitions/env"},
+    "secrets": {"type": "object"},
+    "jobs": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/definitions/job"}
+    }
+  },
+  "definitions": {
+    "env": {
+      "type": "object",
+      "additionalProperties": {"type": ["string", "number", "boolean"]}
+    },
+    "job": {
+      "type": "object",
+      "required": ["target", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "target": {"type": "string", "minLength": 1},
+        "needs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "env": {"$ref": "#/definitions/env"},
+        "timeout-minutes": {"type": "number", "exclusiveMinimum": 0},
+        "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/step"}}
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "run": {"type": "string"},
+        "uses": {"type": "string"},
+        "with": {"type": "object"},
+        "env": {"$ref": "#/definitions/env"},
+        "on": {"const": "local"},
+        "become": {"type": ["boolean", "string", "integer"]},
+        "timeout-minutes": {"type": "number", "exclusiveMinimum": 0},
+        "continue-on-error": {"type": "boolean"},
+        "secret-outputs": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      },
+      "allOf": [
+        {
+          "if": {"required": ["uses"]},
+          "then": {"not": {"required": ["run"]}},
+          "else": {"required": ["run"]}
+        }
+      ]
+    }
+  }
+}

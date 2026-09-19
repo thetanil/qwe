@@ -1,0 +1,22 @@
+max-parallel: 2
+env: {GREETING: hello}
+jobs:
+  build:
+    target: local
+    timeout-minutes: 5
+    env: {STAGE: build}
+    steps:
+      - id: greet
+        run: echo "$GREETING"
+        continue-on-error: false
+      - id: mark
+        uses: file.ensure
+        with: {path: /tmp/x, content: hi, mode: "0644"}
+      - on: local
+        run: echo local
+      - run: whoami
+        become: true
+  after:
+    target: local
+    needs: [build]
+    steps: [{run: echo done}]
