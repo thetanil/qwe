@@ -1,0 +1,9 @@
+jobs:
+  a:
+    target: self
+    steps:
+      - run: echo a
+  b:
+    target: self
+    steps:
+      - run: echo b

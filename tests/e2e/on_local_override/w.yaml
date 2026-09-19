@@ -1,0 +1,8 @@
+jobs:
+  j:
+    target: self
+    steps:
+      - id: here
+        on: local
+        run: echo "cwd=$PWD" >> "$QWE_OUTPUT"
+      - run: echo "${{ steps.here.outputs.cwd }}"

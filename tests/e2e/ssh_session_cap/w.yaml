@@ -1,0 +1,9 @@
+jobs:
+  a:
+    target: self
+    steps:
+      - run: echo a-start; sleep 0.4; echo a-end
+  b:
+    target: self
+    steps:
+      - run: echo b-start; sleep 0.4; echo b-end

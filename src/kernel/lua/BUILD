@@ -9,6 +9,7 @@ package(default_visibility = ["//src:__subpackages__"])
 # added below from the vendored trees.
 MODULES = {
     "backend.local": "//plugins/builtin:backend_local/local.lua",
+    "backend.ssh": "//plugins/builtin:backend-ssh/ssh.lua",
     "backend.recording": "//plugins/builtin:recording/recording.lua",
     "compat53": ":compat53.lua",
     "dkjson": "//third_party/dkjson:dkjson.lua",

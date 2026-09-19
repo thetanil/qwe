@@ -1,0 +1,3 @@
+[j] line1
+[j] no trailing newline, back\slash, 'quote'
+[j] WF=back\slash and $dollar and "quotes" JOB=job STEP=step

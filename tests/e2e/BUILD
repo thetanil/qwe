@@ -167,3 +167,23 @@ e2e_test(name = "vars_in_run_text")
 e2e_test(name = "envelope_only_in_secrets")
 
 e2e_test(name = "inventory_no_inheritance_keys")
+
+e2e_test(name = "ssh_hostname")
+
+e2e_test(name = "ssh_one_master_sequential")
+
+e2e_test(name = "ssh_one_master_parallel")
+
+e2e_test(name = "ssh_parallel_rendezvous")
+
+e2e_test(name = "ssh_session_cap")
+
+e2e_test(name = "ssh_timeout_kills_remote")
+
+e2e_test(name = "ssh_connection_lost")
+
+e2e_test(name = "ssh_master_closed")
+
+e2e_test(name = "ssh_env_and_stdin")
+
+e2e_test(name = "on_local_override")

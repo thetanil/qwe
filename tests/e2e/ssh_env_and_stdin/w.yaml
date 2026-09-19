@@ -1,0 +1,18 @@
+env:
+  WF: 'back\slash and $dollar and "quotes"'
+jobs:
+  j:
+    target: self
+    env:
+      JOB: job
+    steps:
+      - uses: file.ensure
+        with:
+          path: /tmp/qwe-e2e-ssh-stdin.txt
+          content: "line1\nno trailing newline, back\\slash, 'quote'"
+      - run: |
+          cat /tmp/qwe-e2e-ssh-stdin.txt; echo
+          rm -f /tmp/qwe-e2e-ssh-stdin.txt
+          echo "WF=$WF JOB=$JOB STEP=$STEP"
+        env:
+          STEP: step

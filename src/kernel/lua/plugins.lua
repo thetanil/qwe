@@ -174,8 +174,11 @@ function M.run_step(step)
   local with = step.uses and (step["with"] or cbor.map({})) or { run = step.run }
   local ok, argv, result = pcall(function()
     local mod = open(plugin)
-    -- Only the operator host exists as a target so far.
-    local ctx = { backend = require("backend.local").new({ env = step.env }) }
+    local remote = step.__qwe
+    local ctx = {
+      backend = remote and require("backend.ssh").for_target(remote.target, step.env)
+        or require("backend.local").new({ env = step.env }),
+    }
     if type(mod.argv) == "function" then return mod.argv(with, ctx) end
     return nil, require("qwe.checkapply").run(mod, with, ctx)
   end)

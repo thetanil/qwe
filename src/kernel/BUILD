@@ -71,6 +71,8 @@ cc_test(
     srcs = ["proc_test.c"],
     deps = [
         ":proc",
+        ":luavm",
+        "//third_party/luajit",
         ":timer",
         "//third_party/greatest",
     ],

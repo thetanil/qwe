@@ -1,0 +1,20 @@
+# Each job waits for the other's mark, then removes that mark (its own is
+# removed by the other), so nothing is left behind and neither job can remove
+# a mark the other still waits for.
+jobs:
+  a:
+    target: self
+    steps:
+      - run: |
+          m=/tmp/qwe-e2e-ssh-rdv
+          touch $m.a
+          i=0; while [ ! -e $m.b ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done
+          [ -e $m.b ] && rm -f $m.b
+  b:
+    target: self
+    steps:
+      - run: |
+          m=/tmp/qwe-e2e-ssh-rdv
+          touch $m.b
+          i=0; while [ ! -e $m.a ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done
+          [ -e $m.a ] && rm -f $m.a

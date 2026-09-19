@@ -31,6 +31,8 @@ struct job_run {
 	int step_changed;            /* whether the live step changed the target */
 	int outputs_ref;             /* registry ref of the job's { step id -> { key -> value } } */
 	char *out_path;              /* the live run: step's $QWE_OUTPUT file */
+	char *step_target;           /* the live step runs on this remote target, or NULL */
+	char *step_token;            /* what tells its processes apart on the remote host */
 	char *step_json;             /* the live step's outputs, as JSON, for result.json */
 	int timeout_told;            /* the job timeout has been sent as an event */
 	int cancel_told;             /* the operator's cancel has been sent as an event */
@@ -47,6 +49,7 @@ struct job_run {
 
 struct job {
 	char *id;
+	char *target; /* the job's target: local, or an inventory target */
 	int ref; /* registry ref of the job's Lua table */
 	enum qwe_lc_state state;
 	const char *reason;

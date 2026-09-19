@@ -306,6 +306,7 @@ struct run_ctx {
 	struct job *jobs;
 	size_t njobs;
 	const char *run_dir;
+	const char *run_id;
 	char *run_dir_abs;    /* run_dir as an absolute path: $QWE_OUTPUT files go there */
 	int wf_ref;           /* registry ref of the decoded workflow */
 	lua_State *L;
@@ -538,6 +539,9 @@ static void job_release(struct run_ctx *ctx, struct job *job)
 		luaL_unref(job->L, LUA_REGISTRYINDEX, r->outputs_ref);
 		r->outputs_ref = LUA_NOREF;
 	}
+	free(r->step_target);
+	free(r->step_token);
+	r->step_target = r->step_token = NULL;
 	free(r->out_path);
 	free(r->step_json);
 	r->out_path = r->step_json = NULL;
@@ -600,6 +604,12 @@ static long resolve_step(struct run_ctx *ctx, struct job *job)
 	int top = lua_gettop(L);
 	long ms;
 
+	free(r->step_target);
+	free(r->step_token);
+	r->step_target = NULL;
+	r->step_token = NULL;
+	if (asprintf(&r->step_token, "%s.%s.%lu", ctx->run_id, job->id, (unsigned long)r->cur) < 0)
+		r->step_token = NULL;
 	r->cur_ref = LUA_NOREF;
 	lua_getglobal(L, "require");
 	lua_pushstring(L, "qwe.template");
@@ -614,9 +624,19 @@ static long resolve_step(struct run_ctx *ctx, struct job *job)
 		lua_pushstring(L, r->out_path);
 	else
 		lua_pushnil(L);
-	if (lua_pcall(L, 5, 1, 0) != 0)
+	lua_pushstring(L, r->step_token ? r->step_token : "");
+	if (lua_pcall(L, 6, 1, 0) != 0)
 		goto fail;
 	ms = qwe_timeout_ms_at(L, -1);
+	/* a step on a remote target says which */
+	lua_getfield(L, -1, "__qwe");
+	if (lua_istable(L, -1)) {
+		lua_getfield(L, -1, "target");
+		if (lua_isstring(L, -1))
+			r->step_target = strdup(lua_tostring(L, -1));
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 1);
 	r->cur_ref = luaL_ref(L, LUA_REGISTRYINDEX); /* pops the step table */
 	lua_settop(L, top);
 	return ms;
@@ -675,6 +695,85 @@ out:
 	lua_settop(L, top);
 }
 
+/* Calls backend.ssh.<fn>(target, ...) with the string arguments given, in the
+ * parent. Returns 0, or -1 with the reason left in msg. */
+static int ssh_call(struct job *job, const char *fn, const char *a, const char *b, char *msg, size_t msg_size)
+{
+	lua_State *L = job->L;
+	int top = lua_gettop(L), rc = 0, nargs = 1;
+
+	msg[0] = '\0';
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "backend.ssh");
+	if (lua_pcall(L, 1, 1, 0) != 0)
+		goto fail;
+	lua_getfield(L, -1, fn);
+	lua_pushstring(L, job->run.step_target);
+	if (a) {
+		lua_pushstring(L, a);
+		nargs++;
+	}
+	if (b) {
+		lua_pushstring(L, b);
+		nargs++;
+	}
+	if (lua_pcall(L, nargs, 2, 0) != 0)
+		goto fail;
+	if (!lua_toboolean(L, -2)) {
+		snprintf(msg, msg_size, "%s", lua_isstring(L, -1) ? lua_tostring(L, -1) : "failed");
+		rc = -1;
+	}
+	lua_settop(L, top);
+	return rc;
+fail:
+	snprintf(msg, msg_size, "%s", lua_tostring(L, -1));
+	lua_settop(L, top);
+	return -1;
+}
+
+/* Makes sure the master of the live step's target is up (starting it if it died). */
+static int remote_ensure(struct job *job, char *msg, size_t msg_size)
+{
+	lua_State *L = job->L;
+	int top = lua_gettop(L);
+	const char *host;
+	int rc;
+
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "qwe.inventory");
+	lua_call(L, 1, 1);
+	lua_getfield(L, -1, "host");
+	lua_pushstring(L, job->run.step_target);
+	lua_call(L, 1, 1);
+	host = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+	rc = ssh_call(job, "ensure", host, NULL, msg, msg_size);
+	lua_settop(L, top);
+	return rc;
+}
+
+/* Stops what the live step started on its remote host: killing the local ssh
+ * client would not (sshd does not signal a command without a tty). */
+static void remote_kill(struct job *job, const char *signal)
+{
+	char msg[8];
+
+	/* once the local client has exited, the command has ended too */
+	if (job->run.step_target && job->run.step_token && !job->run.leader_reaped)
+		ssh_call(job, "kill", job->run.step_token, signal, msg, sizeof msg);
+}
+
+/* Whether the live step lost its connection: it exited 255 (ssh's own error
+ * status) and the target's master is gone. */
+static int remote_lost(struct job *job, int status)
+{
+	char msg[8];
+
+	if (!job->run.step_target || !WIFEXITED(status) || WEXITSTATUS(status) != 255)
+		return 0;
+	/* ssh_call reads a true result as success: alive() is asked the other way round */
+	return ssh_call(job, "alive", NULL, NULL, msg, sizeof msg) != 0;
+}
+
 /* Action: fork step cur. The state is already step-running; if the fork or
  * one of its timers fails, the job is owed a start-failed. */
 static void step_spawn(struct run_ctx *ctx, struct job *job)
@@ -709,6 +808,15 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 	r->step_changed = 1;
 	arg.L = L;
 	arg.step_ref = r->cur_ref;
+	if (!op && r->step_target) {
+		char msg[512];
+
+		if (remote_ensure(job, msg, sizeof msg) < 0) {
+			fprintf(stderr, "qwe run: job %s: target %s: %s\n", job->id, r->step_target, msg);
+			op = "ssh-master";
+			err = ECONNREFUSED;
+		}
+	}
 	if (op) {
 		/* resolve_step failed */
 	} else if (qwe_timer_open(&r->step_timer) < 0) {
@@ -758,6 +866,9 @@ static void step_finish(struct run_ctx *ctx, struct job *job)
 		qwe_timer_close(&r->grace_timer);
 		r->proc_ok = 0;
 	}
+	free(r->step_target);
+	free(r->step_token);
+	r->step_target = r->step_token = NULL;
 	luaL_unref(job->L, LUA_REGISTRYINDEX, r->cur_ref);
 	r->cur++;
 	r->live_step = -1;
@@ -807,12 +918,14 @@ static void apply_action(struct run_ctx *ctx, struct job *job, enum qwe_lc_actio
 		step_spawn(ctx, job);
 		break;
 	case QWE_LC_ACT_SIGTERM_GROUP:
+		remote_kill(job, "TERM");
 		qwe_proc_kill_group(&r->proc, SIGTERM);
 		break;
 	case QWE_LC_ACT_ARM_GRACE:
 		qwe_timer_arm(&r->grace_timer, ctx->grace_ms);
 		break;
 	case QWE_LC_ACT_SIGKILL_GROUP:
+		remote_kill(job, "KILL");
 		qwe_proc_kill_group(&r->proc, SIGKILL);
 		break;
 	case QWE_LC_ACT_RECORD_STEP:
@@ -999,6 +1112,8 @@ static enum qwe_lc_event leader_exit_event(struct job *job, int status, struct q
 	r->step_changed = 1; /* run: steps always count as changed */
 	if (!live_step_is_plugin(job)) {
 		collect_file_outputs(job);
+		if (remote_lost(job, status))
+			pl->reason = "connection-lost";
 		return exited_ok ? QWE_LC_EV_LEADER_EXIT_OK : QWE_LC_EV_LEADER_EXIT_FAIL;
 	}
 	drain_result(r);
@@ -1105,6 +1220,38 @@ static int broadcast_cancel(struct run_ctx *ctx)
 	return sent;
 }
 
+/* The sessions the target takes at once (inventory max-sessions:, default 8). */
+static long target_max_sessions(lua_State *L, const char *target)
+{
+	int top = lua_gettop(L);
+	long cap = 8;
+
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "qwe.inventory");
+	lua_call(L, 1, 1);
+	lua_getfield(L, -1, "max_sessions");
+	lua_pushstring(L, target);
+	lua_call(L, 1, 1);
+	if (lua_isnumber(L, -1))
+		cap = (long)lua_tonumber(L, -1);
+	lua_settop(L, top);
+	return cap;
+}
+
+/* Ends the ssh masters this run started, if it started any. */
+static void close_masters(lua_State *L)
+{
+	int top = lua_gettop(L);
+
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "backend.ssh");
+	if (lua_pcall(L, 1, 1, 0) == 0) {
+		lua_getfield(L, -1, "close_all");
+		lua_pcall(L, 0, 0, 0);
+	}
+	lua_settop(L, top);
+}
+
 /* Runs every job to a final state on one event loop. The loop turns fds and
  * signals into events, and the lifecycle table decides what each one means. A
  * job whose needs are not all success is skipped (the default join rule); at
@@ -1116,6 +1263,9 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 	size_t n = ctx->njobs;
 	struct qwe_sched_job *sj = calloc(n ? n : 1, sizeof *sj);
 	struct qwe_sched_event *evs = calloc(n ? n : 1, sizeof *evs);
+	long *caps = calloc(n ? n : 1, sizeof *caps);
+	char **group_names = calloc(n ? n : 1, sizeof *group_names);
+	size_t ngroups = 0;
 	struct epoll_event got[32];
 	size_t i, k;
 	int rc = 0;
@@ -1137,6 +1287,19 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 		sj[i].state = &jobs[i].state;
 		sj[i].needs = jobs[i].needs_idx;
 		sj[i].nneeds = jobs[i].nneeds;
+		/* a job on a remote target holds one of that target's sessions while it runs */
+		if (strcmp(jobs[i].target, "local") != 0) {
+			size_t g;
+
+			for (g = 0; g < ngroups; g++)
+				if (strcmp(group_names[g], jobs[i].target) == 0)
+					break;
+			if (g == ngroups) {
+				group_names[ngroups] = jobs[i].target;
+				caps[ngroups++] = target_max_sessions(ctx->L, jobs[i].target);
+			}
+			sj[i].group = g + 1;
+		}
 	}
 
 	for (;;) {
@@ -1148,7 +1311,7 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 		 * otherwise the other jobs would not hear it until the next wakeup. */
 		broadcast_cancel(ctx);
 		do {
-			while ((got_n = qwe_sched_pass(sj, n, max_parallel, evs)) > 0)
+			while ((got_n = qwe_sched_pass(sj, n, max_parallel, caps, evs)) > 0)
 				for (i = 0; i < got_n; i++)
 					job_send_plain(ctx, &jobs[evs[i].job], evs[i].event, -1);
 		} while (broadcast_cancel(ctx));
@@ -1182,6 +1345,8 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 	for (i = 0; i < n; i++)
 		free(jobs[i].needs_idx);
 	close(ctx->ep);
+	free(caps);
+	free(group_names);
 	free(sj);
 	free(evs);
 	return rc;
@@ -1249,6 +1414,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	ctx.jobs = jobs;
 	ctx.njobs = (size_t)n;
 	ctx.run_dir = run_dir;
+	ctx.run_id = run_id;
 	ctx.L = L;
 
 	ctx.run_dir_abs = realpath(run_dir, NULL);
@@ -1261,6 +1427,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	lua_pop(L, 1);
 	if (run_all(&ctx, max_parallel) < 0)
 		rc = QWE_EXIT_FAILED;
+	close_masters(L);
 
 	results = calloc((size_t)n ? (size_t)n : 1, sizeof *results);
 	for (i = 0; i < (size_t)n; i++) {

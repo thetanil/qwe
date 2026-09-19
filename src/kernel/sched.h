@@ -12,6 +12,7 @@ struct qwe_sched_job {
 	const enum qwe_lc_state *state; /* the job's live state; read only */
 	const size_t *needs;            /* indexes into the same array */
 	size_t nneeds;
+	size_t group;                   /* 1-based session group (a target), or 0 for none */
 };
 
 struct qwe_sched_event {
@@ -23,9 +24,12 @@ struct qwe_sched_event {
  * is those jobs' needs-met (all needs success: the default join rule) or
  * needs-failed. Otherwise it is slot-granted for the ready jobs, lowest index
  * first, that fit under max_parallel (0 for unlimited) given the jobs already
- * running. Events are written to out[] (room for n) and their count returned.
+ * running. A job in a session group (a target) also waits while its group's
+ * cap, caps[group - 1], is used up by running jobs: it waits, it does not
+ * fail. caps may be NULL when no job has a group. Events are written to out[] (room for n) and their count returned.
  * The caller sends them, then passes again until a pass returns 0: a skip can
  * unlock the jobs that need the skipped one. */
-size_t qwe_sched_pass(const struct qwe_sched_job *jobs, size_t n, long max_parallel, struct qwe_sched_event *out);
+size_t qwe_sched_pass(const struct qwe_sched_job *jobs, size_t n, long max_parallel, const long *caps,
+		      struct qwe_sched_event *out);
 
 #endif

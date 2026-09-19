@@ -17,6 +17,10 @@
 #                     or "file <SIGNAME> <path>...": once every path has appeared in
 #                     the work dir (the step creates it, so no delay guesses when it
 #                     is running). Waiting gives up after 30 s and fails the case.
+#   needs-ssh         optional marker: the case needs the devcontainer's ssh target. It
+#                     is skipped (prints SKIP, passes) unless REMOTE_CONTAINERS is set
+#                     and `ssh -o BatchMode=yes 172.18.0.1 true` works
+#   bin/              optional directory of commands put first on PATH (a shim)
 #   check.sh          optional extra assertions, run in the work dir after qwe;
 #                     sees $QWE_STDOUT (qwe's stdout) and must exit 0
 #                     ($QWE_BIN is the qwe binary, to run it again)
@@ -35,11 +39,18 @@ case_dir=$2
 [ -d "$case_dir" ] || { echo "run_case: no case dir $case_dir (pwd $(pwd))" >&2; exit 3; }
 
 case_dir=$(cd "$case_dir" && pwd)
+if [ -f "$case_dir/needs-ssh" ]; then
+	if [ -z "$REMOTE_CONTAINERS" ] || ! ssh -o BatchMode=yes -o ConnectTimeout=5 172.18.0.1 true >/dev/null 2>&1; then
+		echo "SKIP: $(basename "$case_dir"): needs ssh to 172.18.0.1 (REMOTE_CONTAINERS unset, or the host is not reachable)" >&2
+		exit 0
+	fi
+fi
 work=$(mktemp -d) || exit 3
 trap 'rm -rf "$work"' EXIT
 cp -R "$case_dir"/. "$work"/ || exit 3
 rm -rf "$work/expected" "$work/args"
-rm -f "$work/check.sh" "$work/env" "$work/signal" "$work/ulimit"
+rm -f "$work/check.sh" "$work/env" "$work/signal" "$work/ulimit" "$work/needs-ssh"
+[ -d "$work/bin" ] && PATH="$work/bin:$PATH"
 
 set --
 if [ -f "$case_dir/args" ]; then

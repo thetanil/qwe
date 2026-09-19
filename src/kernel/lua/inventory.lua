@@ -50,6 +50,21 @@ function M.vars(target, inv)
   return t.vars or {}
 end
 
+-- How many sessions (concurrent jobs) an ssh target takes; ssh servers cap a
+-- multiplexed connection near 10, so the default stays under it.
+M.DEFAULT_MAX_SESSIONS = 8
+
+function M.max_sessions(target, inv)
+  local t = ((inv or current).targets or {})[target]
+  return t and t["max-sessions"] or M.DEFAULT_MAX_SESSIONS
+end
+
+-- The host: of a target, or nil.
+function M.host(target, inv)
+  local t = ((inv or current).targets or {})[target]
+  return t and t.host
+end
+
 -- Every !encrypted value in doc that is not the value of an entry of a
 -- secrets: map (the root's, or a target's). allowed(tokens) says whether the
 -- path (a list of keys) is inside one.

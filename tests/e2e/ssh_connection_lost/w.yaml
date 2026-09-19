@@ -1,0 +1,14 @@
+jobs:
+  a:
+    target: self
+    steps:
+      - run: sleep 31415
+        continue-on-error: true
+      - run: pkill -f '[s]leep 31415'; echo recovered
+  killer:
+    target: local
+    steps:
+      - run: |
+          # wait until the remote sleep is running, then kill this run's master
+          i=0; while ! pgrep -f '[s]leep 31415' >/dev/null && [ $i -lt 200 ]; do sleep 0.05; i=$((i+1)); done
+          pkill -f "[s]sh -M -N -f -S /tmp/qwe-$(id -u)/$PPID\."

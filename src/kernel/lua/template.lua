@@ -111,6 +111,12 @@ function M.check(doc, plugin_outputs, inventory)
           kind = "key",
           message = "QWE_OUTPUT is set by qwe for run: steps",
         }
+      elseif name == "QWE_STEP" then
+        errors[#errors + 1] = {
+          pointer = pointer .. "/" .. esc(name),
+          kind = "key",
+          message = "QWE_STEP is set by qwe for steps on a remote target",
+        }
       elseif type(value) == "string" then
         scan(value, pointer .. "/" .. esc(name), earlier, true, target)
       end
@@ -157,7 +163,11 @@ end
 -- declared env (workflow, then job, then step; the innermost wins) as strings.
 -- outputs is the job's { step id -> { key -> value } }. output_path, for a
 -- run: step, is the file its outputs are written to ($QWE_OUTPUT).
-function M.resolve(workflow, job, index, outputs, output_path)
+-- A step that runs on a remote target (the job's is not local, and the step
+-- does not say on: local) gets QWE_STEP=token in its environment, which is how
+-- qwe finds what the step started there (backend.ssh), and __qwe.target for
+-- the backend to pick.
+function M.resolve(workflow, job, index, outputs, output_path, token)
   local step = job.steps[index]
   local vars = require("qwe.inventory").vars(job.target) or {}
   local function resolve(parsed)
@@ -195,7 +205,13 @@ function M.resolve(workflow, job, index, outputs, output_path)
       if parsed.kind ~= "env" then return resolve(parsed) end
     end)
   end
-  if step.run ~= nil and output_path then final.QWE_OUTPUT = output_path end
+  local remote = job.target ~= nil and job.target ~= "local" and step.on ~= "local"
+  -- the output file is on the operator host: a remote run: step cannot write it yet
+  if step.run ~= nil and output_path and not remote then final.QWE_OUTPUT = output_path end
+  if remote then
+    final.QWE_STEP = token
+    resolved.__qwe = { target = job.target }
+  end
   resolved.env = final
   return setmetatable(resolved, getmetatable(step))
 end

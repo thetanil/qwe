@@ -1,0 +1,6 @@
+jobs:
+  j:
+    target: self
+    steps:
+      - run: sleep 27182
+        timeout-minutes: 0.03

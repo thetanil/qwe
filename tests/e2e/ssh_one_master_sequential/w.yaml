@@ -1,0 +1,14 @@
+jobs:
+  j:
+    target: self
+    steps:
+      - run: echo step1
+      - run: echo step2
+      - run: echo step3
+      - run: echo step4
+      - run: echo step5
+      - run: echo step6
+      - run: echo step7
+      - run: echo step8
+      - run: echo step9
+      - run: echo step10

@@ -53,6 +53,7 @@ static int exec_run(lua_State *L)
 	struct sigaction ign, old_pipe;
 	pid_t pid;
 	int status = 0, failed = 0, saved = 0;
+	int detach = 0;
 
 	luaL_checktype(L, 1, LUA_TTABLE);
 	n = lua_objlen(L, 1);
@@ -60,6 +61,11 @@ static int exec_run(lua_State *L)
 		return luaL_error(L, "qwe.exec.run: empty argv");
 	if (!lua_isnoneornil(L, 2))
 		in = luaL_checklstring(L, 2, &in_len);
+	if (lua_istable(L, 3)) {
+		lua_getfield(L, 3, "detach");
+		detach = lua_toboolean(L, -1);
+		lua_pop(L, 1);
+	}
 	argv = calloc(n + 1, sizeof *argv);
 	if (!argv)
 		return luaL_error(L, "qwe.exec.run: out of memory");
@@ -85,10 +91,25 @@ static int exec_run(lua_State *L)
 		goto spawn_failed;
 	}
 	if (pid == 0) {
+		sigset_t none;
+
+		/* the parent blocks SIGCHLD, SIGINT and SIGTERM to read them from signalfds */
+		sigemptyset(&none);
+		sigprocmask(SIG_SETMASK, &none, NULL);
 		sigaction(SIGPIPE, &old_pipe, NULL);
 		dup2(in_p[0], 0);
 		dup2(out_p[1], 1);
 		dup2(err_p[1], 2);
+		if (detach) {
+			/* its own session, out of every step's group, and no output of its own */
+			int nul = open("/dev/null", O_WRONLY);
+
+			setsid();
+			if (nul >= 0) {
+				dup2(nul, 1);
+				dup2(nul, 2);
+			}
+		}
 		execvp(argv[0], argv);
 		_exit(127);
 	}
@@ -187,6 +208,18 @@ spawn_failed:
 	return 2;
 }
 
+static int exec_getpid(lua_State *L)
+{
+	lua_pushinteger(L, (lua_Integer)getpid());
+	return 1;
+}
+
+static int exec_getuid(lua_State *L)
+{
+	lua_pushinteger(L, (lua_Integer)getuid());
+	return 1;
+}
+
 /* qwe.exec.preamble(env) -> the stdin preamble for a { NAME = "value" } table. */
 static int exec_preamble(lua_State *L)
 {
@@ -241,7 +274,11 @@ static int exec_preamble(lua_State *L)
 
 int luaopen_qwe_exec(lua_State *L)
 {
-	lua_createtable(L, 0, 3);
+	lua_createtable(L, 0, 5);
+	lua_pushcfunction(L, exec_getpid);
+	lua_setfield(L, -2, "getpid");
+	lua_pushcfunction(L, exec_getuid);
+	lua_setfield(L, -2, "getuid");
 	lua_pushcfunction(L, exec_preamble);
 	lua_setfield(L, -2, "preamble");
 	lua_pushstring(L, qwe_preamble_bootstrap);

@@ -1,8 +1,11 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
 #include "src/kernel/proc.h"
+#include "src/kernel/luavm.h"
 
 #include <dirent.h>
+#include <lauxlib.h>
+#include <lua.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -39,6 +42,70 @@ TEST child_is_group_leader(void)
 	ASSERT(WIFEXITED(st) && WEXITSTATUS(st) == 0);
 	close(p.out_fd);
 	sigprocmask(SIG_SETMASK, &old, NULL);
+	PASS();
+}
+
+/* Fields 5 and 6 (pgrp, session) of a /proc/<pid>/stat line. */
+static int stat_group_session(const char *line, long *pgrp, long *sid)
+{
+	const char *p = strrchr(line, ')');
+	long ppid;
+	char state;
+
+	return p && sscanf(p + 1, " %c %ld %ld %ld", &state, &ppid, pgrp, sid) == 4 ? 0 : -1;
+}
+
+static char **argv_sleep_long(void *arg, int result_fd)
+{
+	static char *argv[] = {"sleep", "1000", NULL};
+	(void)arg;
+	(void)result_fd;
+	return argv;
+}
+
+/* The ssh ControlMaster is started with qwe.exec.run detach = true. Killing a
+ * step's group (a cancel) must not reach it: it is in no step's process group,
+ * nor even in qwe's own session. */
+TEST master_outside_step_groups(void)
+{
+	struct qwe_proc step;
+	sigset_t set, old;
+	lua_State *L = qwe_lua_new();
+	char path[] = "/tmp/qwe-master-XXXXXX", line[512] = "", src[512];
+	long master_pg = -1, master_sid = -1, own_sid = getsid(0);
+	int fd, st;
+	FILE *fp;
+
+	ASSERT(L != NULL);
+	fd = mkstemp(path);
+	ASSERT(fd >= 0);
+	close(fd);
+	sigemptyset(&set);
+	sigaddset(&set, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &set, &old);
+	ASSERT_EQ(0, qwe_proc_spawn(&step, argv_sleep_long, NULL));
+
+	/* the stand-in master records its own /proc stat, then exits */
+	snprintf(src, sizeof src,
+		"local exec = require(\"qwe.exec\")\n"
+		"local code = exec.run({ \"sh\", \"-c\", \"cat /proc/self/stat > %s\" }, nil, { detach = true })\n"
+		"assert(code == 0, code)\n",
+		path);
+	ASSERT_EQ(0, luaL_dostring(L, src));
+	sigprocmask(SIG_SETMASK, &old, NULL);
+	qwe_proc_kill_group(&step, SIGKILL);
+	waitpid(step.pid, &st, 0);
+	close(step.out_fd);
+	lua_close(L);
+	fp = fopen(path, "r");
+	ASSERT(fp != NULL);
+	ASSERT(fgets(line, sizeof line, fp) != NULL);
+	fclose(fp);
+	unlink(path);
+	ASSERT_EQ(0, stat_group_session(line, &master_pg, &master_sid));
+	ASSERT(master_pg != step.pid);
+	ASSERT(master_pg != getpgrp());
+	ASSERT(master_sid != own_sid);
 	PASS();
 }
 
@@ -202,5 +269,6 @@ int main(int argc, char **argv)
 	RUN_TEST(child_is_group_leader);
 	RUN_TEST(group_kill_no_orphans);
 	RUN_TEST(subreaper_reaps_orphans);
+	RUN_TEST(master_outside_step_groups);
 	GREATEST_MAIN_END();
 }

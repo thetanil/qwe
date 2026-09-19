@@ -31,7 +31,7 @@ The kernel starts every process itself, through fork/exec, the process group, pi
 - **The connection is owned by the ssh service plugin, in the parent process only.** It starts a ControlMaster per target before the kernel forks that target's first step, health-checks it with `ssh -O check`, and closes it with `ssh -O exit` when the workflow run ends. Masters are keyed by destination and options.
 - **Only the parent ever creates a master.** A forked step inherits the control socket *path* and only ever runs `ssh -S <sock> -o ControlMaster=no`. A master a child opened itself could be neither seen nor closed by the parent. So what a step receives is the connection's *address*, not a connection object.
 - **The master lives outside every step's process group**, in its own session. Otherwise cancelling a step (`kill -pgid`) would kill the connection the next step needs.
-- **The ControlPath is short** (`/tmp/qwe-<uid>/%C`), because Unix socket paths are limited to about 108 bytes, and test and sandbox temp directories are often longer than that.
+- **The ControlPath is short and per run** (`/tmp/qwe-<uid>/<qwe pid>.%C`), because Unix socket paths are limited to about 108 bytes, and test and sandbox temp directories are often longer than that.
 - **Command output uses the existing subprocess I/O path** (§10): the per-job ring, redaction, log sink and live consumers, unchanged.
 - **There is no event bus** (ADR-0004). Connection problems appear as step reasons (`connection-lost`) and log lines.
 
@@ -63,7 +63,7 @@ The "cached connection" is the control socket; the "channel" between the connect
 
 ### I.5 Cancellation & timeouts over SSH
 
-Cancellation is already solved by the existing teardown: killing the local `ssh -S` client (via the job's process group, §9.3) closes the channel. The standard caveat applies — a **detached remote process can outlive the channel** — which is precisely why Ansible grew its async/poll mode. For now this is documented behavior, not a blocker; a later "remote reaper" step type could address it if needed. Step timeouts, job timeouts and operator cancel use the same teardown path as any local step (§7.3, §9).
+Cancellation uses the existing teardown: the local `ssh -S` client is signalled with the step's process group (§9.3). That alone is not enough: sshd tells a command run without a tty nothing when its channel closes, so the remote processes would keep running. So every remote step carries `QWE_STEP=<token>` in its environment (children inherit it), and on TERM or KILL the parent also runs a short `sh` over the master that signals every process whose `/proc/<pid>/environ` has that token. It needs `/proc`, `tr` and `grep` on the target. A process that escapes by scrubbing its environment is not found: the remote counterpart of the §9.3 known gap. Steps use `-o ProxyCommand=false`, so a client whose master died fails (`connection-lost`) instead of opening a connection of its own. Step timeouts, job timeouts and operator cancel use the same teardown path as any local step (§7.3, §9).
 
 If the master dies partway through a step, that step's `ssh -S` fails, and the step is `failed` with reason `connection-lost`. The parent re-establishes the master before the next step. **No step is ever retried automatically**, because it might not be idempotent.
 
