@@ -598,30 +598,44 @@ static void job_send_plain(struct run_ctx *ctx, struct job *job, enum qwe_lc_eve
 	job_send(ctx, job, ev, none, ev_step);
 }
 
-/* Reaps every live step whose leader has exited. Until qwe is a subreaper
- * (ticket 19), a step's group counts as empty once its leader is gone. */
+/* Reaps everything that has exited. qwe is a subreaper, so that includes
+ * processes reparented to it when their parent died, not only step leaders.
+ * A leader's exit is an event. A step ends when its whole group is empty: a
+ * group is checked after each batch of exits, because that is the only time
+ * it can become empty. A process that left the group (setsid) is not seen
+ * (design §9.3, the known M1 gap). */
 static void reap_children(struct run_ctx *ctx)
 {
 	struct signalfd_siginfo si;
 	size_t i;
+	pid_t pid;
+	int status;
 
 	while (read(ctx->chld_fd, &si, sizeof si) == (ssize_t)sizeof si)
 		;
+	while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+		for (i = 0; i < ctx->njobs; i++) {
+			struct job *job = &ctx->jobs[i];
+			struct job_run *r = &job->run;
+			struct qwe_lc_payload pl = {0, "exit-code", NULL};
+
+			if (r->live_step < 0 || !r->proc_ok || r->leader_reaped || r->proc.pid != pid)
+				continue;
+			r->leader_reaped = 1;
+			job_send(ctx, job,
+				 WIFEXITED(status) && WEXITSTATUS(status) == 0 ? QWE_LC_EV_LEADER_EXIT_OK
+									       : QWE_LC_EV_LEADER_EXIT_FAIL,
+				 pl, r->live_step);
+			break;
+		}
+		/* no match: an orphan of some step's group, reaped and forgotten */
+	}
 	for (i = 0; i < ctx->njobs; i++) {
 		struct job *job = &ctx->jobs[i];
 		struct job_run *r = &job->run;
-		struct qwe_lc_payload pl = {0, "exit-code", NULL};
-		long step = r->live_step;
-		int status;
 
-		if (step < 0 || !r->proc_ok || r->leader_reaped)
-			continue;
-		if (waitpid(r->proc.pid, &status, WNOHANG) != r->proc.pid)
-			continue;
-		r->leader_reaped = 1;
-		job_send(ctx, job, WIFEXITED(status) && WEXITSTATUS(status) == 0 ? QWE_LC_EV_LEADER_EXIT_OK : QWE_LC_EV_LEADER_EXIT_FAIL,
-			 pl, step);
-		job_send_plain(ctx, job, QWE_LC_EV_GROUP_EMPTY, step);
+		if (r->live_step >= 0 && r->proc_ok && r->leader_reaped && qwe_proc_group_empty(r->proc.pid))
+			job_send_plain(ctx, job, QWE_LC_EV_GROUP_EMPTY, r->live_step);
 	}
 }
 
@@ -788,6 +802,10 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	sigaddset(&cancel_set, SIGTERM);
 	sigprocmask(SIG_BLOCK, &ctx.chld_mask, NULL);
 	sigprocmask(SIG_BLOCK, &cancel_set, NULL);
+	/* A step's orphans come back to qwe, so that a step ends only when its whole
+	 * group is empty. */
+	if (qwe_proc_become_subreaper() < 0)
+		fprintf(stderr, "qwe run: warning: cannot become a subreaper: %s\n", strerror(errno));
 	ctx.cancel_fd = signalfd(-1, &cancel_set, SFD_CLOEXEC | SFD_NONBLOCK);
 	ctx.chld_fd = signalfd(-1, &ctx.chld_mask, SFD_CLOEXEC | SFD_NONBLOCK);
 	/* The grace period is fixed at 10 seconds; the override is for tests only. */

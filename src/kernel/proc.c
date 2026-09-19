@@ -4,6 +4,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/prctl.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
@@ -62,4 +64,22 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 int qwe_proc_kill_group(const struct qwe_proc *p, int sig)
 {
 	return kill(-p->pid, sig);
+}
+
+int qwe_proc_become_subreaper(void)
+{
+	return prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
+}
+
+int qwe_proc_group_empty(pid_t pgid)
+{
+	int saved = errno;
+	int gone;
+
+	while (waitpid(-pgid, NULL, WNOHANG) > 0)
+		;
+	/* Signal 0 checks that a process of the group exists, and sends nothing. */
+	gone = kill(-pgid, 0) < 0 && errno == ESRCH;
+	errno = saved;
+	return gone;
 }

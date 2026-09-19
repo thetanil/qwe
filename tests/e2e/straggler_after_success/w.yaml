@@ -1,0 +1,6 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: leaves-a-child
+        run: sleep $QWE_E2E_MARK & echo $! > child.pid; echo done

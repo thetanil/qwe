@@ -24,4 +24,16 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg);
  * the group is gone). */
 int qwe_proc_kill_group(const struct qwe_proc *p, int sig);
 
+/* Makes this process the parent of every orphan in its tree: a process whose
+ * parent dies is reparented to qwe, not to init, so qwe can wait for it
+ * (Linux PR_SET_CHILD_SUBREAPER; it is not inherited by children). Returns 0,
+ * or -1 with errno set. */
+int qwe_proc_become_subreaper(void);
+
+/* True when no process of group pgid is left. It first reaps every process of
+ * the group that has exited and is ours to reap; a zombie nobody has waited
+ * for still counts as left. A process that has left the group (setsid) is not
+ * seen: the known M1 gap (design §9.3). */
+int qwe_proc_group_empty(pid_t pgid);
+
 #endif

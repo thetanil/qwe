@@ -1,0 +1,12 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: child-traps-term
+        run: |
+          # The leader exits only once the child ignores SIGTERM, so the
+          # child cannot be caught before its trap is in place.
+          (trap '' TERM; touch armed; exec sleep $QWE_E2E_MARK) &
+          echo $! > child.pid
+          while [ ! -e armed ]; do sleep 0.02; done
+          echo armed

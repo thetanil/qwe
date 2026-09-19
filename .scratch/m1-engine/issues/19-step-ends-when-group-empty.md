@@ -1,6 +1,6 @@
 # 19: A step ends when its process group is empty
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: 18
@@ -15,10 +15,10 @@ This fixes two bugs that exist today:
 
 ## Acceptance criteria
 
-- [ ] A step that leaves a background child and exits 0 is `success`. The child gets SIGTERM, qwe waits for the group to empty, and no process is left behind. The job's trace shows `settling-continue-term` before `group-empty`. `e2e: tests/e2e/straggler_after_success/`
-- [ ] A step whose child traps SIGTERM keeps its full grace period after the leader exits, and is SIGKILLed only when grace expires. The trace shows `grace-expired`, then `settling-*-kill`, then `group-empty`. `e2e: tests/e2e/grace_outlives_leader/` (with `QWE_TEST_GRACE_MS`)
-- [ ] qwe is a child subreaper for the whole run and reaps every process reparented to it, not only step leaders. `unit: src/kernel/proc_test.c::subreaper_reaps_orphans`
-- [ ] A process that escapes with `setsid` is not waited on, and it is noted as the known gap (design §9.3). No test is expected to catch it: that is the cgroup ticket.
+- [x] A step that leaves a background child and exits 0 is `success`. The child gets SIGTERM, qwe waits for the group to empty, and no process is left behind. The job's trace shows `settling-continue-term` before `group-empty`. `e2e: tests/e2e/straggler_after_success/`
+- [x] A step whose child traps SIGTERM keeps its full grace period after the leader exits, and is SIGKILLed only when grace expires. The trace shows `grace-expired`, then `settling-*-kill`, then `group-empty`. `e2e: tests/e2e/grace_outlives_leader/` (with `QWE_TEST_GRACE_MS`)
+- [x] qwe is a child subreaper for the whole run and reaps every process reparented to it, not only step leaders. `unit: src/kernel/proc_test.c::subreaper_reaps_orphans`
+- [x] A process that escapes with `setsid` is not waited on, and it is noted as the known gap (design §9.3). No test is expected to catch it: that is the cgroup ticket.
 
 ## Comments
 
@@ -44,3 +44,10 @@ qwe sets itself as child subreaper at the start of a run. On every SIGCHLD it re
 **Out of scope:**
 - cgroups, and processes that escape with `setsid` (step-containment ticket 01).
 - Any change to the table from ticket 17 beyond fixing a cell this ticket proves wrong. If a cell does change, the ADR and the layer-2 rules must agree with it.
+
+### Resolution
+
+- `proc.c`: `qwe_proc_become_subreaper()` (PR_SET_CHILD_SUBREAPER; qwe calls it at the start of a run) and `qwe_proc_group_empty(pgid)` (reaps the group's exited processes, then `kill(-pgid, 0)` says ESRCH). Unit: `proc_test.c::subreaper_reaps_orphans`.
+- The shell's `reap_children` reaps with `waitpid(-1)` on every SIGCHLD, so orphans are reaped and forgotten, and a leader's exit becomes an event. After each batch it checks the group of every step whose leader has been reaped, and sends `group-empty` only when it is empty. The stragglers' teardown is the table's: SIGTERM and grace at leader exit, SIGKILL only on `grace-expired`.
+- e2e: `straggler_after_success` (checks nothing is left and the trace has `settling-continue-term` then `group-empty`), `grace_outlives_leader` (`grace-expired`, `settling-continue-kill`, `group-empty`). In `grace_outlives_leader` the leader waits for a marker file that the child creates after `trap '' TERM`, so the child cannot be caught before its trap is set; without that the case was flaky (1 in 25).
+- The `setsid` gap is unchanged and documented (design §9.3; step-containment ticket 01). No table cell changed.

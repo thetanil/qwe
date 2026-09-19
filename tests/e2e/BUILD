@@ -87,3 +87,7 @@ e2e_test(name = "trace_transitions")
 e2e_test(name = "trace_debug")
 
 e2e_test(name = "engine_error_spawn")
+
+e2e_test(name = "straggler_after_success")
+
+e2e_test(name = "grace_outlives_leader")
