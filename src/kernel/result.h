@@ -1,0 +1,32 @@
+/* result.json: every job's and step's outcome, reason and times. */
+#ifndef QWE_KERNEL_RESULT_H
+#define QWE_KERNEL_RESULT_H
+
+#include <stdio.h>
+#include <time.h>
+
+struct qwe_step_result {
+	const char *id; /* may be NULL */
+	const char *outcome;
+	const char *reason; /* may be NULL */
+	int changed;
+	time_t started, ended;
+};
+
+struct qwe_job_result {
+	const char *id;
+	const char *outcome;
+	const char *reason; /* may be NULL */
+	time_t started, ended;
+	unsigned long dropped_bytes;
+	const struct qwe_step_result *steps;
+	size_t nsteps;
+};
+
+/* Writes {"run_id":..., "jobs": {...}} to fp. Returns 0, or -1 on a write error. */
+int qwe_result_write(FILE *fp, const char *run_id, const struct qwe_job_result *jobs, size_t njobs);
+
+/* Writes s as a JSON string literal, quoted and escaped. */
+void qwe_json_string(FILE *fp, const char *s);
+
+#endif

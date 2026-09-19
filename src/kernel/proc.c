@@ -1,0 +1,53 @@
+#define _GNU_SOURCE
+#include "src/kernel/proc.h"
+
+#include <fcntl.h>
+#include <signal.h>
+#include <unistd.h>
+
+int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
+{
+	int fds[2];
+	pid_t pid;
+
+	if (pipe(fds) < 0)
+		return -1;
+	fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+
+	pid = fork();
+	if (pid < 0) {
+		close(fds[0]);
+		close(fds[1]);
+		return -1;
+	}
+	if (pid == 0) {
+		sigset_t none;
+		char **argv;
+		int null;
+
+		setpgid(0, 0);
+		sigemptyset(&none);
+		sigprocmask(SIG_SETMASK, &none, NULL);
+		null = open("/dev/null", O_RDONLY);
+		if (null >= 0) {
+			dup2(null, 0);
+			close(null);
+		}
+		dup2(fds[1], 1);
+		dup2(fds[1], 2);
+		close(fds[0]);
+		close(fds[1]);
+		argv = fn(arg);
+		if (!argv)
+			_exit(126);
+		execvp(argv[0], argv);
+		_exit(127);
+	}
+	/* Both sides call setpgid so the group exists before either proceeds. */
+	setpgid(pid, pid);
+	close(fds[1]);
+	fcntl(fds[0], F_SETFL, O_NONBLOCK);
+	p->pid = pid;
+	p->out_fd = fds[0];
+	return 0;
+}

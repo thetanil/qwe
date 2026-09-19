@@ -1,0 +1,9 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: |
+          echo one
+          echo two >&2
+          echo three
+          echo four >&2

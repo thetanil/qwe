@@ -1,0 +1,5 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: head -c 10485760 /dev/zero | tr '\0' x | fold -w 1023

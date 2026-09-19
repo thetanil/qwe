@@ -13,6 +13,9 @@
 /* Returns "qwe <version>". */
 const char *qwe_version_string(void);
 
+/* Runs the workflow at path to completion; returns the process exit code. */
+int qwe_run_workflow(const char *path);
+
 /* Prints "qwe <cmd>: not implemented" to stderr; returns QWE_EXIT_USAGE. */
 int qwe_not_implemented(const char *cmd);
 
