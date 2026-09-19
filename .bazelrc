@@ -1,0 +1,9 @@
+# C99, strict warnings for our own code.
+build --copt=-std=c99 --copt=-Wall --copt=-Wextra --copt=-Werror
+build --host_copt=-std=c99
+
+test --test_output=errors
+# ssh e2e tests need the devcontainer's key agent (spec, "Test strategy").
+test --test_env=REMOTE_CONTAINERS
+test --test_env=SSH_AUTH_SOCK
+test --test_env=HOME

@@ -1,6 +1,6 @@
 # 01: Bazel skeleton, CLI dispatch, greatest
 
-Status: ready-for-agent
+Status: resolved
 Type: task
 Blocked by: none
 
@@ -16,9 +16,16 @@ Vendor **greatest** into `third_party/greatest/`. Add a `.bazelrc` containing th
 
 ## Acceptance criteria
 
-- [ ] `bazel test //...` passes on a clean checkout. `unit: src/cli/dispatch_test.c::known_subcommands_resolve`
-- [ ] An unknown subcommand prints usage to stderr and exits 2. `e2e: tests/e2e/cli_unknown_subcommand/`
-- [ ] `qwe --version` prints a version string and exits 0. `e2e: tests/e2e/cli_version/`
-- [ ] `qwe serve` prints "not implemented" and exits 2. `e2e: tests/e2e/cli_serve_stub/`
-- [ ] The e2e macro fails when the golden file differs from the output. `e2e: tests/e2e/harness_selftest_mismatch/` (a case expected to fail, run under a wrapper that inverts the result)
-- [ ] `src/kernel` has no `main` symbol and every subcommand links it through one public header. `unit: src/kernel/api_test.c::links_without_cli`
+- [x] `bazel test //...` passes on a clean checkout. `unit: src/cli/dispatch_test.c::known_subcommands_resolve`
+- [x] An unknown subcommand prints usage to stderr and exits 2. `e2e: tests/e2e/cli_unknown_subcommand/`
+- [x] `qwe --version` prints a version string and exits 0. `e2e: tests/e2e/cli_version/`
+- [x] `qwe serve` prints "not implemented" and exits 2. `e2e: tests/e2e/cli_serve_stub/`
+- [x] The e2e macro fails when the golden file differs from the output. `e2e: tests/e2e/harness_selftest_mismatch/` (a case expected to fail, run under a wrapper that inverts the result)
+- [x] `src/kernel` has no `main` symbol and every subcommand links it through one public header. `unit: src/kernel/api_test.c::links_without_cli`
+
+## Comments
+
+Done. `bazel test //...` passes (6 tests).
+- e2e tests are named `<case>_test`, not `<case>`. A test named after its case directory makes the test binary shadow the case directory in runfiles.
+- Stubs (`run`, `validate`, `encrypt`, `keygen`, `serve`) print `qwe <cmd>: not implemented` to stderr and exit 2.
+- e2e case layout: `args` (one per line), `expected/{stdout,stderr,exit}`, plus any other `expected/<path>` diffed against `<path>` in the scratch work dir. The runner exits 0 on pass, 1 on golden mismatch, 3 on harness error. The selftest wrapper passes only on exit 1.
