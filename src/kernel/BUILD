@@ -201,3 +201,24 @@ cc_test(
         "//third_party/greatest",
     ],
 )
+
+# ADR-0010: the job lifecycle as one pure table.
+cc_library(
+    name = "lifecycle",
+    srcs = ["lifecycle.c"],
+    hdrs = ["lifecycle.h"],
+)
+
+# The event model is written apart from the table and only the test links it.
+cc_test(
+    name = "lifecycle_test",
+    srcs = [
+        "lifecycle_model.c",
+        "lifecycle_model.h",
+        "lifecycle_test.c",
+    ],
+    deps = [
+        ":lifecycle",
+        "//third_party/greatest",
+    ],
+)

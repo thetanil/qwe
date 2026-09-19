@@ -21,7 +21,7 @@ success  failed  skipped  cancelled
 
 ## Events
 
-`needs-met`, `needs-failed`, `slot-granted`, `next-step`, `no-more-steps`, `start-failed`, `leader-exit-ok`, `leader-exit-fail`, `step-timeout`, `job-timeout`, `cancel`, `grace-expired`, `group-empty`. That is about 21 states × 13 events, roughly 270 cells.
+`needs-met`, `needs-failed`, `slot-granted`, `next-step`, `no-more-steps`, `start-failed`, `leader-exit-ok`, `leader-exit-fail`, `step-timeout`, `job-timeout`, `cancel`, `grace-expired`, `group-empty`. That is about 21 states × 13 events, roughly 270 cells. Two things travel as payload rather than as extra events: `leader-exit-fail`'s reason, and `next-step`'s continue-on-error flag, which picks between the plain and `coe` step-running states. A cancel that finds the job in `between-steps` (no step live, so nothing to settle) goes straight to `cancelled`. A spawn that fails is `start-failed` in `step-running`/`step-running-coe`, because the state is entered before the spawn action runs; `start-failed` in `between-steps` is a job whose log cannot be opened.
 
 ## Rules
 

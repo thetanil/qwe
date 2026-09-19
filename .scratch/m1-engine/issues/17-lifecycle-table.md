@@ -1,6 +1,6 @@
 # 17: The job lifecycle table and its four test layers
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 08
@@ -13,8 +13,8 @@ The states, events, cell kinds and rules are those in ADR-0010, which is the con
 
 ## Acceptance criteria
 
-- [ ] **Layer 1 (completeness):** every (state, event) cell is exactly one of transition, ignore or impossible. None is left unset, and every ignore cell carries a non-empty justification. `unit: src/kernel/lifecycle_test.c::every_cell_classified`
-- [ ] **Layer 2 (rules over all cells):** each rule is one assertion over all cells. `unit: src/kernel/lifecycle_test.c::rules_hold_in_every_cell`
+- [x] **Layer 1 (completeness):** every (state, event) cell is exactly one of transition, ignore or impossible. None is left unset, and every ignore cell carries a non-empty justification. `unit: src/kernel/lifecycle_test.c::every_cell_classified`
+- [x] **Layer 2 (rules over all cells):** each rule is one assertion over all cells. `unit: src/kernel/lifecycle_test.c::rules_hold_in_every_cell`
   - A final state has no transitions.
   - An ignore cell never changes the state and has no actions.
   - A SIGKILL action only leaves a state in which SIGTERM has already been sent.
@@ -22,11 +22,11 @@ The states, events, cell kinds and rules are those in ADR-0010, which is the con
   - From every live state, `cancel` leads only to `settling-cancel-requested-*` or `skipped`.
   - Every transition into `failed`, `skipped` or `cancelled` sets a reason.
   - `leader-exit-fail` records the event's reason unchanged.
-- [ ] **Layer 3 (exhaustive exploration):** a breadth-first search from `pending`, driven by the event model, covers every state and event. `unit: src/kernel/lifecycle_test.c::impossible_cells_unreachable`, `unit: src/kernel/lifecycle_test.c::every_possible_cell_reachable`
+- [x] **Layer 3 (exhaustive exploration):** a breadth-first search from `pending`, driven by the event model, covers every state and event. `unit: src/kernel/lifecycle_test.c::impossible_cells_unreachable`, `unit: src/kernel/lifecycle_test.c::every_possible_cell_reachable`
   - No event sequence the model allows reaches an impossible cell.
   - Every transition and ignore cell is reached.
-- [ ] **Event model:** it lives in its own file and states which events can occur in which state. It is written independently of the table, and it never reads the table. `unit: src/kernel/lifecycle_model.c` (exercised by the two layer-3 tests)
-- [ ] **Layer 4 (scenarios):** named event sequences produce the expected sequence of (state, event, next state, reason) records. `unit: src/kernel/lifecycle_test.c::scenario_*`
+- [x] **Event model:** it lives in its own file and states which events can occur in which state. It is written independently of the table, and it never reads the table. `unit: src/kernel/lifecycle_model.c` (exercised by the two layer-3 tests)
+- [x] **Layer 4 (scenarios):** named event sequences produce the expected sequence of (state, event, next state, reason) records. `unit: src/kernel/lifecycle_test.c::scenario_*`
   - A clean run of two steps ends `success`.
   - A step fails with and without `continue-on-error`.
   - A step timeout, then `grace-expired`, then `group-empty`.
@@ -35,7 +35,7 @@ The states, events, cell kinds and rules are those in ADR-0010, which is the con
   - Stragglers outlive a successful leader.
   - `start-failed` gives `engine-error`.
   - `needs-failed` and a cancel in `pending` or `ready` give `skipped` with the right reason.
-- [ ] Looking up an impossible cell aborts. `unit: src/kernel/lifecycle_test.c::impossible_cell_aborts` (by fork, as in `job_state_test`)
+- [x] Looking up an impossible cell aborts. `unit: src/kernel/lifecycle_test.c::impossible_cell_aborts` (by fork, as in `job_state_test`)
 
 ## Comments
 
@@ -87,3 +87,16 @@ Still open:
    - `operator_cancel` and `parallel_cancel` send their signal at a fixed 0.7 s, which ticket 08 asks to avoid. Starting the cancel when a marker file appears would remove the timing dependence.
 6. **`workflow.c` does too much** (about 800 lines): loading jobs and refusing unimplemented keys, the event loop, teardown, scheduler glue and building the result. The lifecycle could move into its own module, and `load_jobs` into another.
 
+
+### Resolution
+
+`src/kernel/lifecycle.{h,c}` (table + lookup), `lifecycle_model.{h,c}` (event model, linked only by the test), `lifecycle_test.c` (layers 1–4, abort by fork). Not wired into the engine; `job_state` is untouched until ticket 18.
+
+Decisions worth knowing:
+- `next-step` carries `coe` as payload (a `coe_by_payload` flag on the cell picks state or state+1), like `leader-exit-fail`'s reason; the event count stays 13. ADR-0010 notes this.
+- A cancel in `between-steps` goes to `cancelled`, not `settling-cancel-requested-*`: no step is live, so there is nothing to settle. The layer-2 cancel rule allows exactly that one exception. ADR-0010 notes this too.
+- `start-failed` is decided in `step-running`/`-coe` (spawn fails after the state is entered) and in `between-steps` (job start fails).
+- Reasons are kinds: fixed, `FROM_EVENT` (leader-exit-fail from a running state only) and `CARRIED` (the settling-fail → failed cell, so the failing step's reason survives the wait).
+- After a step timeout, both leader exits record `timeout`: a timed-out step failed whatever its leader said.
+- A cancel or job timeout arriving in a `settling-*` state changes the job's reason but does not re-record the step.
+- A cancel is broadcast to every job, so final states carry a justified ignore cell for it.
