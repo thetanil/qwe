@@ -1,10 +1,11 @@
 -- Templating and step outputs. `${{ env.X }}` and `${{ steps.<id>.outputs.<k> }}`
--- are the only expressions (ticket 11; vars and secrets come later). They are
+-- and `${{ vars.X }}` (a value of the job's target) are the only expressions
+-- (secrets come later). They are
 -- checked when the workflow is validated and evaluated in the parent just
 -- before each step starts.
 --
--- env values may use only steps references: an env value that read env would
--- need an evaluation order, and nothing needs one.
+-- env values may use only steps and vars references: an env value that read env
+-- would need an evaluation order, and nothing needs one.
 local cbor = require("qwe.cbor")
 local json = require("dkjson")
 
@@ -12,14 +13,16 @@ local M = {}
 
 local NAME = "[A-Za-z_][A-Za-z0-9_%-]*"
 
--- Parses the inside of ${{ }}. Returns { kind = "env", name } or
+-- Parses the inside of ${{ }}. Returns { kind = "env", name }, { kind = "vars", name } or
 -- { kind = "steps", step, key }, or nil and a message.
 local function parse_expr(expr)
   local name = expr:match("^env%.([A-Za-z_][A-Za-z0-9_]*)$")
   if name then return { kind = "env", name = name } end
+  local var = expr:match("^vars%.(" .. NAME .. ")$")
+  if var then return { kind = "vars", name = var } end
   local step, key = expr:match("^steps%.(" .. NAME .. ")%.outputs%.(" .. NAME .. ")$")
   if step then return { kind = "steps", step = step, key = key } end
-  return nil, 'unknown expression "' .. expr .. '" (only env.NAME and steps.ID.outputs.KEY exist)'
+  return nil, 'unknown expression "' .. expr .. '" (only env.NAME, vars.NAME and steps.ID.outputs.KEY exist)'
 end
 
 -- Calls fn(expr_text) for every ${{ }} in s, in order.
@@ -44,20 +47,34 @@ end
 -- Problems with the templates and env names of a decoded workflow. Returns a
 -- list of { pointer, kind = "value", message }. plugins maps a plugin name to
 -- its declared output names, when it has any.
-function M.check(doc, plugin_outputs)
+function M.check(doc, plugin_outputs, inventory)
+  local inv = require("qwe.inventory")
   local errors = {}
   local function add(pointer, message)
     errors[#errors + 1] = { pointer = pointer, kind = "value", message = message }
   end
 
   -- earlier: step id -> the plugin's outputs table or true, for the steps before this one
-  local function scan(value, pointer, earlier, in_env)
+  local function scan(value, pointer, earlier, in_env, target)
     if type(value) == "string" then
       each_expr(value, function(expr)
         local parsed, message = parse_expr(expr)
         if not parsed then return add(pointer, message) end
         if parsed.kind == "env" and in_env then
           return add(pointer, "an env value cannot read env: ${{ " .. expr .. " }}")
+        end
+        if parsed.kind == "vars" then
+          if target == nil then
+            return add(pointer, "vars belong to a job's target: use them in a job or step, or map them in a job's env: (${{ " .. expr .. " }})")
+          end
+          local vars = inv.vars(target, inventory)
+          if vars and vars[parsed.name] == nil then
+            local names = {}
+            for k in pairs(vars) do names[#names + 1] = k end
+            table.sort(names)
+            return add(pointer, 'target "' .. target .. '" has no var "' .. parsed.name .. '"'
+              .. (#names > 0 and (" (vars: " .. table.concat(names, ", ") .. ")") or " (it has no vars)"))
+          end
         end
         if parsed.kind == "steps" then
           local step = earlier[parsed.step]
@@ -72,14 +89,14 @@ function M.check(doc, plugin_outputs)
       end)
     elseif type(value) == "table" then
       if getmetatable(value) == cbor.array_mt then
-        for i, v in ipairs(value) do scan(v, pointer .. "/" .. (i - 1), earlier, in_env) end
+        for i, v in ipairs(value) do scan(v, pointer .. "/" .. (i - 1), earlier, in_env, target) end
       else
-        for k, v in pairs(value) do scan(v, pointer .. "/" .. esc(k), earlier, in_env) end
+        for k, v in pairs(value) do scan(v, pointer .. "/" .. esc(k), earlier, in_env, target) end
       end
     end
   end
 
-  local function check_env(env, pointer, earlier)
+  local function check_env(env, pointer, earlier, target)
     if type(env) ~= "table" then return end
     for name, value in pairs(env) do
       if not name:match("^[A-Za-z_][A-Za-z0-9_]*$") then
@@ -95,7 +112,7 @@ function M.check(doc, plugin_outputs)
           message = "QWE_OUTPUT is set by qwe for run: steps",
         }
       elseif type(value) == "string" then
-        scan(value, pointer .. "/" .. esc(name), earlier, true)
+        scan(value, pointer .. "/" .. esc(name), earlier, true, target)
       end
     end
   end
@@ -107,13 +124,13 @@ function M.check(doc, plugin_outputs)
   for _, job_id in ipairs(job_ids) do
     local job = doc.jobs[job_id]
     local base = "/jobs/" .. esc(job_id)
-    check_env(job.env, base .. "/env", {})
+    check_env(job.env, base .. "/env", {}, job.target)
     local earlier = {}
     for i, step in ipairs(job.steps) do
       local at = base .. "/steps/" .. (i - 1)
-      check_env(step.env, at .. "/env", earlier)
-      if type(step.run) == "string" then scan(step.run, at .. "/run", earlier, false) end
-      if type(step["with"]) == "table" then scan(step["with"], at .. "/with", earlier, false) end
+      check_env(step.env, at .. "/env", earlier, job.target)
+      if type(step.run) == "string" then scan(step.run, at .. "/run", earlier, false, job.target) end
+      if type(step["with"]) == "table" then scan(step["with"], at .. "/with", earlier, false, job.target) end
       if step.id then
         earlier[step.id] = (step.uses and plugin_outputs[step.uses]) or true
       end
@@ -142,7 +159,13 @@ end
 -- run: step, is the file its outputs are written to ($QWE_OUTPUT).
 function M.resolve(workflow, job, index, outputs, output_path)
   local step = job.steps[index]
+  local vars = require("qwe.inventory").vars(job.target) or {}
   local function resolve(parsed)
+    if parsed.kind == "vars" then
+      local value = vars[parsed.name]
+      if value == nil then return nil end
+      return env_string(value)
+    end
     if parsed.kind == "env" then
       -- only reachable in run: text and with: values; env values have no env refs
       return nil
@@ -165,11 +188,11 @@ function M.resolve(workflow, job, index, outputs, output_path)
   for k, v in pairs(step) do
     if k ~= "env" then resolved[k] = copy(v, resolve_all) else resolved[k] = v end
   end
-  -- env values: steps references only
+  -- env values: steps and vars references only
   local final = {}
   for name, value in pairs(env) do
     final[name] = substitute(value, function(parsed)
-      if parsed.kind == "steps" then return resolve(parsed) end
+      if parsed.kind ~= "env" then return resolve(parsed) end
     end)
   end
   if step.run ~= nil and output_path then final.QWE_OUTPUT = output_path end

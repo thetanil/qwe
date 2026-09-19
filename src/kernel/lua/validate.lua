@@ -117,7 +117,8 @@ local function id_problem(id)
 end
 
 -- Checks the schema cannot express. Assumes the schema passed.
-local function structure(doc, plugin_list)
+local function structure(doc, plugin_list, inventory)
+  local inv = require("qwe.inventory")
   local errors = {}
   local ids = {}
   for id in pairs(doc.jobs) do ids[#ids + 1] = id end
@@ -125,6 +126,14 @@ local function structure(doc, plugin_list)
   for _, job_id in ipairs(ids) do
     local seen = {}
     local bad = id_problem(job_id)
+    local target = doc.jobs[job_id].target
+    if not inv.has_target(inventory, target) then
+      errors[#errors + 1] = {
+        pointer = "/jobs/" .. esc(job_id) .. "/target",
+        kind = "value",
+        message = 'unknown target "' .. target .. '" (declared: ' .. table.concat(inv.target_names(inventory), ", ") .. ")",
+      }
+    end
     if bad then
       errors[#errors + 1] = {
         pointer = "/jobs/" .. esc(job_id),
@@ -159,17 +168,18 @@ local function structure(doc, plugin_list)
   for _, p in ipairs(plugin_list) do
     if p.outputs then outputs[p.name] = p.outputs end
   end
-  for _, e in ipairs(require("qwe.template").check(doc, outputs)) do errors[#errors + 1] = e end
+  for _, e in ipairs(require("qwe.template").check(doc, outputs, inventory)) do errors[#errors + 1] = e end
   return errors
 end
 
 -- Returns a list of { pointer, kind, message }, empty if the workflow is valid.
-function M.validate(doc, plugin_list)
+function M.validate(doc, plugin_list, inventory)
   plugin_list = plugin_list or plugins.builtin()
+  inventory = inventory or require("qwe.inventory").current()
   local result = kernel_validator(plugin_list):validate(doc)
   local errors = {}
   if result.valid then
-    return structure(doc, plugin_list)
+    return structure(doc, plugin_list, inventory)
   end
   for _, err in ipairs(result.errors or {}) do
     -- The allOf line only says that some branch inside it failed.
@@ -191,7 +201,10 @@ function M.check(schema_tbl, data)
     -- These lines only say that some branch inside them failed.
     if not (ends_with(kw, "/allOf") or ends_with(kw, "/anyOf") or ends_with(kw, "/oneOf")) then
       if ends_with(kw, "/additionalProperties") then
-        list[#list + 1] = { pointer = err.instanceLocation, kind = "key", message = "unknown key" }
+        list[#list + 1] = {
+          pointer = err.instanceLocation, kind = "key",
+          message = 'unknown key "' .. last_token(err.instanceLocation) .. '"',
+        }
       else
         list[#list + 1] = { pointer = err.instanceLocation, kind = "value", message = err.error or "invalid value" }
       end
@@ -203,9 +216,9 @@ end
 -- Loads the project's plugins (next to the workflow, in dir) and validates doc
 -- against the built-in and project plugins together. Returns the workflow's
 -- errors and the plugins' problems ({ where, message }).
-function M.validate_project(doc, dir)
+function M.validate_project(doc, dir, inventory)
   local list, problems = plugins.load(dir)
-  return M.validate(doc, list), problems
+  return M.validate(doc, list, inventory), problems
 end
 
 return M

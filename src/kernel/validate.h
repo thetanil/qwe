@@ -12,4 +12,7 @@
  * returns how many there were. The stack is left as it was. */
 int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const struct qwe_positions *pos);
 
+/* The same for the decoded inventory on top of L's stack (qwe.inventory). */
+int qwe_validate_inventory(lua_State *L, const char *cmd, const char *path, const struct qwe_positions *pos);
+
 #endif

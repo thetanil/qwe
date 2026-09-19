@@ -1,0 +1,1 @@
+qwe validate: inventory.yaml:6:14: an !encrypted value can only be an entry of a secrets: map

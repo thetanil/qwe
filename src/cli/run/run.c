@@ -6,7 +6,7 @@
 
 static int usage(void)
 {
-	fprintf(stderr, "usage: qwe run <workflow.yaml> [--debug]\n");
+	fprintf(stderr, "usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--debug]\n");
 	return QWE_EXIT_USAGE;
 }
 
@@ -17,12 +17,17 @@ int qwe_cmd_run(int argc, char **argv)
 	int i;
 
 	for (i = 1; i < argc; i++) {
-		if (strcmp(argv[i], "--debug") == 0)
+		if (strcmp(argv[i], "--debug") == 0) {
 			opts.debug = 1;
-		else if (argv[i][0] == '-' || path)
+		} else if (strcmp(argv[i], "-i") == 0) {
+			if (++i >= argc || opts.inventory)
+				return usage();
+			opts.inventory = argv[i];
+		} else if (argv[i][0] == '-' || path) {
 			return usage(); /* an unknown option, or a second file */
-		else
+		} else {
 			path = argv[i];
+		}
 	}
 	if (!path)
 		return usage();

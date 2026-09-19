@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://qwe.invalid/inventory",
+  "description": "qwe inventory, M1 subset: no groups, defaults or inheritance of any kind.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "secrets": {"type": "object"},
+    "targets": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/definitions/target"}
+    }
+  },
+  "definitions": {
+    "vars": {
+      "type": "object",
+      "additionalProperties": {"type": ["string", "number", "boolean"]}
+    },
+    "target": {
+      "type": "object",
+      "required": ["backend"],
+      "additionalProperties": false,
+      "properties": {
+        "backend": {"enum": ["ssh"]},
+        "host": {"type": "string", "minLength": 1},
+        "max-sessions": {"type": "integer", "minimum": 1},
+        "become-password": {"type": "string"},
+        "vars": {"$ref": "#/definitions/vars"},
+        "secrets": {"type": "object"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"backend": {"const": "ssh"}}, "required": ["backend"]},
+          "then": {"required": ["host"]}
+        }
+      ]
+    }
+  }
+}

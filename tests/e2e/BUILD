@@ -141,3 +141,29 @@ e2e_test(name = "plugin_outputs_flow")
 e2e_test(name = "validate_unknown_context")
 
 e2e_test(name = "validate_unknown_output_key")
+
+e2e_test(name = "inventory_default_location")
+
+e2e_test(name = "inventory_flag_wins")
+
+e2e_test(name = "unknown_target")
+
+e2e_test(name = "local_needs_no_inventory")
+
+e2e_test(name = "inventory_local_reserved")
+
+e2e_test(name = "inventory_unknown_backend")
+
+e2e_test(name = "inventory_ssh_requires_host")
+
+e2e_test(name = "vars_per_target")
+
+e2e_test(name = "vars_unknown_key")
+
+e2e_test(name = "vars_not_auto_exported")
+
+e2e_test(name = "vars_in_run_text")
+
+e2e_test(name = "envelope_only_in_secrets")
+
+e2e_test(name = "inventory_no_inheritance_keys")

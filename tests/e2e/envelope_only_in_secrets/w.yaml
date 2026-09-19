@@ -1,0 +1,5 @@
+jobs:
+  j:
+    target: box
+    steps:
+      - run: echo hi

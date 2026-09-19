@@ -1,0 +1,2 @@
+qwe validate: inventory.yaml:1:1: unknown key "defaults"
+qwe validate: inventory.yaml:3:1: unknown key "groups"

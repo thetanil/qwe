@@ -19,6 +19,7 @@
 #                     is running). Waiting gives up after 30 s and fails the case.
 #   check.sh          optional extra assertions, run in the work dir after qwe;
 #                     sees $QWE_STDOUT (qwe's stdout) and must exit 0
+#                     ($QWE_BIN is the qwe binary, to run it again)
 #   everything else   input files, copied to a scratch work dir where qwe runs
 #
 #
@@ -139,7 +140,7 @@ while IFS= read -r f; do
 	check "$case_dir/expected/$f" "$work/$f" "$f" || true
 done <"$work.files"
 if [ -f "$case_dir/check.sh" ]; then
-	(cd "$work" && QWE_STDOUT="$work.stdout" sh "$case_dir/check.sh") || { echo "check.sh failed" >&2; fail=1; }
+	(cd "$work" && QWE_STDOUT="$work.stdout" QWE_BIN="$qwe" sh "$case_dir/check.sh") || { echo "check.sh failed" >&2; fail=1; }
 fi
 rm -f "$work.stdout" "$work.stderr" "$work.files"
 [ "$fail" = 0 ]

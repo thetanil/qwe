@@ -1,0 +1,4 @@
+targets:
+  box:
+    backend: telnet
+    host: 192.0.2.1

@@ -1,0 +1,10 @@
+jobs:
+  j:
+    target: box
+    steps:
+      - run: echo "arch=${arch-unset} ARCH=${ARCH-unset}"
+        on: local
+      - run: echo "ARCH=$ARCH"
+        on: local
+        env:
+          ARCH: ${{ vars.arch }}

@@ -1,0 +1,6 @@
+targets:
+  box:
+    backend: ssh
+    host: 192.0.2.1
+    vars:
+      arch: default

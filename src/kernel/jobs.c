@@ -26,7 +26,7 @@ static int cmp_job(const void *a, const void *b)
 /* Keys the engine accepts in the schema but does not act on yet. Running a
  * workflow that uses one would silently do the wrong thing, so it is refused. */
 static const char *const unimplemented_job_keys[] = {NULL};
-static const char *const unimplemented_step_keys[] = {"become", "on", "secret-outputs", NULL};
+static const char *const unimplemented_step_keys[] = {"become", "secret-outputs", NULL};
 
 static int refuse(const char *path, const char *what, const char *id, const char *key, const char *why)
 {
@@ -67,11 +67,11 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 	for (i = 0; i < n; i++) {
 		struct job *j = &jobs[i];
 		size_t nsteps;
+		int remote; /* the job's target is not local */
 
 		lua_rawgeti(L, LUA_REGISTRYINDEX, j->ref);
 		lua_getfield(L, -1, "target");
-		if (!lua_isstring(L, -1) || strcmp(lua_tostring(L, -1), "local") != 0)
-			bad = refuse(path, "job", j->id, "target", "only target: local is implemented");
+		remote = lua_isstring(L, -1) && strcmp(lua_tostring(L, -1), "local") != 0;
 		lua_pop(L, 1);
 		for (k = 0; unimplemented_job_keys[k]; k++) {
 			lua_getfield(L, -1, unimplemented_job_keys[k]);
@@ -102,6 +102,12 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 			if (!lua_isstring(L, -2) && !lua_isstring(L, -1))
 				bad = refuse(path, "job", j->id, "steps", "a step needs run: or uses:");
 			lua_pop(L, 2);
+			/* No remote backend yet: a step reaches a target other than local only
+			 * by not using it, with on: local. */
+			lua_getfield(L, -1, "on");
+			if (remote && !lua_isstring(L, -1))
+				bad = refuse(path, "job", j->id, "target", "only target: local can run steps yet (a step on another target needs on: local)");
+			lua_pop(L, 1);
 			for (m = 0; unimplemented_step_keys[m]; m++) {
 				lua_getfield(L, -1, unimplemented_step_keys[m]);
 				if (!lua_isnil(L, -1))

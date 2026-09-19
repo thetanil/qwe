@@ -1,0 +1,1 @@
+qwe validate: w.yaml:5:14: target "box" has no var "nope" (vars: arch)

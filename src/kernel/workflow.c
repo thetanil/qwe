@@ -331,10 +331,77 @@ static void fmt_run_id(char *buf, size_t n)
 	snprintf(buf + strlen(buf), n - strlen(buf), "-%d", (int)getpid());
 }
 
+/* Reads, transcodes, decodes and validates the inventory (inv_path, or
+ * inventory.yaml next to the workflow when that is NULL and the file exists),
+ * and makes it the one jobs read from. With no inventory the targets are just
+ * `local`. Returns 0, or QWE_EXIT_USAGE after printing every error. */
+static int load_inventory(lua_State *L, const char *cmd, const char *wf_path, const char *inv_path)
+{
+	char err[256], *yaml = NULL, *default_path = NULL;
+	size_t yaml_len, cbor_len;
+	uint8_t *cbor;
+	struct qwe_positions *pos = NULL;
+	int errors, top = lua_gettop(L);
+
+	if (!inv_path) {
+		const char *slash = strrchr(wf_path, '/');
+		size_t dir_len = slash ? (size_t)(slash - wf_path) + 1 : 0;
+
+		default_path = malloc(dir_len + sizeof "inventory.yaml");
+		memcpy(default_path, wf_path, dir_len);
+		strcpy(default_path + dir_len, "inventory.yaml");
+		if (access(default_path, F_OK) != 0) {
+			free(default_path);
+			return 0;
+		}
+		inv_path = default_path;
+	}
+	if (read_file(inv_path, &yaml, &yaml_len) < 0) {
+		fprintf(stderr, "%s: cannot read %s: %s\n", cmd, inv_path, strerror(errno));
+		goto fail;
+	}
+	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, &pos, err, sizeof err) < 0) {
+		fprintf(stderr, "%s: %s:%s\n", cmd, inv_path, err);
+		free(yaml);
+		goto fail;
+	}
+	free(yaml);
+	if (qwe_cbor_to_lua(L, cbor, cbor_len, err, sizeof err) < 0) {
+		fprintf(stderr, "%s: %s: %s\n", cmd, inv_path, err);
+		free(cbor);
+		qwe_positions_free(pos);
+		goto fail;
+	}
+	free(cbor);
+	if (!lua_istable(L, -1)) {
+		fprintf(stderr, "%s: %s:1:1: an inventory is a map with targets: and secrets:\n", cmd, inv_path);
+		qwe_positions_free(pos);
+		goto fail;
+	}
+	errors = qwe_validate_inventory(L, cmd, inv_path, pos);
+	qwe_positions_free(pos);
+	if (errors > 0)
+		goto fail;
+	/* qwe.inventory.use(inventory) */
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "qwe.inventory");
+	lua_call(L, 1, 1);
+	lua_getfield(L, -1, "use");
+	lua_pushvalue(L, top + 1);
+	lua_call(L, 1, 0);
+	lua_settop(L, top);
+	free(default_path);
+	return 0;
+fail:
+	free(default_path);
+	lua_settop(L, top);
+	return QWE_EXIT_USAGE;
+}
+
 /* Reads, transcodes, decodes and validates the workflow. On success returns 0
  * with the decoded workflow on top of *L's stack. Otherwise it has printed
  * every error (as file:line:col) and returns QWE_EXIT_USAGE, and *L is closed. */
-static int load_workflow(const char *cmd, const char *path, lua_State **L_out)
+static int load_workflow(const char *cmd, const char *path, const char *inventory, lua_State **L_out)
 {
 	char err[256], *yaml = NULL;
 	size_t yaml_len, cbor_len;
@@ -367,6 +434,11 @@ static int load_workflow(const char *cmd, const char *path, lua_State **L_out)
 		return QWE_EXIT_USAGE;
 	}
 	free(cbor);
+	if (load_inventory(L, cmd, path, inventory) != 0) {
+		qwe_positions_free(pos);
+		lua_close(L);
+		return QWE_EXIT_USAGE;
+	}
 	errors = qwe_validate_doc(L, cmd, path, pos);
 	qwe_positions_free(pos);
 	if (errors > 0) {
@@ -1130,7 +1202,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	int rc = QWE_EXIT_OK, all_ok = 1;
 	FILE *fp;
 
-	if (load_workflow("qwe run", path, &L) != 0)
+	if (load_workflow("qwe run", path, opts ? opts->inventory : NULL, &L) != 0)
 		return QWE_EXIT_USAGE;
 	n = qwe_jobs_load(L, path, &jobs);
 	if (n < 0)
@@ -1226,10 +1298,10 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	return rc;
 }
 
-int qwe_validate_workflow(const char *path)
+int qwe_validate_workflow(const char *path, const char *inventory)
 {
 	lua_State *L;
-	int rc = load_workflow("qwe validate", path, &L);
+	int rc = load_workflow("qwe validate", path, inventory, &L);
 
 	if (rc == 0)
 		lua_close(L);

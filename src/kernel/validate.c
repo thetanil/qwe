@@ -176,11 +176,45 @@ static size_t print_plugin_problems(lua_State *L, const char *cmd, int idx)
 	return n;
 }
 
+/* Adds the { pointer, kind, message } errors of the list at idx to ps. */
+static void collect_errors(lua_State *L, int idx, const struct qwe_positions *pos, struct problems *ps)
+{
+	size_t i, n = lua_objlen(L, idx);
+
+	for (i = 1; i <= n; i++) {
+		const char *pointer, *kind, *message;
+
+		lua_rawgeti(L, idx, (int)i);
+		lua_getfield(L, -1, "pointer");
+		lua_getfield(L, -2, "kind");
+		lua_getfield(L, -3, "message");
+		pointer = lua_tostring(L, -3);
+		kind = lua_tostring(L, -2);
+		message = lua_tostring(L, -1);
+		add(ps, locate(pos, pointer ? pointer : "", kind && strcmp(kind, "key") == 0),
+		    message ? message : "invalid");
+		lua_pop(L, 4);
+	}
+}
+
+/* Prints the problems in source order and frees them. */
+static void print_problems(struct problems *ps, const char *cmd, const char *path)
+{
+	size_t i;
+
+	qsort(ps->v, ps->n, sizeof *ps->v, cmp_problem);
+	for (i = 0; i < ps->n; i++) {
+		fprintf(stderr, "%s: %s:%u:%u: %s\n", cmd, path, ps->v[i].pos.line, ps->v[i].pos.col, ps->v[i].message);
+		free(ps->v[i].message);
+	}
+	free(ps->v);
+}
+
 int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const struct qwe_positions *pos)
 {
 	struct problems ps = {0};
 	int doc = lua_gettop(L);
-	size_t i, n, nplugin;
+	size_t n, nplugin;
 	char *dir;
 
 	lua_getglobal(L, "require");
@@ -197,36 +231,44 @@ int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const stru
 	nplugin = print_plugin_problems(L, cmd, lua_gettop(L));
 	lua_pop(L, 1); /* the plugin problems; the workflow's errors are on top */
 
-	n = lua_objlen(L, -1);
-	for (i = 1; i <= n; i++) {
-		const char *pointer, *kind, *message;
-
-		lua_rawgeti(L, -1, (int)i);
-		lua_getfield(L, -1, "pointer");
-		lua_getfield(L, -2, "kind");
-		lua_getfield(L, -3, "message");
-		pointer = lua_tostring(L, -3);
-		kind = lua_tostring(L, -2);
-		message = lua_tostring(L, -1);
-		add(&ps, locate(pos, pointer ? pointer : "", kind && strcmp(kind, "key") == 0),
-		    message ? message : "invalid");
-		lua_pop(L, 4);
-	}
+	collect_errors(L, lua_gettop(L), pos, &ps);
 	lua_pop(L, 2); /* the list and the module */
 
 	if (ps.n == 0)
 		check_dag(L, doc, pos, &ps);
 
-	qsort(ps.v, ps.n, sizeof *ps.v, cmp_problem);
-	for (i = 0; i < ps.n; i++) {
-		fprintf(stderr, "%s: %s:%u:%u: %s\n", cmd, path, ps.v[i].pos.line, ps.v[i].pos.col, ps.v[i].message);
-		free(ps.v[i].message);
-	}
-	free(ps.v);
-	return (int)(ps.n + nplugin);
+	n = ps.n;
+	print_problems(&ps, cmd, path);
+	return (int)(n + nplugin);
 
 internal:
 	fprintf(stderr, "%s: internal error in the validator: %s\n", cmd, lua_tostring(L, -1));
 	lua_settop(L, doc);
+	return 1;
+}
+
+int qwe_validate_inventory(lua_State *L, const char *cmd, const char *path, const struct qwe_positions *pos)
+{
+	struct problems ps = {0};
+	int inv = lua_gettop(L);
+	size_t n;
+
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "qwe.inventory");
+	if (lua_pcall(L, 1, 1, 0) != 0)
+		goto internal;
+	lua_getfield(L, -1, "validate");
+	lua_pushvalue(L, inv);
+	if (lua_pcall(L, 1, 1, 0) != 0)
+		goto internal;
+	collect_errors(L, lua_gettop(L), pos, &ps);
+	lua_pop(L, 2); /* the list and the module */
+	n = ps.n;
+	print_problems(&ps, cmd, path);
+	return (int)n;
+
+internal:
+	fprintf(stderr, "%s: internal error in the inventory reader: %s\n", cmd, lua_tostring(L, -1));
+	lua_settop(L, inv);
 	return 1;
 }

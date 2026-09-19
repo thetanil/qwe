@@ -1,0 +1,4 @@
+targets:
+  box:
+    backend: ssh
+    max-sessions: 2

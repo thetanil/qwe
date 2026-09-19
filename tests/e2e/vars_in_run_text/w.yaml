@@ -1,0 +1,6 @@
+jobs:
+  j:
+    target: box
+    steps:
+      - run: echo arch=${{ vars.arch }}
+        on: local

@@ -1,0 +1,1 @@
+qwe validate: inventory.yaml:2:3: "local" is built in and cannot be defined in the inventory
