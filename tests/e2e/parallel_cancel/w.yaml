@@ -1,0 +1,13 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - run: echo started; sleep $QWE_E2E_MARK
+  b:
+    target: local
+    steps:
+      - run: echo started; sleep $QWE_E2E_MARK
+  c:
+    target: local
+    steps:
+      - run: echo started; sleep $QWE_E2E_MARK

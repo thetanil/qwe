@@ -1,3 +1,4 @@
+max-parallel: 1
 jobs:
   a:
     target: local

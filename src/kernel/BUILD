@@ -24,6 +24,7 @@ cc_library(
         ":timer",
         ":result",
         ":ring",
+        ":sched",
         ":sink",
         "//src/edge/yaml",
         "//third_party/luajit",
@@ -180,6 +181,23 @@ cc_test(
     srcs = ["timer_test.c"],
     deps = [
         ":timer",
+        "//third_party/greatest",
+    ],
+)
+
+cc_library(
+    name = "sched",
+    srcs = ["sched.c"],
+    hdrs = ["sched.h"],
+    deps = [":job_state"],
+)
+
+cc_test(
+    name = "sched_test",
+    srcs = ["sched_test.c"],
+    deps = [
+        ":job_state",
+        ":sched",
         "//third_party/greatest",
     ],
 )

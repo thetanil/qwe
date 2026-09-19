@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "src/kernel/sink.h"
 
 #include <errno.h>
@@ -29,7 +30,7 @@ int qwe_sink_open(struct qwe_sink *s, const char *job, const char *dir, int term
 	if (!path)
 		return -1;
 	snprintf(path, n, "%s/%s.log", dir, job);
-	s->log_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	s->log_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
 	free(path);
 	if (s->log_fd < 0)
 		return -1;

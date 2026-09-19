@@ -10,6 +10,7 @@
 #include "src/kernel/timer.h"
 #include "src/kernel/result.h"
 #include "src/kernel/ring.h"
+#include "src/kernel/sched.h"
 #include "src/kernel/sink.h"
 
 #include <errno.h>
@@ -146,9 +147,23 @@ static int drain(int fd, struct qwe_ring *ring, struct qwe_sink *sink)
 	}
 }
 
-/* What is shared by every step of a run. */
+/* What an epoll event is about. Every fd in the loop carries one of these as
+ * its tag, so the one loop can tell jobs apart. */
+enum evkind { EV_OUT, EV_STEP_TIMER, EV_JOB_TIMER, EV_GRACE_TIMER, EV_CHILD, EV_CANCEL };
+
+struct job;
+
+struct ev {
+	struct job *job; /* NULL for EV_CHILD and EV_CANCEL */
+	enum evkind kind;
+};
+
+/* What is shared by every job of a run. */
 struct run_ctx {
 	sigset_t chld_mask;
+	int ep;               /* the one epoll every job's fds are on */
+	int chld_fd;          /* signalfd for SIGCHLD */
+	struct ev chld_ev, cancel_ev;
 	int cancel_fd;        /* signalfd for SIGINT and SIGTERM */
 	int cancel_requested; /* sticky: the operator asked to stop */
 	long grace_ms;        /* SIGTERM to SIGKILL */
@@ -166,104 +181,6 @@ static int poll_cancel(struct run_ctx *ctx)
 	while (read(ctx->cancel_fd, &si, sizeof si) == (ssize_t)sizeof si)
 		ctx->cancel_requested = 1;
 	return ctx->cancel_requested;
-}
-
-static void add_fd(int ep, int fd)
-{
-	struct epoll_event ev;
-
-	ev.events = EPOLLIN;
-	ev.data.fd = fd;
-	epoll_ctl(ep, EPOLL_CTL_ADD, fd, &ev);
-}
-
-/* Runs one step to completion, tearing it down if a trigger fires: the step's
- * own timeout (step_ms, 0 for none), the job's timer, or an operator cancel.
- * Teardown is one path: SIGTERM to the process group, then SIGKILL when the
- * grace timer fires. *status gets the wait status (-1 if it never ran).
- * Returns the strongest trigger that fired. */
-static enum trigger run_step(struct run_ctx *ctx, lua_State *L, int step_ref, long step_ms,
-			     struct qwe_timer *job_timer, struct qwe_ring *ring, struct qwe_sink *sink,
-			     int *status)
-{
-	struct child_arg arg = {L, step_ref};
-	struct qwe_proc proc;
-	struct qwe_timer step_timer, grace_timer;
-	enum trigger trigger = TRIG_NONE;
-	int sfd, ep, exited = 0, tearing = 0;
-
-	*status = -1;
-	sfd = signalfd(-1, &ctx->chld_mask, SFD_CLOEXEC | SFD_NONBLOCK);
-	ep = epoll_create1(EPOLL_CLOEXEC);
-	if (sfd < 0 || ep < 0 || qwe_timer_open(&step_timer) < 0 || qwe_timer_open(&grace_timer) < 0)
-		return TRIG_NONE;
-	if (qwe_proc_spawn(&proc, child_argv, &arg) < 0)
-		return TRIG_NONE;
-	if (step_ms > 0)
-		qwe_timer_arm(&step_timer, step_ms);
-
-	add_fd(ep, sfd);
-	add_fd(ep, proc.out_fd);
-	add_fd(ep, step_timer.fd);
-	add_fd(ep, job_timer->fd);
-	add_fd(ep, ctx->cancel_fd);
-	add_fd(ep, grace_timer.fd);
-
-	while (!exited) {
-		struct epoll_event got[8];
-		int i, n = epoll_wait(ep, got, 8, -1);
-		enum trigger now = TRIG_NONE;
-
-		if (n < 0 && errno == EINTR)
-			continue;
-		for (i = 0; i < n; i++) {
-			int fd = got[i].data.fd;
-
-			if (fd == proc.out_fd) {
-				if (drain(proc.out_fd, ring, sink))
-					epoll_ctl(ep, EPOLL_CTL_DEL, proc.out_fd, NULL);
-			} else if (fd == sfd) {
-				struct signalfd_siginfo si;
-				while (read(sfd, &si, sizeof si) == (ssize_t)sizeof si)
-					;
-				if (waitpid(proc.pid, status, WNOHANG) == proc.pid)
-					exited = 1;
-			} else if (fd == step_timer.fd) {
-				if (qwe_timer_expired(&step_timer) && now < TRIG_STEP_TIMEOUT)
-					now = TRIG_STEP_TIMEOUT;
-			} else if (fd == job_timer->fd) {
-				if (qwe_timer_expired(job_timer) && now < TRIG_JOB_TIMEOUT)
-					now = TRIG_JOB_TIMEOUT;
-			} else if (fd == ctx->cancel_fd) {
-				if (poll_cancel(ctx))
-					now = TRIG_CANCEL;
-			} else if (fd == grace_timer.fd) {
-				if (qwe_timer_expired(&grace_timer))
-					qwe_proc_kill_group(&proc, SIGKILL);
-			}
-		}
-		if (now != TRIG_NONE && !exited) {
-			if (now > trigger)
-				trigger = now;
-			if (!tearing) {
-				tearing = 1;
-				qwe_proc_kill_group(&proc, SIGTERM);
-				qwe_timer_arm(&grace_timer, ctx->grace_ms);
-			}
-		}
-	}
-	/* Whatever the group left behind after its leader went is not wanted: a
-	 * torn-down step must leave nothing alive. */
-	if (tearing)
-		qwe_proc_kill_group(&proc, SIGKILL);
-	/* The child is gone; whatever it wrote is already in the pipe. */
-	drain(proc.out_fd, ring, sink);
-	close(proc.out_fd);
-	close(sfd);
-	close(ep);
-	qwe_timer_close(&step_timer);
-	qwe_timer_close(&grace_timer);
-	return trigger;
 }
 
 static void fmt_run_id(char *buf, size_t n)
@@ -324,6 +241,25 @@ static int load_workflow(const char *cmd, const char *path, lua_State **L_out)
 
 static long timeout_ms_at(lua_State *L, int idx);
 
+/* What one live job needs beyond its result: everything that used to sit on
+ * the stack of a blocking run_job. */
+struct job_run {
+	struct qwe_ring ring;
+	struct qwe_sink sink;
+	struct qwe_timer timer;      /* the job's own limit */
+	struct qwe_timer step_timer; /* the live step's limit */
+	struct qwe_timer grace_timer;
+	struct qwe_proc proc;
+	size_t cur;                  /* the step running now, or the next to run */
+	int cur_ref;                 /* registry ref of the live step's table */
+	int cur_continue;            /* the live step's continue-on-error */
+	int step_live;               /* a process is running for step cur */
+	int tearing;                 /* SIGTERM has been sent to the live step */
+	enum trigger step_trigger;   /* the strongest trigger that hit the live step */
+	enum trigger torn;           /* the job-level trigger that ended the job, if any */
+	int failed;
+};
+
 /* One job as the scheduler sees it. */
 struct job {
 	char *id;
@@ -337,6 +273,10 @@ struct job {
 	time_t started, ended;
 	unsigned long dropped;
 	long timeout_ms; /* the job's own limit, 0 for none */
+	lua_State *L;
+	struct job_run run;
+	struct ev ev[4]; /* tags for this job's fds, indexed by evkind */
+	size_t *needs_idx;
 };
 
 static int cmp_job(const void *a, const void *b)
@@ -461,160 +401,351 @@ static long timeout_ms_at(lua_State *L, int idx)
 	return ms > 0 ? ms : 0;
 }
 
-/* Runs the job's steps in order. Returns 0, or -1 if the job could not even
- * start (its log could not be opened). */
-static int run_job(struct run_ctx *ctx, lua_State *L, struct job *job, const char *run_dir)
+static void ev_add(struct run_ctx *ctx, struct job *job, enum evkind kind, int fd)
 {
-	struct qwe_ring ring;
-	struct qwe_sink sink;
-	struct qwe_timer timer;
-	enum trigger torn = TRIG_NONE; /* the job-level trigger that ended it, if any */
-	size_t i;
-	int failed = 0;
+	struct epoll_event e;
 
-	if (qwe_ring_init(&ring, QWE_RING_CAPACITY) < 0 || qwe_sink_open(&sink, job->id, run_dir, 1) < 0 ||
-	    qwe_timer_open(&timer) < 0) {
-		fprintf(stderr, "qwe run: cannot open the log of job %s in %s: %s\n", job->id, run_dir, strerror(errno));
-		return -1;
+	job->ev[kind].job = job;
+	job->ev[kind].kind = kind;
+	e.events = EPOLLIN;
+	e.data.ptr = &job->ev[kind];
+	epoll_ctl(ctx->ep, EPOLL_CTL_ADD, fd, &e);
+}
+
+static void ev_del(struct run_ctx *ctx, int fd)
+{
+	epoll_ctl(ctx->ep, EPOLL_CTL_DEL, fd, NULL);
+}
+
+/* Applies a trigger to the job's live step. Teardown is one path: SIGTERM to
+ * the process group, then SIGKILL when the grace timer fires. A later trigger
+ * of a higher value wins the outcome but never restarts the teardown: the
+ * grace timer is armed once. */
+static void step_trigger(struct run_ctx *ctx, struct job *job, enum trigger now)
+{
+	struct job_run *r = &job->run;
+
+	if (!r->step_live)
+		return;
+	if (now > r->step_trigger)
+		r->step_trigger = now;
+	if (!r->tearing) {
+		r->tearing = 1;
+		qwe_proc_kill_group(&r->proc, SIGTERM);
+		qwe_timer_arm(&r->grace_timer, ctx->grace_ms);
 	}
+}
+
+/* Records how step cur ended and moves on to the next. */
+static void step_record(struct job *job, enum trigger t, int status)
+{
+	struct job_run *r = &job->run;
+	struct qwe_step_result *res = &job->steps[r->cur];
+
+	res->ended = time(NULL);
+	res->changed = 1; /* run: steps always count as changed */
+	if (t == TRIG_JOB_TIMEOUT || t == TRIG_CANCEL) {
+		/* Imposed from outside: no continue-on-error can save it. */
+		res->outcome = "cancelled";
+		res->reason = t == TRIG_CANCEL ? "cancel-requested" : "timeout";
+		r->torn = t;
+	} else if (t == TRIG_STEP_TIMEOUT) {
+		/* The author's own limit on this step: a failure. */
+		res->outcome = "failed";
+		res->reason = "timeout";
+		if (!r->cur_continue) {
+			r->failed = 1;
+			job->reason = res->reason;
+		}
+	} else if (status >= 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+		res->outcome = "success";
+	} else {
+		res->outcome = "failed";
+		res->reason = "exit-code";
+		if (!r->cur_continue) {
+			r->failed = 1;
+			job->reason = res->reason;
+		}
+	}
+	luaL_unref(job->L, LUA_REGISTRYINDEX, r->cur_ref);
+	r->cur++;
+}
+
+/* The live step's process has been reaped: finish it. */
+static void step_reap(struct run_ctx *ctx, struct job *job, int status)
+{
+	struct job_run *r = &job->run;
+
+	/* Whatever the group left behind after its leader went is not wanted: a
+	 * torn-down step must leave nothing alive. */
+	if (r->tearing)
+		qwe_proc_kill_group(&r->proc, SIGKILL);
+	/* The child is gone; whatever it wrote is already in the pipe. */
+	drain(r->proc.out_fd, &r->ring, &r->sink);
+	ev_del(ctx, r->proc.out_fd);
+	close(r->proc.out_fd);
+	ev_del(ctx, r->step_timer.fd);
+	ev_del(ctx, r->grace_timer.fd);
+	qwe_timer_close(&r->step_timer);
+	qwe_timer_close(&r->grace_timer);
+	r->step_live = 0;
+	step_record(job, r->step_trigger, status);
+}
+
+/* Starts step cur, or records it skipped because the job has already ended.
+ * Either way it leaves the step done unless step_live is set. */
+static void step_begin(struct run_ctx *ctx, struct job *job)
+{
+	struct job_run *r = &job->run;
+	struct qwe_step_result *res = &job->steps[r->cur];
+	lua_State *L = job->L;
+	struct child_arg arg;
+	long step_ms;
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, job->ref);
+	lua_getfield(L, -1, "steps");
+	lua_rawgeti(L, -1, (int)r->cur + 1);
+	lua_getfield(L, -1, "id");
+	res->id = lua_isstring(L, -1) ? strdup(lua_tostring(L, -1)) : NULL;
+	lua_pop(L, 1);
+	lua_getfield(L, -1, "continue-on-error");
+	r->cur_continue = lua_toboolean(L, -1);
+	lua_pop(L, 1);
+	step_ms = timeout_ms_at(L, -1);
+	r->cur_ref = luaL_ref(L, LUA_REGISTRYINDEX); /* pops the step table */
+	lua_pop(L, 2);
+
+	/* Between steps: a trigger may already have fired. */
+	if (!r->failed && r->torn == TRIG_NONE) {
+		if (poll_cancel(ctx))
+			r->torn = TRIG_CANCEL;
+		else if (qwe_timer_expired(&r->timer))
+			r->torn = TRIG_JOB_TIMEOUT;
+	}
+	if (r->failed || r->torn != TRIG_NONE) {
+		/* The job has ended before this step started. */
+		res->outcome = "skipped";
+		luaL_unref(L, LUA_REGISTRYINDEX, r->cur_ref);
+		r->cur++;
+		return;
+	}
+
+	res->started = time(NULL);
+	r->step_trigger = TRIG_NONE;
+	r->tearing = 0;
+	arg.L = L;
+	arg.step_ref = r->cur_ref;
+	if (qwe_timer_open(&r->step_timer) < 0)
+		goto failed_to_start;
+	if (qwe_timer_open(&r->grace_timer) < 0) {
+		qwe_timer_close(&r->step_timer);
+		goto failed_to_start;
+	}
+	if (qwe_proc_spawn(&r->proc, child_argv, &arg) < 0) {
+		qwe_timer_close(&r->step_timer);
+		qwe_timer_close(&r->grace_timer);
+		goto failed_to_start;
+	}
+	if (step_ms > 0)
+		qwe_timer_arm(&r->step_timer, step_ms);
+	ev_add(ctx, job, EV_OUT, r->proc.out_fd);
+	ev_add(ctx, job, EV_STEP_TIMER, r->step_timer.fd);
+	ev_add(ctx, job, EV_GRACE_TIMER, r->grace_timer.fd);
+	r->step_live = 1;
+	return;
+
+failed_to_start:
+	step_record(job, TRIG_NONE, -1);
+}
+
+/* Records the job's final state and releases what it held. */
+static void job_finish(struct run_ctx *ctx, struct job *job)
+{
+	struct job_run *r = &job->run;
+
+	job->ended = time(NULL);
+	job->dropped = r->ring.dropped;
+	if (r->torn != TRIG_NONE) {
+		qwe_job_transition(&job->state, QWE_JOB_TERMINATING);
+		qwe_job_transition(&job->state, QWE_JOB_CANCELLED);
+		job->reason = r->torn == TRIG_CANCEL ? "cancel-requested" : "timeout";
+	} else {
+		qwe_job_transition(&job->state, r->failed ? QWE_JOB_FAILED : QWE_JOB_SUCCESS);
+	}
+	ev_del(ctx, r->timer.fd);
+	qwe_timer_close(&r->timer);
+	qwe_sink_close(&r->sink);
+	qwe_ring_free(&r->ring);
+}
+
+/* Runs steps until one is live or none are left, in which case the job ends. */
+static void job_advance(struct run_ctx *ctx, struct job *job)
+{
+	while (!job->run.step_live && job->run.cur < job->nsteps)
+		step_begin(ctx, job);
+	if (!job->run.step_live)
+		job_finish(ctx, job);
+}
+
+/* ready -> running. A job whose log cannot be opened fails on the spot. */
+static void job_begin(struct run_ctx *ctx, lua_State *L, struct job *job, const char *run_dir)
+{
+	struct job_run *r = &job->run;
+
+	memset(r, 0, sizeof *r);
+	job->L = L;
 	qwe_job_transition(&job->state, QWE_JOB_RUNNING);
+	if (qwe_ring_init(&r->ring, QWE_RING_CAPACITY) < 0 || qwe_sink_open(&r->sink, job->id, run_dir, 1) < 0 ||
+	    qwe_timer_open(&r->timer) < 0) {
+		fprintf(stderr, "qwe run: cannot open the log of job %s in %s: %s\n", job->id, run_dir, strerror(errno));
+		qwe_job_transition(&job->state, QWE_JOB_FAILED);
+		job->reason = "internal";
+		return;
+	}
 	job->started = time(NULL);
 	job->steps = calloc(job->nsteps ? job->nsteps : 1, sizeof *job->steps);
 	if (job->timeout_ms > 0)
-		qwe_timer_arm(&timer, job->timeout_ms);
-
-	for (i = 0; i < job->nsteps; i++) {
-		struct qwe_step_result *r = &job->steps[i];
-		long step_ms;
-		int ref, status, continue_on_error;
-
-		lua_rawgeti(L, LUA_REGISTRYINDEX, job->ref);
-		lua_getfield(L, -1, "steps");
-		lua_rawgeti(L, -1, (int)i + 1);
-		lua_getfield(L, -1, "id");
-		r->id = lua_isstring(L, -1) ? strdup(lua_tostring(L, -1)) : NULL;
-		lua_pop(L, 1);
-		lua_getfield(L, -1, "continue-on-error");
-		continue_on_error = lua_toboolean(L, -1);
-		lua_pop(L, 1);
-		step_ms = timeout_ms_at(L, -1);
-		ref = luaL_ref(L, LUA_REGISTRYINDEX); /* pops the step table */
-		lua_pop(L, 2);
-
-		/* Between steps: a trigger may already have fired. */
-		if (!failed && torn == TRIG_NONE) {
-			if (poll_cancel(ctx))
-				torn = TRIG_CANCEL;
-			else if (qwe_timer_expired(&timer))
-				torn = TRIG_JOB_TIMEOUT;
-		}
-		if (failed || torn != TRIG_NONE) {
-			/* The job has ended before this step started. */
-			r->outcome = "skipped";
-			luaL_unref(L, LUA_REGISTRYINDEX, ref);
-			continue;
-		}
-
-		r->started = time(NULL);
-		{
-			enum trigger t = run_step(ctx, L, ref, step_ms, &timer, &ring, &sink, &status);
-
-			r->ended = time(NULL);
-			luaL_unref(L, LUA_REGISTRYINDEX, ref);
-			r->changed = 1; /* run: steps always count as changed */
-
-			if (t == TRIG_JOB_TIMEOUT || t == TRIG_CANCEL) {
-				/* Imposed from outside: no continue-on-error can save it. */
-				r->outcome = "cancelled";
-				r->reason = t == TRIG_CANCEL ? "cancel-requested" : "timeout";
-				torn = t;
-			} else if (t == TRIG_STEP_TIMEOUT) {
-				/* The author's own limit on this step: a failure. */
-				r->outcome = "failed";
-				r->reason = "timeout";
-				if (!continue_on_error) {
-					failed = 1;
-					job->reason = r->reason;
-				}
-			} else if (status >= 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-				r->outcome = "success";
-			} else {
-				r->outcome = "failed";
-				r->reason = "exit-code";
-				if (!continue_on_error) {
-					failed = 1;
-					job->reason = r->reason;
-				}
-			}
-		}
-	}
-	job->ended = time(NULL);
-	job->dropped = ring.dropped;
-	if (torn != TRIG_NONE) {
-		qwe_job_transition(&job->state, QWE_JOB_TERMINATING);
-		qwe_job_transition(&job->state, QWE_JOB_CANCELLED);
-		job->reason = torn == TRIG_CANCEL ? "cancel-requested" : "timeout";
-	} else {
-		qwe_job_transition(&job->state, failed ? QWE_JOB_FAILED : QWE_JOB_SUCCESS);
-	}
-	qwe_timer_close(&timer);
-	qwe_sink_close(&sink);
-	qwe_ring_free(&ring);
-	return 0;
+		qwe_timer_arm(&r->timer, job->timeout_ms);
+	ev_add(ctx, job, EV_JOB_TIMER, r->timer.fd);
+	job_advance(ctx, job);
 }
 
-/* Resolves every job, one at a time. A job whose dependencies are not all
- * success is skipped (the default join rule); the rest run in id order. An
- * operator cancel stops the run: what is running is torn down, and every job
- * still pending is skipped. */
-static int run_all(struct run_ctx *ctx, lua_State *L, struct job *jobs, size_t n, const char *run_dir)
+/* Reaps every live step whose process has exited. */
+static void reap_children(struct run_ctx *ctx, struct job *jobs, size_t n)
 {
-	size_t resolved = 0;
+	struct signalfd_siginfo si;
+	size_t i;
 
-	while (resolved < n) {
-		struct job *next = NULL;
-		size_t i, k;
+	while (read(ctx->chld_fd, &si, sizeof si) == (ssize_t)sizeof si)
+		;
+	for (i = 0; i < n; i++) {
+		int status;
 
-		if (poll_cancel(ctx)) {
+		if (jobs[i].state != QWE_JOB_RUNNING || !jobs[i].run.step_live)
+			continue;
+		if (waitpid(jobs[i].run.proc.pid, &status, WNOHANG) == jobs[i].run.proc.pid) {
+			step_reap(ctx, &jobs[i], status);
+			job_advance(ctx, &jobs[i]);
+		}
+	}
+}
+
+/* One epoll event for a job. The event may be stale (the step it was about
+ * has ended within the same batch); every branch checks the live state. */
+static void job_event(struct run_ctx *ctx, struct job *job, enum evkind kind)
+{
+	struct job_run *r = &job->run;
+
+	if (job->state != QWE_JOB_RUNNING || !r->step_live)
+		return;
+	switch (kind) {
+	case EV_OUT:
+		if (drain(r->proc.out_fd, &r->ring, &r->sink))
+			ev_del(ctx, r->proc.out_fd);
+		break;
+	case EV_STEP_TIMER:
+		if (qwe_timer_expired(&r->step_timer))
+			step_trigger(ctx, job, TRIG_STEP_TIMEOUT);
+		break;
+	case EV_JOB_TIMER:
+		if (qwe_timer_expired(&r->timer))
+			step_trigger(ctx, job, TRIG_JOB_TIMEOUT);
+		break;
+	case EV_GRACE_TIMER:
+		if (qwe_timer_expired(&r->grace_timer))
+			qwe_proc_kill_group(&r->proc, SIGKILL);
+		break;
+	default:
+		break;
+	}
+}
+
+/* Runs every job to a final state on one event loop. A job whose needs are
+ * not all success is skipped (the default join rule); at most max_parallel
+ * jobs run at once, started in id order. An operator cancel tears down what
+ * is running and skips every job still pending. */
+static int run_all(struct run_ctx *ctx, lua_State *L, struct job *jobs, size_t n, const char *run_dir,
+		   long max_parallel)
+{
+	struct qwe_sched_job *sj = calloc(n ? n : 1, sizeof *sj);
+	size_t *starts = calloc(n ? n : 1, sizeof *starts);
+	struct epoll_event got[32];
+	size_t i, k;
+	int rc = 0;
+
+	ctx->ep = epoll_create1(EPOLL_CLOEXEC);
+	ctx->chld_ev.kind = EV_CHILD;
+	ctx->cancel_ev.kind = EV_CANCEL;
+	{
+		struct epoll_event e;
+
+		e.events = EPOLLIN;
+		e.data.ptr = &ctx->chld_ev;
+		epoll_ctl(ctx->ep, EPOLL_CTL_ADD, ctx->chld_fd, &e);
+		e.data.ptr = &ctx->cancel_ev;
+		epoll_ctl(ctx->ep, EPOLL_CTL_ADD, ctx->cancel_fd, &e);
+	}
+	for (i = 0; i < n; i++) {
+		jobs[i].needs_idx = calloc(jobs[i].nneeds ? jobs[i].nneeds : 1, sizeof(size_t));
+		for (k = 0; k < jobs[i].nneeds; k++)
+			jobs[i].needs_idx[k] = (size_t)(find_job(jobs, n, jobs[i].needs[k]) - jobs);
+		sj[i].state = &jobs[i].state;
+		sj[i].needs = jobs[i].needs_idx;
+		sj[i].nneeds = jobs[i].nneeds;
+	}
+
+	for (;;) {
+		size_t started, live = 0, final = 0;
+		int ne;
+
+		if (ctx->cancel_requested) {
 			for (i = 0; i < n; i++) {
 				if (jobs[i].state == QWE_JOB_PENDING) {
 					qwe_job_transition(&jobs[i].state, QWE_JOB_SKIPPED);
 					jobs[i].reason = "cancel-requested";
+				} else if (jobs[i].state == QWE_JOB_RUNNING) {
+					step_trigger(ctx, &jobs[i], TRIG_CANCEL);
 				}
 			}
-			return 0;
+		}
+		started = qwe_sched_pass(sj, n, max_parallel, starts);
+		for (i = 0; i < n; i++)
+			if (jobs[i].state == QWE_JOB_SKIPPED && !jobs[i].reason)
+				jobs[i].reason = "dependency-failed";
+		for (i = 0; i < started; i++)
+			job_begin(ctx, L, &jobs[starts[i]], run_dir);
+		if (started > 0)
+			continue; /* a job that ended at once may unlock others */
+
+		for (i = 0; i < n; i++) {
+			final += qwe_job_state_is_final(jobs[i].state);
+			live += jobs[i].state == QWE_JOB_RUNNING;
+		}
+		if (final == n)
+			break;
+		if (live == 0) {
+			rc = -1; /* cannot happen: validation rejects cycles */
+			break;
 		}
 
-		/* The first pending job whose dependencies are all resolved. */
-		for (i = 0; i < n && !next; i++) {
-			int ready = jobs[i].state == QWE_JOB_PENDING;
+		ne = epoll_wait(ctx->ep, got, 32, -1);
+		for (i = 0; ne > 0 && i < (size_t)ne; i++) {
+			struct ev *e = got[i].data.ptr;
 
-			for (k = 0; ready && k < jobs[i].nneeds; k++)
-				ready = qwe_job_state_is_final(find_job(jobs, n, jobs[i].needs[k])->state);
-			if (ready)
-				next = &jobs[i];
+			if (e->kind == EV_CHILD)
+				reap_children(ctx, jobs, n);
+			else if (e->kind == EV_CANCEL)
+				poll_cancel(ctx);
+			else
+				job_event(ctx, e->job, e->kind);
 		}
-		if (!next)
-			return -1; /* cannot happen: validation rejects cycles */
-
-		{
-			int all_success = 1;
-
-			for (k = 0; k < next->nneeds; k++)
-				if (find_job(jobs, n, next->needs[k])->state != QWE_JOB_SUCCESS)
-					all_success = 0;
-			if (!all_success) {
-				qwe_job_transition(&next->state, QWE_JOB_SKIPPED);
-				next->reason = "dependency-failed";
-			} else {
-				qwe_job_transition(&next->state, QWE_JOB_READY);
-				if (run_job(ctx, L, next, run_dir) < 0)
-					return -1;
-			}
-		}
-		resolved++;
 	}
-	return 0;
+	for (i = 0; i < n; i++)
+		free(jobs[i].needs_idx);
+	close(ctx->ep);
+	free(sj);
+	free(starts);
+	return rc;
 }
 
 int qwe_run_workflow(const char *path)
@@ -628,7 +759,7 @@ int qwe_run_workflow(const char *path)
 	struct qwe_job_result *results;
 	enum qwe_job_state *states;
 	const char *slash;
-	long n;
+	long n, max_parallel;
 	size_t i;
 	int rc = QWE_EXIT_OK;
 	FILE *fp;
@@ -660,12 +791,16 @@ int qwe_run_workflow(const char *path)
 	sigprocmask(SIG_BLOCK, &ctx.chld_mask, NULL);
 	sigprocmask(SIG_BLOCK, &cancel_set, NULL);
 	ctx.cancel_fd = signalfd(-1, &cancel_set, SFD_CLOEXEC | SFD_NONBLOCK);
+	ctx.chld_fd = signalfd(-1, &ctx.chld_mask, SFD_CLOEXEC | SFD_NONBLOCK);
 	ctx.cancel_requested = 0;
 	/* The grace period is fixed at 10 seconds; the override is for tests only. */
 	grace_env = getenv("QWE_TEST_GRACE_MS");
 	ctx.grace_ms = grace_env ? atol(grace_env) : 10000;
 
-	if (run_all(&ctx, L, jobs, (size_t)n, run_dir) < 0)
+	lua_getfield(L, -1, "max-parallel");
+	max_parallel = lua_isnumber(L, -1) ? (long)lua_tonumber(L, -1) : 0;
+	lua_pop(L, 1);
+	if (run_all(&ctx, L, jobs, (size_t)n, run_dir, max_parallel) < 0)
 		rc = QWE_EXIT_FAILED;
 
 	results = calloc((size_t)n, sizeof *results);

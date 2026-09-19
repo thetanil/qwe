@@ -1,0 +1,21 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - run: |
+          touch a.mark
+          i=0; while [ ! -e b.mark ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done
+          exit 1
+  b:
+    target: local
+    steps:
+      - run: |
+          touch b.mark
+          i=0; while [ ! -e a.mark ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done
+          sleep 0.3
+          echo b finished
+  c:
+    target: local
+    needs: [a]
+    steps:
+      - run: echo NEVER c

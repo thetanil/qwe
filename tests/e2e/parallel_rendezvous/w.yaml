@@ -1,0 +1,15 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - run: |
+          touch a.mark
+          i=0; while [ ! -e b.mark ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done
+          [ -e b.mark ]
+  b:
+    target: local
+    steps:
+      - run: |
+          touch b.mark
+          i=0; while [ ! -e a.mark ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done
+          [ -e a.mark ]
