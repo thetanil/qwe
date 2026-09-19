@@ -242,7 +242,7 @@ int qwe_run_workflow(const char *path)
 		return QWE_EXIT_USAGE;
 	}
 	err[0] = '\0';
-	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, err, sizeof err) < 0) {
+	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, NULL, err, sizeof err) < 0) {
 		fprintf(stderr, "qwe run: %s:%s\n", path, err);
 		free(yaml);
 		return QWE_EXIT_USAGE;
@@ -340,4 +340,25 @@ int qwe_run_workflow(const char *path)
 	free(run_dir);
 	free(dir);
 	return rc;
+}
+
+/* Parse-only for now; schema validation is ticket 05's. */
+int qwe_validate_workflow(const char *path)
+{
+	char err[256], *yaml = NULL;
+	size_t yaml_len, cbor_len;
+	uint8_t *cbor;
+
+	if (read_file(path, &yaml, &yaml_len) < 0) {
+		fprintf(stderr, "qwe validate: cannot read %s: %s\n", path, strerror(errno));
+		return QWE_EXIT_USAGE;
+	}
+	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, NULL, err, sizeof err) < 0) {
+		fprintf(stderr, "qwe validate: %s:%s\n", path, err);
+		free(yaml);
+		return QWE_EXIT_USAGE;
+	}
+	free(yaml);
+	free(cbor);
+	return qwe_not_implemented("validate");
 }

@@ -7,7 +7,7 @@
 
 static int to_cbor(const char *y, uint8_t **buf, size_t *n, char *err)
 {
-	return qwe_yaml_to_cbor(y, strlen(y), buf, n, err, 128);
+	return qwe_yaml_to_cbor(y, strlen(y), buf, n, NULL, err, 128);
 }
 
 /* Compares the transcoded bytes with an indefinite-length CBOR literal. */

@@ -1,0 +1,4 @@
+jobs:
+  j:
+    steps: [a, b
+    target: local
