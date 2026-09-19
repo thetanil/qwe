@@ -53,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# qwe workflow run artifacts (logs, result.json)
+.qwe/runs/
+
+# Bazel
+/bazel-*
