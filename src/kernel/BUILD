@@ -1,4 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//src:__subpackages__"])
 
@@ -138,4 +139,11 @@ cc_test(
         "//third_party/greatest",
         "//third_party/luajit",
     ],
+)
+
+sh_test(
+    name = "luarun_test",
+    srcs = ["luarun_test.sh"],
+    args = ["$(location :luarun)"],
+    data = [":luarun"],
 )
