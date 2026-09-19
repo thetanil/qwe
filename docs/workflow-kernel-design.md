@@ -179,6 +179,8 @@ The kernel assembles the overall contract from the kernel's own workflow structu
 
 ## 7. Job and Step Lifecycles
 
+> **Superseded in part by ADR-0010.** The job lifecycle is one flat table (with the step phase part of the job state). Where this section differs from ADR-0010, the ADR wins. In particular, `terminating` becomes the `settling-cancel-*` states.
+
 The kernel's real job is managing state transitions at two levels: jobs in the graph, and steps inside a running job. Every finished job and step has an **outcome** (`success | failed | skipped | cancelled`) and a **reason** recorded next to it. There are no other terminal states, and "why" is always carried by the reason (for example `timeout`, `cancel-requested`, `dependency-failed`, `exit-code`, `not-converged`, `connection-lost`, `become-denied`, `plugin-error`).
 
 ### 7.1 Job states
@@ -265,6 +267,8 @@ The **step timeout**, the **job timeout** and the **cancellation grace period** 
 ### 9.3 Process groups, not PIDs
 
 Subprocesses may themselves spawn children (a shell running a pipeline, or a plugin running commands through the backend). Signalling only the direct PID leaves orphans. So each step's child calls `setpgid` to become a process-group leader, and the kernel signals the **whole group** via `kill(-pgid, …)`. For ssh targets, killing the local `ssh -S` client closes the channel. The SSH ControlMaster is deliberately **outside** every step's process group, so cancelling a step never kills the shared connection (qwe-ssh-sec I.2).
+
+**Known gap (M1):** a process that leaves its step's group (`setsid`, or a double fork into a new group) is invisible to group signalling and to the group-empty check. It can outlive its step and qwe. M1 accepts this. Closing it needs a cgroup per step (`cgroup.kill`, `cgroup.events` `populated`), tracked in `.scratch/step-containment/issues/01-cgroup-per-step.md`.
 
 ---
 

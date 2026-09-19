@@ -29,8 +29,24 @@ How a finished step or job resolved. It is exactly one of `success`, `failed`, `
 _Avoid_: Status, conclusion, result
 
 **Reason**:
-Why an outcome happened, recorded next to it. Examples are `timeout`, `cancel-requested`, `dependency-failed` and `not-converged`. A timed-out step is `failed` with reason `timeout`. A timed-out job is `cancelled` with reason `timeout`.
+Why an outcome happened, recorded next to it. Examples are `timeout`, `cancel-requested`, `dependency-failed`, `not-converged` and `engine-error` (qwe itself failed, not the step). A timed-out step is `failed` with reason `timeout`. A timed-out job is `cancelled` with reason `timeout`.
 _Avoid_: Cause, error code
+
+**Job lifecycle**:
+The states one job passes through, from when the workflow is parsed until it has an outcome. It includes waiting on needs and for a parallelism slot, and the phase of the step running now. Every change to a job's state is a transition of its lifecycle.
+_Avoid_: Job status, run state
+
+**Trigger**:
+Something that ends a running step early: the step's timeout, the job's timeout, or an operator cancel. The trigger decides the outcome and reason. When several fire, the strongest wins: cancel, then job timeout, then step timeout.
+_Avoid_: Interrupt, abort, kill
+
+**Lifecycle trace**:
+The record a workflow run keeps of its job lifecycles: every transition, every event it ignored, and why. It is the evidence of what the engine decided, separate from what the steps printed.
+_Avoid_: Debug log, audit log, event log
+
+**Teardown**:
+Stopping a running step: it is asked to stop, given a grace period, and then forced to stop. Every trigger uses the same teardown.
+_Avoid_: Kill, abort, shutdown
 
 **Check**:
 The part of a step plugin that reports whether the target is already in the desired state. It never changes anything.

@@ -1,7 +1,5 @@
 # M1: the qwe engine
 
-Status: needs-triage
-
 ## Goal
 
 Build the qwe engine and show that it works end to end with generic steps on two execution backends, `local` and `ssh`. Every target in M1 is the operator host, reached directly (`local`) or over SSH at `172.18.0.1` (`ssh`, from inside the devcontainer).
@@ -32,7 +30,7 @@ Every later milestone (provisioning `pi00`, runners, flashing) depends on the sa
 ### CLI
 
 ```
-qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]...
+qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]... [--debug]
 qwe validate <workflow.yaml> [-i <inventory.yaml>]
 qwe encrypt          # plaintext on stdin, envelope on stdout; never reads argv for the value
 qwe keygen           # creates ~/.config/qwe/secret (32 random bytes, mode 0600); refuses to overwrite
@@ -43,6 +41,7 @@ qwe --version
 - **Inventory:** `-i` if given, otherwise `inventory.yaml` in the workflow's directory. If the workflow names any target other than `local` and neither of those exists, it's a validation error.
 - `qwe run` always validates first. `qwe validate` is the same validation without running anything, and it never contacts a target.
 - `--job <id>` (can be repeated) runs those jobs plus everything they depend on through `needs:`.
+- `--debug` makes the lifecycle trace also record every event, including events that changed nothing. Without it the trace still records every transition, every ignored event and any fail-stop abort.
 
 ### Exit codes
 
@@ -126,13 +125,14 @@ targets:
 Each workflow run writes `.qwe/runs/<run-id>/` next to the workflow:
 - `<job-id>.log`: the job's merged stdout and stderr, redacted.
 - `result.json`: for every job and step, its outcome, reason, `changed`, start and end times, and non-secret step outputs.
+- `lifecycle.trace`: the lifecycle trace, one line per record: monotonic time, job, step index, state, event, next state, cell kind (transition, ignore or impossible) and reason. It always has every transition, every ignored or stale event and a fail-stop abort (flushed before the abort). With `--debug` it has every event too. Its name cannot collide with a `<job-id>.log`.
 
 The terminal shows each job's lines prefixed with the job id. E2e golden tests compare against `result.json` and the log files, with times and run id normalized.
 
 ## Behaviour (what the tickets must prove)
 
 1. **Jobs and steps.** Steps run in order. A failed step fails its job, unless the step has `continue-on-error`, in which case the job continues and the step's outcome is still `failed`. `needs:` uses the `default` join rule: a job runs only if every dependency is `success`, and is otherwise `skipped` with reason `dependency-failed`.
-2. **Outcomes and reasons.** Outcomes are `success | failed | skipped | cancelled`, with no other states. Reasons used in M1: `exit-code`, `timeout`, `cancel-requested`, `dependency-failed`, `not-converged`, `connection-lost`, `become-denied`, `plugin-error`.
+2. **Outcomes and reasons.** Outcomes are `success | failed | skipped | cancelled`, with no other states. Reasons used in M1: `exit-code`, `timeout`, `cancel-requested`, `dependency-failed`, `not-converged`, `connection-lost`, `become-denied`, `plugin-error`, `engine-error`. `engine-error` means qwe itself could not start the step or job (a log, pipe, timer or fork failed). The step, or the job if it failed at start, is `failed`, `continue-on-error` does not apply, other jobs carry on, and the lifecycle trace records the operation and errno.
 3. **Timeouts.** When a step times out, the step is `failed` with reason `timeout`, and `continue-on-error` applies. When a job times out, the job is `cancelled` with reason `timeout`, no further steps start, and nothing can override it. Both are torn down the same way: SIGTERM to the step's process group, a 10-second grace period, then SIGKILL.
 4. **Cancel.** SIGINT or SIGTERM to qwe tears down every running job the same way. Those jobs are `cancelled` with reason `cancel-requested`, pending jobs are `skipped`, and qwe exits 130 with no processes left behind.
 5. **Fork per step plugin.** Every `uses:` and `run:` step runs in a forked child in its own process group. A plugin that segfaults, blocks forever or leaks memory affects only its own step.
