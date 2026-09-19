@@ -1,0 +1,1 @@
+qwe validate: w.yaml:5:13: step id "has space" must match [A-Za-z_][A-Za-z0-9_-]*

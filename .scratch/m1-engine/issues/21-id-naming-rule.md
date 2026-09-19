@@ -1,6 +1,6 @@
 # 21: Job and step ids follow a naming rule
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: none
@@ -25,12 +25,12 @@ ADR-0009 removed `pattern` and `patternProperties` from the strict metaschema un
 
 ## Acceptance criteria
 
-- [ ] A job id with `/`, `..`, a space, or a leading digit or `-`, and an empty id, are each a validation error. The error names the id and points at the key as `file:line:col`, and qwe exits 2. `e2e: tests/e2e/validate_bad_job_id/`
-- [ ] A step `id:` that breaks the rule is a validation error pointing at the value. `e2e: tests/e2e/validate_bad_step_id/`
-- [ ] An id of 64 characters is accepted, and one of 65 is rejected. `unit: src/kernel/validate_test.c::id_length_limit` (or an e2e case if the check is only reachable through the binary)
-- [ ] Every bad id in a workflow is reported, not only the first, consistent with the other validation errors. `e2e: tests/e2e/validate_bad_job_id/`
-- [ ] `qwe run` on a workflow with a bad id creates no run directory and writes no log. `e2e: tests/e2e/run_refuses_bad_id/`
-- [ ] The rule is stated in the M1 spec's "Workflow YAML" section and in design §14.
+- [x] A job id with `/`, `..`, a space, or a leading digit or `-`, and an empty id, are each a validation error. The error names the id and points at the key as `file:line:col`, and qwe exits 2. `e2e: tests/e2e/validate_bad_job_id/`
+- [x] A step `id:` that breaks the rule is a validation error pointing at the value. `e2e: tests/e2e/validate_bad_step_id/`
+- [x] An id of 64 characters is accepted, and one of 65 is rejected. `unit: src/kernel/validate_test.c::id_length_limit` (or an e2e case if the check is only reachable through the binary)
+- [x] Every bad id in a workflow is reported, not only the first, consistent with the other validation errors. `e2e: tests/e2e/validate_bad_job_id/`
+- [x] `qwe run` on a workflow with a bad id creates no run directory and writes no log. `e2e: tests/e2e/run_refuses_bad_id/`
+- [x] The rule is stated in the M1 spec's "Workflow YAML" section and in design §14.
 
 ## Comments
 
@@ -57,3 +57,7 @@ Validation rejects a bad id with a `file:line:col` error, just as it does a dupl
 - A configurable runs directory (`--runs-dir`). That is a separate feature, and ids must be safe wherever the runs directory is.
 - A naming rule for other names (env keys, secret names, output keys). They are dealt with in the tickets that introduce them.
 - Adding a regex engine.
+
+### Resolution
+
+Implemented in `src/kernel/lua/validate.lua` (`id_problem`, called from `structure`). A bad job id is reported at its key, a bad step id at its value; all are reported. Cases: `validate_bad_job_id`, `validate_bad_step_id`, `run_refuses_bad_id`; unit: `id_length_limit` lives in `src/kernel/lua/validate_test.lua`. Rule added to spec "Workflow YAML" and design §14. `bazel test //...` green.

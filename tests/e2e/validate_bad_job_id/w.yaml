@@ -1,0 +1,21 @@
+jobs:
+  ../escape:
+    target: local
+    steps:
+      - run: echo a
+  a b:
+    target: local
+    steps:
+      - run: echo b
+  1st:
+    target: local
+    steps:
+      - run: echo c
+  "":
+    target: local
+    steps:
+      - run: echo d
+  good_one-2:
+    target: local
+    steps:
+      - run: echo e

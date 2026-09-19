@@ -381,6 +381,7 @@ A job reads its target's values as `${{ vars.X }}` and `${{ secrets.X }}`, the w
 ## 14. Workflow Model
 
 - A **workflow** is a graph of **jobs** connected by `needs:`. Cycles are validation errors.
+- **Ids** (a job id and a step `id:`) match `[A-Za-z_][A-Za-z0-9_-]*` and are at most 64 characters. The validator checks this after the schema, because ADR-0009 keeps `pattern` out of the schema. The ids become file names, trace fields and template references.
 - A **job** has an id, dependencies, exactly **one target**, which must be declared (`target: local` included; there is no default), a timeout, a join rule, an `env:` block, and an ordered list of **steps**.
 - A **step** is a `uses:` plugin step or a `run:` step (the built-in `run` plugin). It has an optional id, `with:` inputs, `env:`, a timeout, `continue-on-error`, and `become:` (run as root when `true`, as a named user, or as a uid).
 - A step may set `on: local` to run on the operator host instead of the job's target. **No other per-step target override exists** (ADR-0003).

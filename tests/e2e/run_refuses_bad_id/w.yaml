@@ -1,0 +1,5 @@
+jobs:
+  ../../escaped:
+    target: local
+    steps:
+      - run: touch ran

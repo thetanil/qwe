@@ -1,0 +1,4 @@
+qwe validate: w.yaml:2:3: job id "../escape" must match [A-Za-z_][A-Za-z0-9_-]*
+qwe validate: w.yaml:6:3: job id "a b" must match [A-Za-z_][A-Za-z0-9_-]*
+qwe validate: w.yaml:10:3: job id "1st" must match [A-Za-z_][A-Za-z0-9_-]*
+qwe validate: w.yaml:14:3: job id "" must match [A-Za-z_][A-Za-z0-9_-]*

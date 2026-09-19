@@ -1,0 +1,8 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: has space
+        run: echo a
+      - id: ok-id
+        run: echo b

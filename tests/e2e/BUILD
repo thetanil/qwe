@@ -75,3 +75,9 @@ e2e_test(
     name = "harness_selftest_run_golden",
     expect_mismatch = True,
 )
+
+e2e_test(name = "validate_bad_job_id")
+
+e2e_test(name = "validate_bad_step_id")
+
+e2e_test(name = "run_refuses_bad_id")

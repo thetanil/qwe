@@ -59,3 +59,14 @@ if #errors ~= 1 or not errors[1].message:find("with", 1, true) then
   fail("a plugin with required inputs needs a with: block")
 end
 print("validate_test: ok")
+
+-- id_length_limit: a job or step id of 64 characters is accepted, 65 is not
+local function id_errors(n)
+  local id = string.rep("a", n)
+  return validate.validate(cbor.map({ jobs = cbor.map({ [id] = cbor.map({
+    target = "local",
+    steps = cbor.array({ cbor.map({ id = id, run = "true" }) }),
+  }) }) }), list)
+end
+if #id_errors(64) ~= 0 then fail("a 64-character id must be accepted") end
+if #id_errors(65) ~= 2 then fail("a 65-character job id and step id must each be rejected") end

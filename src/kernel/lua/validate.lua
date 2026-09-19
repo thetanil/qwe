@@ -101,6 +101,16 @@ local function describe(doc, err, plugin_list)
   return { pointer = ptr, kind = "value", message = err.error or "invalid value" }
 end
 
+-- A job id or step id is a plain name: [A-Za-z_][A-Za-z0-9_-]*, up to 64 chars.
+-- (ADR-0009: no regex in the schema, so it is checked here.)
+local MAX_ID = 64
+local function id_problem(id)
+  if #id > MAX_ID then return "is longer than " .. MAX_ID .. " characters" end
+  if not id:match("^[A-Za-z_][A-Za-z0-9_%-]*$") then
+    return "must match [A-Za-z_][A-Za-z0-9_-]*"
+  end
+end
+
 -- Checks the schema cannot express. Assumes the schema passed.
 local function structure(doc)
   local errors = {}
@@ -109,9 +119,25 @@ local function structure(doc)
   table.sort(ids)
   for _, job_id in ipairs(ids) do
     local seen = {}
+    local bad = id_problem(job_id)
+    if bad then
+      errors[#errors + 1] = {
+        pointer = "/jobs/" .. esc(job_id),
+        kind = "key",
+        message = 'job id "' .. job_id .. '" ' .. bad,
+      }
+    end
     for i, step in ipairs(doc.jobs[job_id].steps) do
       local id = step.id
       if id then
+        local step_bad = id_problem(id)
+        if step_bad then
+          errors[#errors + 1] = {
+            pointer = "/jobs/" .. esc(job_id) .. "/steps/" .. (i - 1) .. "/id",
+            kind = "value",
+            message = 'step id "' .. id .. '" ' .. step_bad,
+          }
+        end
         if seen[id] then
           errors[#errors + 1] = {
             pointer = "/jobs/" .. esc(job_id) .. "/steps/" .. (i - 1) .. "/id",

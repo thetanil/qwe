@@ -84,6 +84,7 @@ jobs:
     steps: [ { run: echo done } ]
 ```
 
+- **Ids:** a job id and a step `id:` match `[A-Za-z_][A-Za-z0-9_-]*` and are at most 64 characters (GitHub Actions' rule). Anything else is a validation error, so an id is always safe as a file name, a trace field and a template reference.
 - **Not in M1:** anchors, aliases and merge keys (rejected, with a source position). Also `if:`, the `always` join rule, `strategy.matrix`, `--check`, `docker`, and expression functions or operators.
 - **Templating:** `${{ env.X }}`, `${{ vars.X }}`, `${{ secrets.X }}` and `${{ steps.<id>.outputs.<k> }}` only. They're evaluated in the parent just before a step starts. A reference to anything else is a validation error.
   - `vars` are the job's target's `vars:`. They're **not** exported into the environment automatically. They can be substituted anywhere, including `run:` text, and reach a command's environment only through an explicit `env:` mapping, as in GitHub Actions.
