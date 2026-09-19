@@ -68,3 +68,10 @@ e2e_test(name = "parallel_failure_isolation")
 e2e_test(name = "parallel_cancel")
 
 e2e_test(name = "parallel_log_separation")
+
+# Deliberately wrong RUN/ golden: proves goldens beyond stdout are compared
+# (under bazel they are symlinks in runfiles).
+e2e_test(
+    name = "harness_selftest_run_golden",
+    expect_mismatch = True,
+)

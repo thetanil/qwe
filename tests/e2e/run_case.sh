@@ -87,7 +87,7 @@ check() { # <golden> <actual> <label>
 [ -f "$case_dir/expected/stdout" ] && check "$case_dir/expected/stdout" "$work.stdout" stdout
 [ -f "$case_dir/expected/stderr" ] && check "$case_dir/expected/stderr" "$work.stderr" stderr
 : >"$work.files"
-[ -d "$case_dir/expected" ] && (cd "$case_dir/expected" && find . -type f ! -name stdout ! -name stderr ! -name exit) >"$work.files"
+[ -d "$case_dir/expected" ] && (cd "$case_dir/expected" && find -L . -type f ! -name stdout ! -name stderr ! -name exit) >"$work.files"
 while IFS= read -r f; do
 	check "$case_dir/expected/$f" "$work/$f" "$f" || true
 done <"$work.files"

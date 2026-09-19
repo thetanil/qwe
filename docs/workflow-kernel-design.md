@@ -196,6 +196,7 @@ The kernel's real job is managing state transitions at two levels: jobs in the g
 - `pending → ready`: a dependency resolved and the join rule (§8.2) is satisfied.
 - `pending → skipped` (reason `dependency-failed`): a dependency resolved in a way the join rule can't accept.
 - `ready → running`: a parallelism slot became available (`max-parallel`, and the target's session cap).
+- `ready → skipped` (reason `cancel-requested`): an operator cancel arrived while the job waited for a slot. It never starts.
 - `running → success`: the last step finished and no step failed without `continue-on-error`.
 - `running → failed`: a step failed without `continue-on-error`. Its remaining steps don't run.
 - `running → terminating`: the **job timeout** fired, or an **operator cancel** arrived. Both use the same teardown path.

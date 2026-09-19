@@ -663,7 +663,7 @@ static void job_event(struct run_ctx *ctx, struct job *job, enum evkind kind)
 /* Runs every job to a final state on one event loop. A job whose needs are
  * not all success is skipped (the default join rule); at most max_parallel
  * jobs run at once, started in id order. An operator cancel tears down what
- * is running and skips every job still pending. */
+ * is running and skips every job that has not started. */
 static int run_all(struct run_ctx *ctx, lua_State *L, struct job *jobs, size_t n, const char *run_dir,
 		   long max_parallel)
 {
@@ -700,7 +700,7 @@ static int run_all(struct run_ctx *ctx, lua_State *L, struct job *jobs, size_t n
 
 		if (ctx->cancel_requested) {
 			for (i = 0; i < n; i++) {
-				if (jobs[i].state == QWE_JOB_PENDING) {
+				if (jobs[i].state == QWE_JOB_PENDING || jobs[i].state == QWE_JOB_READY) {
 					qwe_job_transition(&jobs[i].state, QWE_JOB_SKIPPED);
 					jobs[i].reason = "cancel-requested";
 				} else if (jobs[i].state == QWE_JOB_RUNNING) {

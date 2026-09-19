@@ -10,7 +10,7 @@ int qwe_job_transition_legal(enum qwe_job_state from, enum qwe_job_state to)
 	case QWE_JOB_PENDING:
 		return to == QWE_JOB_READY || to == QWE_JOB_SKIPPED;
 	case QWE_JOB_READY:
-		return to == QWE_JOB_RUNNING;
+		return to == QWE_JOB_RUNNING || to == QWE_JOB_SKIPPED;
 	case QWE_JOB_RUNNING:
 		return to == QWE_JOB_SUCCESS || to == QWE_JOB_FAILED || to == QWE_JOB_TERMINATING;
 	case QWE_JOB_TERMINATING:

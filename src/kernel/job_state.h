@@ -1,7 +1,7 @@
 /* The job state machine (design §7). A job only ever moves along these edges:
  *
  *   pending -> ready | skipped
- *   ready -> running
+ *   ready -> running | skipped
  *   running -> success | failed | terminating
  *   terminating -> cancelled
  *

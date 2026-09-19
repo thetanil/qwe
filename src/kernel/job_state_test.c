@@ -14,7 +14,7 @@ TEST legal_transitions(void)
 	static const int legal[N][N] = {
 		/*             pend rdy run term succ fail skip canc */
 		/* pending */ {0, 1, 0, 0, 0, 0, 1, 0},
-		/* ready */   {0, 0, 1, 0, 0, 0, 0, 0},
+		/* ready */   {0, 0, 1, 0, 0, 0, 1, 0},
 		/* running */ {0, 0, 0, 1, 1, 1, 0, 0},
 		/* terminating */ {0, 0, 0, 0, 0, 0, 0, 1},
 		/* success */ {0, 0, 0, 0, 0, 0, 0, 0},
