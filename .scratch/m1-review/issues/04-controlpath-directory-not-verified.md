@@ -1,6 +1,6 @@
 # 04: The ControlPath directory is used without checking who owns it
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: none
@@ -55,14 +55,16 @@ what is wrong with it, not fall back to a less safe path.
 
 ## Acceptance criteria
 
-- [ ] With `XDG_RUNTIME_DIR` set to a writable 0700 directory, the control socket is created under it and no directory is created in `/tmp`. `e2e: tests/e2e/ssh_socket_dir_xdg/`
-- [ ] With `XDG_RUNTIME_DIR` unset, `/tmp/qwe-<uid>` is created 0700 and used. `e2e: tests/e2e/ssh_hostname/` (existing, must stay green)
-- [ ] A pre-existing socket directory with mode 0777 is refused: the step fails, the message names the directory and its mode, and no socket is created in it. `e2e: tests/e2e/ssh_socket_dir_refused/`
+- [x] With `XDG_RUNTIME_DIR` set to a writable 0700 directory, the control socket is created under it and no directory is created in `/tmp`. `e2e: tests/e2e/ssh_socket_dir_xdg/`
+- [x] With `XDG_RUNTIME_DIR` unset, `/tmp/qwe-<uid>` is created 0700 and used. `e2e: tests/e2e/ssh_hostname/` (existing, must stay green)
+- [x] A pre-existing socket directory with mode 0777 is refused: the step fails, the message names the directory and its mode, and no socket is created in it. `e2e: tests/e2e/ssh_socket_dir_refused/`
 - [ ] A socket directory that is not owned by the current user is refused the same way. `manual: as a second local user, create /tmp/qwe-<uid> mode 0700, then run an ssh e2e case as the first user and confirm it refuses by owner rather than by mode` (an automated case cannot make a directory owned by another uid)
-- [ ] The directory check and the key-file check report their problems the same way, so the rule reads as one rule. `unit: src/secrets/keyfile_test.c::mode_check_matches_socket_dir_check`
-- [ ] qwe-ssh-sec I.2 records `$XDG_RUNTIME_DIR` as the preferred ControlPath location and the ownership check as the fallback's condition.
+- [x] The directory check and the key-file check report their problems the same way, so the rule reads as one rule. `unit: src/secrets/keyfile_test.c::mode_check_matches_socket_dir_check`
+- [x] qwe-ssh-sec I.2 records `$XDG_RUNTIME_DIR` as the preferred ControlPath location and the ownership check as the fallback's condition.
 
 ## Comments
 
 The ssh e2e cases carry `needs-ssh` and skip without a reachable target, so the
 two new cases follow that convention.
+
+Resolved 2026-09-20. `qwe_private_check` (src/secrets/keyfile.c) is now the one owner-and-mode rule; `qwe_key_load` and the new `qwe.fs.private_dir` both call it, so the wording matches (`keyfile_test.c`). `backend.ssh.ensure` verifies the directory on every call, before `ssh -O check`, and returns the message, which the engine reports as a step start failure. `$XDG_RUNTIME_DIR/qwe` is used when set and short enough for a socket path, else `/tmp/qwe-<uid>`. The key-file check gained the owner test as well. The two new e2e cases set `XDG_RUNTIME_DIR=xdg` (relative, as `key_perms_refused` does with HOME); the refused case pre-creates `xdg/qwe` 0777. The manual second-user owner check was not run: there is no second local user here. `ssh_connection_lost` matched the socket path literally as `/tmp/qwe-<uid>/`; it now matches any directory.

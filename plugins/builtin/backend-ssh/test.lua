@@ -28,7 +28,7 @@ case("master_argv_is_fixed", function()
 end)
 
 case("sock_path_is_short", function()
-  local path = ssh.sock_path(1000, 4194304)
+  local path = ssh.sock_path(ssh.socket_dir(1000, nil), 4194304)
   eq("/tmp/qwe-1000/4194304.%C", path, "path")
   -- ssh appends "." and 16 characters while it binds; %C expands to 40
   assert(#path - 2 + 40 + 17 < 108, "socket path too long")
@@ -68,4 +68,13 @@ case("become_wraps_preamble", function()
   -- and the local backend
   local argv_local = require("backend.local").new({ env = {}, become = true }):command("true")
   eq("sudo -n sh -c", table.concat(argv_local, " ", 1, 4), "local argv")
+end)
+
+case("socket_dir_prefers_the_runtime_dir", function()
+  eq("/run/user/1000/qwe", ssh.socket_dir(1000, "/run/user/1000"), "xdg")
+  eq("/run/user/1000/qwe", ssh.socket_dir(1000, "/run/user/1000/"), "trailing slash")
+  eq("/tmp/qwe-1000", ssh.socket_dir(1000, nil), "unset")
+  eq("/tmp/qwe-1000", ssh.socket_dir(1000, ""), "empty")
+  -- too long for a unix socket path: back to /tmp, which ensure() verifies
+  eq("/tmp/qwe-1000", ssh.socket_dir(1000, "/" .. ("x"):rep(60)), "too long")
 end)

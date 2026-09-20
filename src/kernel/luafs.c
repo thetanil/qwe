@@ -1,9 +1,12 @@
 #define _POSIX_C_SOURCE 200809L
 #include "src/kernel/luafs.h"
 
+#include "src/secrets/keyfile.h"
+
 #include <dirent.h>
 #include <errno.h>
 #include <lauxlib.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -53,12 +56,40 @@ static int fs_isdir(lua_State *L)
 	return 1;
 }
 
+static int fs_private_dir(lua_State *L)
+{
+	const char *path = luaL_checkstring(L, 1), *what = luaL_optstring(L, 2, "the directory");
+	char err[512];
+	struct stat st;
+
+	if (mkdir(path, 0700) < 0 && errno != EEXIST) {
+		lua_pushnil(L);
+		lua_pushfstring(L, "cannot create %s %s: %s", what, path, strerror(errno));
+		return 2;
+	}
+	/* lstat: a symlink is refused, whatever it points at */
+	if (lstat(path, &st) < 0 || !S_ISDIR(st.st_mode)) {
+		lua_pushnil(L);
+		lua_pushfstring(L, "%s %s is not a directory", what, path);
+		return 2;
+	}
+	if (qwe_private_check(&st, what, path, err, sizeof err) < 0) {
+		lua_pushnil(L);
+		lua_pushstring(L, err);
+		return 2;
+	}
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
 int luaopen_qwe_fs(lua_State *L)
 {
-	lua_createtable(L, 0, 2);
+	lua_createtable(L, 0, 3);
 	lua_pushcfunction(L, fs_list);
 	lua_setfield(L, -2, "list");
 	lua_pushcfunction(L, fs_isdir);
 	lua_setfield(L, -2, "isdir");
+	lua_pushcfunction(L, fs_private_dir);
+	lua_setfield(L, -2, "private_dir");
 	return 1;
 }

@@ -15,6 +15,13 @@ int qwe_key_default_path(char *out, size_t n);
  * message in err that names the file. */
 int qwe_key_load(const char *path, uint8_t key[QWE_KEY_BYTES], char *err, size_t err_size);
 
+/* The rule for anything private that qwe keeps on disk (the key file, the ssh
+ * socket directory): it must be owned by this user and not accessible by group
+ * or others. Returns 0, or -1 with a message in err that names what and path;
+ * the caller has checked the file type. */
+struct stat;
+int qwe_private_check(const struct stat *st, const char *what, const char *path, char *err, size_t err_size);
+
 /* Creates the key file at path (the default path when NULL) with mode 0600 and
  * a new random key, and its directory (0700) if need be. Never overwrites: it
  * returns -1, with the reason in err, when the file exists. */

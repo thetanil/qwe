@@ -11,6 +11,7 @@
 --     step only inherits the socket's path, never a connection.
 local become = require("qwe.become")
 local exec = require("qwe.exec")
+local fs = require("qwe.fs")
 
 local M = {}
 
@@ -38,12 +39,26 @@ done
 exit 0
 ]]
 
--- The ControlPath. One directory per user, one socket per qwe run and host:
--- a run never shares (or closes) another run's master. It is short, because a
--- unix socket path is limited to about 108 bytes; ssh expands %C to a hash of
--- the connection.
-function M.sock_path(uid, pid)
-  return string.format("/tmp/qwe-%d/%d.%%C", uid, pid)
+-- The directory for control sockets and master logs: $XDG_RUNTIME_DIR/qwe when
+-- that is set (the system made it per-user and 0700), else /tmp/qwe-<uid>.
+-- A unix socket path is limited to about 108 bytes, so a runtime dir too long
+-- for that falls back to /tmp. ensure() verifies the directory before using it.
+-- ssh appends "." and 16 characters while it binds; %C expands to 40.
+local MAX_SOCK = 107
+local SOCK_TAIL = #"/4194304." + 40 + 17
+
+function M.socket_dir(uid, xdg)
+  if xdg and xdg ~= "" then
+    local dir = xdg:gsub("/+$", "") .. "/qwe"
+    if #dir + SOCK_TAIL <= MAX_SOCK then return dir end
+  end
+  return string.format("/tmp/qwe-%d", uid)
+end
+
+-- The ControlPath. One socket per qwe run and host: a run never shares (or
+-- closes) another run's master. ssh expands %C to a hash of the connection.
+function M.sock_path(dir, pid)
+  return string.format("%s/%d.%%C", dir, pid)
 end
 
 -- ssh options every client of a master takes.
@@ -139,17 +154,21 @@ end
 function M.ensure(name, host)
   local m = masters[name]
   if not m then
-    local uid, pid = exec.getuid(), exec.getpid()
+    local pid = exec.getpid()
+    local dir = M.socket_dir(exec.getuid(), os.getenv("XDG_RUNTIME_DIR"))
     m = {
       host = host,
-      sock = M.sock_path(uid, pid),
-      log = string.format("/tmp/qwe-%d/%d.%s.log", uid, pid, name),
-      dir = string.format("/tmp/qwe-%d", uid),
+      sock = M.sock_path(dir, pid),
+      log = string.format("%s/%d.%s.log", dir, pid, name),
+      dir = dir,
     }
     masters[name] = m
   end
+  -- Checked before anything is asked of a socket in it, every time: whoever owns
+  -- the directory owns what the step's commands and secrets are sent to.
+  local ok, problem = fs.private_dir(m.dir, "the socket directory")
+  if not ok then return nil, problem end
   if alive(m) then return true end
-  exec.run({ "mkdir", "-p", "-m", "700", m.dir })
   local code, _, err = exec.run(M.master_argv(m.host, m.sock, m.log), nil, { detach = true })
   local why = read_all(m.log)
   os.remove(m.log)

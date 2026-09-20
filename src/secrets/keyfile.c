@@ -33,6 +33,22 @@ static int resolve(const char *path, char *buf, size_t n, const char **out, char
 	return 0;
 }
 
+int qwe_private_check(const struct stat *st, const char *what, const char *path, char *err, size_t err_size)
+{
+	if (st->st_uid != geteuid()) {
+		snprintf(err, err_size, "%s %s is owned by uid %u, not by you (uid %u)", what, path,
+			 (unsigned)st->st_uid, (unsigned)geteuid());
+		return -1;
+	}
+	if (st->st_mode & 077) {
+		snprintf(err, err_size,
+			 "%s %s has mode %04o: it must not be accessible by group or others (chmod %s)", what, path,
+			 (unsigned)(st->st_mode & 0777), S_ISDIR(st->st_mode) ? "700" : "600");
+		return -1;
+	}
+	return 0;
+}
+
 int qwe_key_load(const char *path, uint8_t key[QWE_KEY_BYTES], char *err, size_t err_size)
 {
 	char def[1024], raw[256];
@@ -54,10 +70,7 @@ int qwe_key_load(const char *path, uint8_t key[QWE_KEY_BYTES], char *err, size_t
 		close(fd);
 		return -1;
 	}
-	if (st.st_mode & 077) {
-		snprintf(err, err_size,
-			 "the key file %s has mode %04o: it must not be accessible by group or others (chmod 600)",
-			 path, (unsigned)(st.st_mode & 0777));
+	if (qwe_private_check(&st, "the key file", path, err, err_size) < 0) {
 		close(fd);
 		return -1;
 	}

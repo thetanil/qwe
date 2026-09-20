@@ -25,3 +25,12 @@ cc_test(
         "//third_party/libsodium",
     ],
 )
+
+cc_test(
+    name = "keyfile_test",
+    srcs = ["keyfile_test.c"],
+    deps = [
+        ":secrets",
+        "//third_party/greatest",
+    ],
+)
