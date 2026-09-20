@@ -90,10 +90,17 @@ enum qwe_dag_status qwe_dag_check(const struct qwe_dag_job *jobs, size_t n, stru
 	w.depth = 0;
 	w.color = calloc(n ? n : 1, sizeof *w.color);
 	w.stack = calloc(n ? n : 1, sizeof *w.stack);
-	if (w.color && w.stack)
-		for (i = 0; i < n && !found; i++)
-			if (w.color[i] == WHITE)
-				found = visit(&w, i);
+	if (!w.color || !w.stack) {
+		/* not checked is not "no cycle" */
+		free(w.color);
+		free(w.stack);
+		err->status = QWE_DAG_NO_MEMORY;
+		snprintf(err->message, sizeof err->message, "cannot check the needs: graph: out of memory");
+		return err->status;
+	}
+	for (i = 0; i < n && !found; i++)
+		if (w.color[i] == WHITE)
+			found = visit(&w, i);
 	free(w.color);
 	free(w.stack);
 	return found ? err->status : QWE_DAG_OK;

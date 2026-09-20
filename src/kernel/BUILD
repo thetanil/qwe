@@ -142,6 +142,8 @@ cc_library(
 cc_test(
     name = "dag_test",
     srcs = ["dag_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    linkopts = ["-Wl,--wrap=calloc"],
     deps = [
         ":dag",
         "//third_party/greatest",

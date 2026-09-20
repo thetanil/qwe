@@ -14,6 +14,7 @@ enum qwe_dag_status {
 	QWE_DAG_OK,
 	QWE_DAG_UNKNOWN_NEED, /* job `job`'s need number `need` names no job */
 	QWE_DAG_CYCLE,        /* `job` is the first job of a cycle */
+	QWE_DAG_NO_MEMORY,    /* the cycle check could not run: it is not known whether there is a cycle */
 };
 
 struct qwe_dag_error {
@@ -25,7 +26,9 @@ struct qwe_dag_error {
 
 /* Checks unknown needs first, then cycles, and reports the first problem it
  * finds. The message names the jobs involved (a cycle as "a -> b -> a").
- * Returns the status; err is filled unless it is NULL. */
+ * Returns the status; err is filled unless it is NULL. Never returns
+ * QWE_DAG_OK for a graph it did not check: if it cannot allocate, the status
+ * is QWE_DAG_NO_MEMORY. */
 enum qwe_dag_status qwe_dag_check(const struct qwe_dag_job *jobs, size_t n, struct qwe_dag_error *err);
 
 #endif

@@ -1,7 +1,17 @@
 #include "greatest.h"
 #include "src/kernel/dag.h"
 
+#include <stdlib.h>
 #include <string.h>
+
+void *__real_calloc(size_t a, size_t b);
+
+static int fail_calloc; /* armed: every calloc returns NULL */
+
+void *__wrap_calloc(size_t a, size_t b)
+{
+	return fail_calloc ? NULL : __real_calloc(a, b);
+}
 
 TEST cycle_detected(void)
 {
@@ -45,6 +55,27 @@ TEST unknown_need(void)
 	PASS();
 }
 
+TEST allocation_failure_is_not_ok(void)
+{
+	static const char *const a_needs[] = {"b"};
+	static const char *const b_needs[] = {"a"};
+	const struct qwe_dag_job cycle[] = {{"a", a_needs, 1}, {"b", b_needs, 1}};
+	const struct qwe_dag_job plain[] = {{"a", NULL, 0}};
+	struct qwe_dag_error err;
+
+	/* A graph that could not be checked is never reported as a good one, cyclic or not. */
+	fail_calloc = 1;
+	ASSERT_EQ(QWE_DAG_NO_MEMORY, qwe_dag_check(cycle, 2, &err));
+	ASSERT(strstr(err.message, "out of memory") != NULL);
+	ASSERT_EQ(QWE_DAG_NO_MEMORY, qwe_dag_check(plain, 1, &err));
+	ASSERT_EQ(QWE_DAG_NO_MEMORY, qwe_dag_check(plain, 1, NULL));
+	fail_calloc = 0;
+	/* and with memory the same graphs are judged as before */
+	ASSERT_EQ(QWE_DAG_CYCLE, qwe_dag_check(cycle, 2, &err));
+	ASSERT_EQ(QWE_DAG_OK, qwe_dag_check(plain, 1, &err));
+	PASS();
+}
+
 TEST diamond_is_fine(void)
 {
 	static const char *const b_needs[] = {"a"};
@@ -67,6 +98,7 @@ int main(int argc, char **argv)
 	RUN_TEST(cycle_detected);
 	RUN_TEST(self_need_is_a_cycle);
 	RUN_TEST(unknown_need);
+	RUN_TEST(allocation_failure_is_not_ok);
 	RUN_TEST(diamond_is_fine);
 	GREATEST_MAIN_END();
 }

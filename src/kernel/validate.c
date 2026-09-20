@@ -131,10 +131,13 @@ static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, st
 
 	st = qwe_dag_check(jobs, n, &err);
 	if (st != QWE_DAG_OK) {
-		char *tok = escape_token(jobs[err.job].id);
+		/* a check that could not run is an error too, reported at the jobs it covers */
+		char *tok = st == QWE_DAG_NO_MEMORY ? strdup("") : escape_token(jobs[err.job].id);
 		char *ptr = malloc(strlen(tok) + 64);
 
-		if (st == QWE_DAG_UNKNOWN_NEED)
+		if (st == QWE_DAG_NO_MEMORY)
+			sprintf(ptr, "/jobs");
+		else if (st == QWE_DAG_UNKNOWN_NEED)
 			sprintf(ptr, "/jobs/%s/needs/%lu", tok, (unsigned long)err.need);
 		else
 			sprintf(ptr, "/jobs/%s", tok);

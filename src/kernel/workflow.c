@@ -1481,7 +1481,13 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 		if (final == n)
 			break;
 		if (running == 0) {
-			rc = -1; /* cannot happen: validation rejects cycles */
+			/* Jobs are left and none is running or can be started. Validation
+			 * rejects a needs: cycle, so this means the graph was not what it
+			 * checked: say so, because this line is all the operator will get. */
+			fprintf(stderr, "qwe run: internal error: %lu of %lu jobs are neither finished nor runnable "
+					"(their needs: never resolve)\n",
+				(unsigned long)(n - final), (unsigned long)n);
+			rc = -1;
 			break;
 		}
 
