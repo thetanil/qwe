@@ -67,6 +67,10 @@ Cancellation uses the existing teardown: the local `ssh -S` client is signalled 
 
 If the master dies partway through a step, that step's `ssh -S` fails, and the step is `failed` with reason `connection-lost`. The parent re-establishes the master before the next step. **No step is ever retried automatically**, because it might not be idempotent.
 
+**What counts as a lost connection** is two facts together: the local client exited **255**, ssh's own error status, *and* `ssh -O check` finds no master. Exit 255 alone is not enough, because a remote command is free to exit 255 itself; asking the master settles which it was. This applies to `run:` steps. A plugin step that loses its connection fails as `plugin-error`, because the plugin is what saw the failure and the engine has only its result to go on.
+
+**If the master cannot be started at all** — the host is unreachable, the key is refused, `ConnectTimeout` expires — the step fails on the start-failed path with reason `engine-error`, and ssh's own message goes to the job's log. It is not `connection-lost`: nothing was connected to lose.
+
 ### I.6 Deferred: in-process SSH (libssh2)
 
 Linking **libssh2** (3-clause BSD, client-only, supports non-blocking operation with an app-owned socket) and driving it directly from the event loop remains a future option. It is deferred because:
@@ -101,7 +105,9 @@ Secrets are encrypted inline in the authored YAML. GitHub Actions deliberately d
 - **AEAD: XChaCha20-Poly1305** (`crypto_aead_xchacha20poly1305_ietf_*`). Authenticated encryption — confidentiality *and* tamper detection — with a 24-byte random nonce large enough to generate randomly without a counter.
 - **Key model: raw key, not passphrase.** The key file holds a 32-byte random key used directly; there is **no password KDF**. This is deliberate: a raw machine-local key removes the entire "did we pick enough Argon2/PBKDF2 iterations" question that a human passphrase would force. (Per-purpose subkeys, if ever wanted, can be derived with `crypto_kdf_derive_from_key` — but that is an option, not a requirement.)
 - **CSPRNG:** libsodium `randombytes` for nonces (and any salts).
-- **Memory hygiene:** `sodium_memzero` on plaintext buffers after use.
+- **Memory hygiene:** `sodium_memzero` on plaintext buffers after use. This reaches the C buffers — the key, a decrypted plaintext, `qwe encrypt`'s input — and **not** the copies Lua holds, because a Lua string is immutable, interned and collected whenever the GC decides. A decrypted secret therefore exists as a Lua string in the parent for the rest of the run. Closing that would mean keeping plaintext out of Lua entirely, which the templating design does not allow today; it is a known limit, recorded rather than solved.
+- **The secret CBOR tag is 32768**, the first value in RFC 8949's first-come-first-served range. It is defined once, in `src/edge/yaml/secret_tag.h`, and shared by the C transcoder and `qwe.cbor`, so the two can never disagree about what marks a secret.
+- **A secret satisfies a `with:` schema that says `type: string`** with no custom keyword and no placeholder, because by the time the schema runs, the value *is* a string: `${{ secrets.X }}` is text in the document, and substitution happens later, in the parent, just before the step. A bare `!encrypted` envelope in `with:` is refused outright — an envelope is only ever a value in a `secrets:` map.
 
 ### II.3 Key material & file
 
@@ -120,6 +126,16 @@ version ∥ algorithm-id ∥ nonce ∥ ciphertext ∥ auth-tag
 ```
 
 No KDF parameters are stored, because the raw-key model has no KDF. Versioning everything follows Ansible Vault's `;1.1;AES256`-style header precedent. Authoring is supported by **`qwe encrypt`** (analogous to `ansible-vault encrypt_string`), which reads a plaintext **from stdin, never from an argument**, and emits the envelope string the user pastes into YAML — decryption alone would be useless without a blessed way to *produce* ciphertext.
+
+**The text form**, which is what `qwe encrypt` prints and what an `!encrypted` value holds, is:
+
+```
+qwe:1:xchacha20poly1305:<base64 of nonce ∥ ciphertext ∥ auth-tag>
+```
+
+The version and algorithm id are not decoration: they are passed to the AEAD as its **additional data**, so editing either one fails authentication rather than selecting a different algorithm. A reader can therefore tell a qwe envelope from any other string, and refuse one it does not understand, without holding a key — which is what lets `qwe validate` check that every `secrets:` entry is a well-formed envelope on a machine with no key file at all.
+
+`qwe encrypt` drops one trailing newline from its input, so `echo hunter2 | qwe encrypt` seals `hunter2` rather than `hunter2\n`. Use `printf %s` when the exact bytes matter.
 
 ### II.5 Encrypted values are a tagged type, decrypted late
 

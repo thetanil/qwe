@@ -9,6 +9,7 @@ Issues and specs (you may know a spec as a PRD) for this repo live as markdown f
 - Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` — never a single combined tickets file
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
+- A closed feature moves to `.scratch/archive/<feature-slug>/`, which the frontier glob does not reach. Promote its still-load-bearing decisions to `docs/adr/` or `CONTEXT.md` first — the archived tickets are the record of how the project got somewhere, not the statement of where it is. See `.scratch/archive/README.md`
 
 ## Acceptance criteria
 

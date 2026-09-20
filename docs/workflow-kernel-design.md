@@ -241,6 +241,7 @@ Parallelism is controlled by the user in the GitHub Actions style, and it's buil
 
 - fewer than **`max-parallel`** jobs are running (a workflow-level setting; unlimited by default), and
 - the job's target has a free session under its **session cap**. The ssh backend caps concurrent sessions per target at 8 by default (inventory `max-sessions:`), because OpenSSH's server `MaxSessions` defaults to 10 per multiplexed connection. Jobs above the cap wait. They don't fail.
+  - **A session is held by a running job, not by a live step.** A job on a remote target takes one of its target's sessions when it starts and gives it back when it ends, including while it sits between steps. Counting live steps instead would let more jobs in and then stall them mid-job at the ssh layer, where the wait is invisible to the scheduler and to `max-parallel`. Holding per job costs some parallelism and keeps the cap a scheduling decision.
 
 The graph and state machines are unchanged: parallelism is only a gate on `ready → running`. Each running job has its own ring and log. Matrix-style fan-out is deferred.
 
@@ -392,6 +393,8 @@ A job reads its target's values as `${{ vars.X }}` and `${{ secrets.X }}`, the w
   - `${{ }}` is evaluated in the parent by `qwe.template` just before the step starts, over `run:` text, `with:` values and `env:` values. An `env:` value may read only `steps.*`, not `env`. An unset output reads as empty. Each job keeps its own outputs table, and `steps.<id>` must name an earlier step of the same job (checked at validation, and against the plugin's declared outputs when it has them).
   - `run:` steps get `$QWE_OUTPUT`, a file under the run directory. The parent reads and deletes it when the step's leader exits; lines that are not `key=value` or `key<<DELIM` blocks are ignored. A step's non-empty outputs appear in `result.json` as `outputs`.
 - **Templating** uses GitHub's `${{ … }}` syntax, with the contexts `env`, `vars`, `secrets` and `steps` in M1. `vars` are never exported into the environment automatically. Secrets are forbidden inside `run:` text.
+  - `vars` belong to a job's target, so they may be used in a job's or step's `env:`, in `run:` text and in `with:` values, and are a validation error in the **workflow-level** `env:`, which no target owns. `local` has no vars at all, so any `vars.X` in a `local` job is an error.
+- **Validation order.** The inventory is read, validated and made current *before* the workflow is validated, so a workflow error is never reported against an inventory that is itself broken. Inventory errors are reported against the inventory's own path and stop the run before any workflow error is looked for.
 - The workflow is written in YAML, transcoded to CBOR with positions (§15), validated against the composed schema (§6.4), and built into an in-memory graph. Execution walks the graph through the state machines (§7), gated by parallelism (§8.3), driven by the three event sources (§5.1).
 - `qwe run --job <id>` runs the selected jobs plus everything they depend on through `needs:`. The whole workflow is still validated.
 - Each workflow run writes `.qwe/runs/<run-id>/` next to the workflow: one redacted log per job and a `result.json` with every outcome, reason and changed flag.
