@@ -32,6 +32,23 @@ statement of where it is.
 | Feature | Closed | What it built |
 |---|---|---|
 | `m1-engine` | 2026-09-20 | The M1 workflow engine: transcoder, schema validation, the job lifecycle table, steps, timeouts, cancellation, parallelism, plugins, check/apply, env and templating, the inventory, the ssh backend, `become`, secrets and redaction, `--job` selection. 21 tickets, 160 acceptance criteria. |
+| `m1-review` | 2026-09-20 | A review of the finished M1 engine, and the fixes it found: duplicate YAML keys, `timeout-seconds` and a total conversion, the `$QWE_OUTPUT` file's mode, the ControlPath directory's owner, a master outliving a killed run, blocking ssh calls in the event loop, a dag check that approved when it could not run, the transcoder's trust in libyaml, the plugin trust boundary, disabled targets, and validation executing plugin code. 11 tickets, 74 acceptance criteria. |
+
+What was promoted out of `m1-review` when it was archived: **ADR-0013** (a plugin
+file has no top-level code, and validation reads it rather than running it — the
+decision ticket 11 made, including the `kind:` attempt that was reverted); four
+bullets in the qwe-ssh-sec Decision Log Addendum (pre-connect and the 100 ms
+timeout guarantee with its 3 s reconnect exception, the `ControlPersist` ttl as a
+backstop, the verified ControlPath directory, and the `0600` `$QWE_OUTPUT` file).
+Most of this feature's decisions were already written into the docs as each
+ticket closed — design §14 (the timeout unit, maximum and rounding), §15.4
+(duplicate mapping keys), §13 and §7 (`disabled:` and `target-disabled`), §12
+(plugin shape), qwe-ssh-sec I.2, I.3, I.5 and II.9, and `CONTEXT.md`'s **Strict
+globals** and **Trust boundary** entries — which is why the promotion at archive
+time was small. Two repairs went with it: `CONTEXT.md` still said that
+*validating* someone else's workflow directory runs their code, which ticket 11
+had made untrue, and ticket 05's edit to qwe-ssh-sec I.3 had swallowed the
+opening of that section's second list item.
 
 What was promoted out of `m1-engine` when it was archived: ADR-0011
 (`become-denied` is detected by a probe), the session-cap rule and the
