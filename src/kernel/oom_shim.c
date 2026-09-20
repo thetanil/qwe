@@ -1,6 +1,7 @@
 #include "src/kernel/oom_shim.h"
 
 #include <fcntl.h>
+#include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
 #include <sys/types.h>
@@ -52,7 +53,36 @@ int qwe_oom_fired(void)
 	return fired != 0;
 }
 
-static int should_fail(void)
+
+
+extern char __executable_start;
+
+/* With QWE_OOM_SITE_LOG=<file>, appends the address of the failed call, as an
+ * offset into the executable, one hex number per line. addr2line -e <test>
+ * turns it into the call site, which is how to check that a test reaches a
+ * given allocation. Nothing here allocates. */
+static void log_site(void *ra)
+{
+	const char *path = getenv("QWE_OOM_SITE_LOG");
+	char line[24];
+	unsigned long off = (unsigned long)((char *)ra - &__executable_start);
+	int i = sizeof line - 1, fd;
+
+	if (!path)
+		return;
+	line[i] = 10;
+	do {
+		line[--i] = "0123456789abcdef"[off & 15];
+		off >>= 4;
+	} while (off);
+	fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0600);
+	if (fd >= 0) {
+		(void)!write(fd, line + i, sizeof line - (size_t)i);
+		close(fd);
+	}
+}
+
+static int should_fail(void *ra)
 {
 	pid_t me;
 
@@ -62,6 +92,7 @@ static int should_fail(void)
 	if (armed_pid == 0 || me == armed_pid) {
 		if (fail_at && ++calls == fail_at) {
 			fired = 1;
+			log_site(ra);
 			return 1;
 		}
 		return 0;
@@ -71,6 +102,7 @@ static int should_fail(void)
 		child_calls = 0;
 	}
 	if (child_fail_at && ++child_calls == child_fail_at) {
+		log_site(ra);
 		if (child_log[0]) {
 			int fd = open(child_log, O_WRONLY | O_APPEND | O_CREAT, 0600);
 
@@ -84,11 +116,11 @@ static int should_fail(void)
 	return 0;
 }
 
-void *__wrap_malloc(size_t n) { return should_fail() ? NULL : __real_malloc(n); }
-void *__wrap_calloc(size_t a, size_t b) { return should_fail() ? NULL : __real_calloc(a, b); }
-void *__wrap_realloc(void *p, size_t n) { return should_fail() ? NULL : __real_realloc(p, n); }
-char *__wrap_strdup(const char *s) { return should_fail() ? NULL : __real_strdup(s); }
-char *__wrap_strndup(const char *s, size_t n) { return should_fail() ? NULL : __real_strndup(s, n); }
+void *__wrap_malloc(size_t n) { return should_fail(__builtin_return_address(0)) ? NULL : __real_malloc(n); }
+void *__wrap_calloc(size_t a, size_t b) { return should_fail(__builtin_return_address(0)) ? NULL : __real_calloc(a, b); }
+void *__wrap_realloc(void *p, size_t n) { return should_fail(__builtin_return_address(0)) ? NULL : __real_realloc(p, n); }
+char *__wrap_strdup(const char *s) { return should_fail(__builtin_return_address(0)) ? NULL : __real_strdup(s); }
+char *__wrap_strndup(const char *s, size_t n) { return should_fail(__builtin_return_address(0)) ? NULL : __real_strndup(s, n); }
 
 #include <signal.h>
 #include <sys/wait.h>

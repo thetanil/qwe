@@ -11,3 +11,10 @@ cc_library(
         "//third_party/libsodium",
     ],
 )
+
+# The sources, for src/kernel:alloc_audit_test.
+filegroup(
+    name = "c_files",
+    srcs = glob(["*.c"]),
+    visibility = ["//src/kernel:__pkg__"],
+)

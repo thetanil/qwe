@@ -13,7 +13,12 @@
  *
  * A child that fires appends a line to the file named by qwe_oom_child_log,
  * since its memory is gone by the time the parent looks. Nothing here
- * allocates. */
+ * allocates.
+ *
+ * With QWE_OOM_SITE_LOG=<file> in the environment, the failing call is also
+ * appended to that file as an offset into the executable (hex, one per line);
+ * addr2line -i -e <test binary> turns the offsets into call sites. That is how
+ * to check which allocations a test really fails. */
 #ifndef QWE_KERNEL_OOM_SHIM_H
 #define QWE_KERNEL_OOM_SHIM_H
 

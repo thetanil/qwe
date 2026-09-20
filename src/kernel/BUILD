@@ -467,3 +467,58 @@ cc_test(
         "//third_party/greatest",
     ],
 )
+
+# The sources, for src/kernel:alloc_audit_test.
+filegroup(
+    name = "c_files",
+    srcs = glob(["*.c"]),
+    visibility = ["//src/kernel:__pkg__"],
+)
+
+# Fails when a bare allocation call appears (or goes) outside the audit list.
+sh_test(
+    name = "alloc_audit_test",
+    size = "small",
+    srcs = ["alloc_audit_test.sh"],
+    args = ["$(rootpath alloc_audit.txt)"] + ["$(rootpaths %s)" % p for p in [
+        ":c_files",
+        "//src/secrets:c_files",
+        "//src/edge/yaml:c_files",
+        "//src/cli:c_files",
+        "//src/cli/encrypt:c_files",
+        "//src/cli/run:c_files",
+        "//src/cli/validate:c_files",
+        "//src/cli/keygen:c_files",
+        "//src/cli/serve:c_files",
+        "//tools:c_files",
+    ]],
+    data = [
+        "alloc_audit.txt",
+        ":c_files",
+        "//src/cli:c_files",
+        "//src/cli/encrypt:c_files",
+        "//src/cli/keygen:c_files",
+        "//src/cli/run:c_files",
+        "//src/cli/serve:c_files",
+        "//src/cli/validate:c_files",
+        "//src/edge/yaml:c_files",
+        "//src/secrets:c_files",
+        "//tools:c_files",
+    ],
+)
+
+# Fails every allocation of the redactor, the CBOR map encoder and qwe.exec.run in turn (ticket quality/08).
+cc_test(
+    name = "sites_oom_test",
+    size = "small",
+    srcs = ["sites_oom_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    deps = [
+        ":kernel",
+        ":luavm",
+        ":oom_shim",
+        ":redact",
+        "//third_party/greatest",
+        "//third_party/luajit",
+    ],
+)

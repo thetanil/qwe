@@ -36,3 +36,23 @@ cc_test(
         "//third_party/greatest",
     ],
 )
+
+# The sources, for src/kernel:alloc_audit_test.
+filegroup(
+    name = "c_files",
+    srcs = glob(["*.c"]),
+    visibility = ["//src/kernel:__pkg__"],
+)
+
+# Fails every allocation of a seal and of an open in turn (ticket quality/08).
+cc_test(
+    name = "oom_test",
+    size = "small",
+    srcs = ["oom_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    deps = [
+        ":secrets",
+        "//src/kernel:oom_shim",
+        "//third_party/greatest",
+    ],
+)

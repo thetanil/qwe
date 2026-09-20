@@ -227,6 +227,69 @@ TEST run_survives_every_injection(void)
 	PASS();
 }
 
+/* A workflow past read_file's first 4 KiB (its buffer grows), run with --job. */
+static void fresh_select_case(char *dir, size_t cap)
+{
+	char path[700];
+	FILE *fp;
+	int i;
+
+	fresh_case(dir, cap);
+	snprintf(path, sizeof path, "%s/w.yaml", dir);
+	fp = fopen(path, "a");
+	for (i = 0; i < 80; i++)
+		fputs("# padding, so that the file is longer than the reader's first buffer, and then some\n", fp);
+	fclose(fp);
+}
+
+static int select_case(void *arg)
+{
+	static const char *const only[] = {"build"};
+	struct qwe_run_options opts = {0};
+	char path[700];
+
+	opts.jobs = only;
+	opts.njobs = 1;
+	snprintf(path, sizeof path, "%s/w.yaml", (const char *)arg);
+	return qwe_run_workflow(path, &opts);
+}
+
+TEST select_job_survives_every_injection(void)
+{
+	struct qwe_oom_outcome o, r;
+	char dir[600];
+	long at;
+
+	fresh_select_case(dir, sizeof dir);
+	ASSERT_EQ(0, qwe_oom_probe(1L << 40, 0, select_case, dir, &o));
+	ASSERT_EQ_FMT(0, o.code, "%d");
+	ASSERT(has_file(dir, "build.out", "built\n"));
+	ASSERT(!has_file(dir, "test.out", "tested\n")); /* --job build: not what needs it */
+	for (at = 1; at <= o.count; at++) {
+		fresh_select_case(dir, sizeof dir);
+		ASSERT_EQ(0, qwe_oom_probe(at, 0, select_case, dir, &r));
+		if (!r.fired && r.exited) {
+			fprintf(stderr, "allocation %ld of %ld: never reached\n%s\n", at, o.count, r.err);
+			FAIL();
+		}
+		if (r.exited && r.code == 0) {
+			if (!has_file(dir, "build.out", "built\n") || has_file(dir, "test.out", "tested\n")) {
+				fprintf(stderr, "allocation %ld: exit 0 with the wrong work done\n%s\n", at, r.err);
+				FAIL();
+			}
+		} else if (r.exited && (r.code == QWE_EXIT_FAILED || r.code == QWE_EXIT_USAGE) && r.err[0]) {
+			; /* a message and a non-zero exit */
+		} else if (!r.exited && r.signal == SIGABRT && strstr(r.err, "out of memory")) {
+			; /* allocation policy rule 2 */
+		} else {
+			fprintf(stderr, "allocation %ld of %ld: exited %d code %d signal %d\n%s\n", at, o.count,
+			    r.exited, r.code, r.signal, r.err);
+			FAIL();
+		}
+	}
+	PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv)
@@ -238,5 +301,6 @@ int main(int argc, char **argv)
 	GREATEST_MAIN_BEGIN();
 	RUN_TEST(injection_is_deterministic);
 	RUN_TEST(run_survives_every_injection);
+	RUN_TEST(select_job_survives_every_injection);
 	GREATEST_MAIN_END();
 }

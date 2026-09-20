@@ -101,9 +101,11 @@ TEST validate_survives_every_injection(void)
 {
 	static const struct scenario valid = {"w.yaml", 0};
 	static const struct scenario cycle = {"cycle.yaml", 2};
+	static const struct scenario dup = {"dup.yaml", 2};
 
 	CHECK_CALL(sweep(&valid));
 	CHECK_CALL(sweep(&cycle));
+	CHECK_CALL(sweep(&dup));
 	PASS();
 }
 
@@ -134,6 +136,10 @@ int main(int argc, char **argv)
 	    "jobs:\n"
 	    "  a:\n    target: local\n    needs: [b]\n    steps:\n      - run: echo hi\n"
 	    "  b:\n    target: local\n    needs: [a]\n    steps:\n      - run: echo hi\n");
+	write_file("dup.yaml",
+	    "jobs:\n"
+	    "  a:\n    target: local\n    steps:\n      - run: echo hi\n"
+	    "  a:\n    target: local\n    steps:\n      - run: echo hi\n");
 	GREATEST_MAIN_BEGIN();
 	RUN_TEST(validate_survives_every_injection);
 	GREATEST_MAIN_END();

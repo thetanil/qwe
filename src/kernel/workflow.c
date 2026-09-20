@@ -1505,7 +1505,7 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 	struct qwe_sched_job *sj = qwe_xcalloc(n, sizeof *sj);
 	struct qwe_sched_event *evs = qwe_xcalloc(n, sizeof *evs);
 	long *caps = qwe_xcalloc(n, sizeof *caps);
-	char **group_names = calloc(n ? n : 1, sizeof *group_names);
+	char **group_names = qwe_xcalloc(n ? n : 1, sizeof *group_names);
 	size_t ngroups = 0;
 	struct epoll_event got[32];
 	size_t i, k;

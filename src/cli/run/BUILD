@@ -18,3 +18,24 @@ cc_test(
         "//third_party/greatest",
     ],
 )
+
+# The sources, for src/kernel:alloc_audit_test.
+filegroup(
+    name = "c_files",
+    srcs = glob(["*.c"]),
+    visibility = ["//src/kernel:__pkg__"],
+)
+
+# Fails the argument list's allocation (ticket quality/08).
+cc_test(
+    name = "oom_test",
+    size = "small",
+    srcs = ["oom_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    deps = [
+        ":run",
+        "//src/kernel",
+        "//src/kernel:oom_shim",
+        "//third_party/greatest",
+    ],
+)
