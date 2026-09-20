@@ -128,6 +128,16 @@ _Avoid_: Core plugin, stdlib, bundled plugin
 A plugin loaded from source out of the project's plugin directory next to the workflow, with no rebuild. It may not have the same name as a built-in plugin.
 _Avoid_: User plugin, local plugin (the word "local" means the operator host), extension
 
+**Strict globals** (`qwe.strict`):
+The environment a plugin's Lua runs in: reading or writing a global that does not exist is an error, so a typo cannot silently become `nil` or leak a global. It prevents mistakes. It is **not a sandbox**: it proxies the real globals, so a plugin still has `io`, `os.execute`, `loadstring` and everything else the interpreter has.
+_Avoid_: Sandbox, isolation, restricted environment
+
+**Trust boundary**:
+The workflow directory and the inventory are **trusted input**, in the way a `Makefile` or a `.github/` directory is. Project plugin code runs with the operator's full privileges on the operator host, and a workflow can already run any command through `run:`, so qwe does not try to contain either. Running or validating a workflow directory someone else wrote is running their code as you; read it first. The inventory is trusted the same way: it names the hosts qwe connects to and holds the secrets a job can read.
+
+What `qwe validate` does with a project plugin: it reads the source, runs luacheck over it, checks its `schema.json`, and **loads the module** to check its contract, which **executes the plugin's top level** (under strict globals, in the validating process). It does not call `check` or `apply`; those run only in a step's forked child during `qwe run`. So `qwe validate` is **not** a safe way to inspect an untrusted workflow. (`open()` in `plugins.lua` is what a step uses to load the module; validation reaches the same execution through `plugincheck.check_lua`.) Pinned by `tests/e2e/validate_runs_plugin_top_level`; making validation execute nothing is `m1-review/11`.
+_Avoid_: Sandbox, isolation, untrusted plugin
+
 **Secret**:
 A value that must never appear in logs. It comes from an inline-encrypted value in authored YAML or from a step output declared secret, and anything built from a secret is itself secret. Once qwe knows a secret's plaintext, that plaintext is masked in all output for the rest of the workflow run.
 _Avoid_: Credential, sensitive value, vault value

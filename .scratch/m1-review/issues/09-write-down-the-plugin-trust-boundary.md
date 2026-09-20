@@ -1,6 +1,6 @@
 # 09: Write down that a workflow directory is trusted code
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: none
@@ -63,10 +63,16 @@ ticket should be split.
 
 ## Acceptance criteria
 
-- [ ] `CONTEXT.md` states the trust boundary: the workflow directory and the inventory are trusted input, and project plugin code runs with the operator's privileges.
-- [ ] The `qwe.strict` entry says it prevents mistakes and is not a sandbox, so the name cannot be read as a security claim.
-- [ ] It is confirmed by reading `plugins.load`, `plugincheck.check` and `open()` whether `qwe validate` executes any project plugin code, and `CONTEXT.md` records the answer. `manual: trace the call path from qwe_validate_workflow to plugins.load and note where open() is reached`
-- [ ] A test pins the answer, so it cannot drift: a project plugin whose top level has a side effect (writing a file) is validated, and the side effect does not happen. `e2e: tests/e2e/validate_does_not_run_plugins/`
-- [ ] `docs/workflow-kernel-design.md` §12 links to the boundary rather than restating it.
+- [x] `CONTEXT.md` states the trust boundary: the workflow directory and the inventory are trusted input, and project plugin code runs with the operator's privileges.
+- [x] The `qwe.strict` entry says it prevents mistakes and is not a sandbox, so the name cannot be read as a security claim.
+- [x] It is confirmed by reading `plugins.load`, `plugincheck.check` and `open()` whether `qwe validate` executes any project plugin code, and `CONTEXT.md` records the answer. `manual: trace the call path from qwe_validate_workflow to plugins.load and note where open() is reached`
+- [x] A test pins the answer, so it cannot drift: a project plugin whose top level has a side effect (writing a file) is validated, and **the side effect does happen** (the answer turned out to be yes; see Comments). `e2e: tests/e2e/validate_runs_plugin_top_level/`
+- [x] `docs/workflow-kernel-design.md` §12 links to the boundary rather than restating it.
 
 ## Comments
+
+Resolved 2026-09-20, with the finding this ticket anticipated ("if it does, that is a finding … and this ticket should be split").
+
+**`qwe validate` does execute project plugin code.** `qwe_validate_workflow` → `qwe.validate.validate_project` → `plugins.load` → `load_project` → `plugincheck.check` → `check_lua`, which calls `loadstring` and then `pcall(strict.run, name, chunk)`: the chunk's top level runs, because the contract check needs the returned module. `open()` is a separate path used by steps; `check`/`apply` are not reached by validation. `tests/e2e/validate_runs_plugin_top_level/` pins exactly that (top level runs, check and apply do not), so the documentation cannot drift from it. The original criterion ("the side effect does not happen") was unmeetable as written and is rewritten above.
+
+Written: `CONTEXT.md` gains **Strict globals** (not a sandbox) and **Trust boundary** (workflow directory and inventory are trusted; what validate executes); design §12.2 links to it rather than restating. Whether to change validation is `m1-review/11`, `ready-for-human`.

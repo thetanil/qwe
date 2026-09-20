@@ -345,6 +345,8 @@ This is a *best-effort* interleave, not a byte-exact global order. If both pipes
 - **Project plugins** are loaded from source out of `.qwe/plugins/<name>/` next to the workflow, using the same layout.
 - A project plugin with the same name as a built-in plugin is a **validation error**. Otherwise a stray project `power.ensure` could replace the built-in one and drop its safety checks.
 
+**A workflow directory is trusted code**: project plugins run with the operator's privileges, and strict globals are not a sandbox. See the **Trust boundary** entry in `CONTEXT.md` for what that covers and for what `qwe validate` does and does not execute.
+
 `qwe validate` runs three checks on every project plugin: its schemas against the metaschema, its **plugin contract** (it exports check/apply or is `run`-like, has a `with:` schema, and declares outputs with `secret` flags), and **luacheck**. Built-in plugins pass the same checks as Bazel tests. All plugin code runs with strict globals. A plugin is `plugin.lua` plus `schema.json` (`{"with": …, "outputs": …}`); a step plugin exports `check` and `apply`, a run-like one exports `argv`. Only luacheck's API is embedded (no argparse, no lfs). A `uses:` step whose plugin raises an error fails with reason `plugin-error`.
 
 ### 12.3 Check and apply
