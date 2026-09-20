@@ -1,6 +1,6 @@
 # 01: Free everything, on every exit path
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: none
@@ -55,14 +55,30 @@ gets broken, so it deserves a comment on the struct field.
 
 ## Acceptance criteria
 
-- [ ] A successful run of a multi-job workflow with steps, outputs and `needs:` reports no reachable or unreachable blocks at exit under valgrind. `manual: valgrind --leak-check=full --errors-for-leak-kinds=all bazel-bin/src/cli/qwe run tests/e2e/needs_skip_chain/w.yaml` (the gate itself is ticket 04)
-- [ ] The same holds for a run that fails, one that is cancelled with SIGINT, and one that hits a step timeout. `manual: as above, for tests/e2e/step_failure_stops_job, operator_cancel and step_timeout_fails`
-- [ ] Every early return in `qwe_run_workflow` goes through one cleanup path: no `return` between the first allocation and the end of the function frees nothing. `unit: src/kernel/jobs_test.c::jobs_free_releases_everything`
-- [ ] `qwe validate` on a valid and on an invalid workflow leaks nothing. `manual: valgrind on both`
-- [ ] `qwe_jobs_free` is called with a partially built job list (a load that failed halfway) without faulting. `unit: src/kernel/jobs_test.c::jobs_free_handles_partial_load`
-- [ ] The borrowed-pointer relationship between `qwe_sink` and the job's `id` is written on the struct field.
+- [x] A successful run of a multi-job workflow with steps, outputs and `needs:` reports no reachable or unreachable blocks at exit under valgrind. `manual: valgrind --leak-check=full --errors-for-leak-kinds=all bazel-bin/src/cli/qwe run tests/e2e/needs_skip_chain/w.yaml` (the gate itself is ticket 04)
+- [x] The same holds for a run that fails, one that is cancelled with SIGINT, and one that hits a step timeout. `manual: as above, for tests/e2e/step_failure_stops_job, operator_cancel and step_timeout_fails`
+- [x] Every early return in `qwe_run_workflow` goes through one cleanup path: no `return` between the first allocation and the end of the function frees nothing. `unit: src/kernel/jobs_test.c::jobs_free_releases_everything`
+- [x] `qwe validate` on a valid and on an invalid workflow leaks nothing. `manual: valgrind on both`
+- [x] `qwe_jobs_free` is called with a partially built job list (a load that failed halfway) without faulting. `unit: src/kernel/jobs_test.c::jobs_free_handles_partial_load`
+- [x] The borrowed-pointer relationship between `qwe_sink` and the job's `id` is written on the struct field.
 
 ## Comments
 
 This is a prerequisite for ticket 04 and makes ticket 03's output readable too;
 a sanitizer's leak detector has the same problem with deliberate exit leaks.
+
+### Resolution
+
+- Added `qwe_jobs_free(L, jobs, n)` (jobs.c): id, target, needs, steps (ids,
+  outputs_json), detail, Lua ref, and the array. `qwe_jobs_load` now calls it on
+  its own failure paths, so a half-built list never escapes.
+- `qwe_run_workflow` has a single `out:` cleanup; the four early returns jump to it.
+- Found and fixed one more leak not in the table: the `--job` array in
+  `qwe_cmd_run` (src/cli/run/run.c).
+- Tests: `jobs_free_releases_everything`, `jobs_free_handles_partial_load`
+  (strdup/calloc/free counted via `--wrap` in jobs_test).
+- Valgrind (`--leak-check=full --errors-for-leak-kinds=all`): 0 errors on
+  needs_skip_chain, step_failure_stops_job, step_timeout_fails, operator_cancel
+  (SIGINT sent by hand while the step ran), and `qwe validate` on a valid and an
+  invalid workflow.
+- `qwe_sink.job` is documented as borrowed from the job's id.

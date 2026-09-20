@@ -273,6 +273,12 @@ cc_test(
     name = "jobs_test",
     size = "small",
     srcs = ["jobs_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    linkopts = [
+        "-Wl,--wrap=calloc",
+        "-Wl,--wrap=strdup",
+        "-Wl,--wrap=free",
+    ],
     deps = [
         ":kernel",
         "//third_party/greatest",

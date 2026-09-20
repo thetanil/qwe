@@ -82,4 +82,8 @@ long qwe_timeout_ms_at(lua_State *L, int idx);
  * job count, or -1 after printing why. */
 long qwe_jobs_load(lua_State *L, const char *path, struct job **out);
 
+/* Frees the list qwe_jobs_load built, and everything the run put into its jobs,
+ * and releases the jobs' registry refs in L. Call it before lua_close(L). */
+void qwe_jobs_free(lua_State *L, struct job *jobs, size_t n);
+
 #endif

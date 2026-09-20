@@ -1648,26 +1648,31 @@ static void report_disabled(const struct job *jobs, size_t n)
 
 int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 {
-	char run_id[64], *dir, *run_dir, *trace_path;
+	char run_id[64], *dir = NULL, *run_dir = NULL, *trace_path = NULL;
 	lua_State *L;
 	struct job *jobs = NULL;
 	struct run_ctx ctx;
 	sigset_t cancel_set;
 	const char *grace_env;
-	struct qwe_job_result *results;
+	struct qwe_job_result *results = NULL;
 	const char *slash;
 	long n, max_parallel;
 	size_t i;
-	int rc = QWE_EXIT_OK, all_ok = 1;
+	int rc = QWE_EXIT_OK, all_ok = 1, trace_ok = 0;
 	FILE *fp;
 
+	memset(&ctx, 0, sizeof ctx);
 	if (load_workflow("qwe run", path, opts ? opts->inventory : NULL, &L) != 0)
 		return QWE_EXIT_USAGE;
 	n = qwe_jobs_load(L, path, &jobs);
-	if (n < 0)
+	if (n < 0) {
+		lua_close(L);
 		return QWE_EXIT_USAGE;
-	if (opts && opts->jobs && select_jobs(jobs, &n, opts) < 0)
-		return QWE_EXIT_USAGE;
+	}
+	if (opts && opts->jobs && select_jobs(jobs, &n, opts) < 0) {
+		rc = QWE_EXIT_USAGE;
+		goto out;
+	}
 
 	/* .qwe/runs/<run-id>/ next to the workflow. */
 	slash = strrchr(path, '/');
@@ -1677,16 +1682,17 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	sprintf(run_dir, "%s/.qwe/runs/%s", dir, run_id);
 	if (mkdir_p(run_dir, 0700) < 0) {
 		fprintf(stderr, "qwe run: cannot create %s: %s\n", run_dir, strerror(errno));
-		return QWE_EXIT_USAGE;
+		rc = QWE_EXIT_USAGE;
+		goto out;
 	}
 	trace_path = malloc(strlen(run_dir) + 32);
 	sprintf(trace_path, "%s/lifecycle.trace", run_dir);
-	memset(&ctx, 0, sizeof ctx);
 	if (qwe_trace_open(&ctx.trace, trace_path, opts && opts->debug) < 0) {
 		fprintf(stderr, "qwe run: cannot create %s: %s\n", trace_path, strerror(errno));
-		return QWE_EXIT_USAGE;
+		rc = QWE_EXIT_USAGE;
+		goto out;
 	}
-	free(trace_path);
+	trace_ok = 1;
 	qwe_trace_install_abort_hook(&ctx.trace);
 
 	/* SIGCHLD, SIGINT and SIGTERM are read through signalfds, so they must be
@@ -1757,12 +1763,15 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	}
 	report_disabled(jobs, (size_t)n);
 	qwe_lc_set_abort_hook(NULL, NULL);
-	qwe_trace_close(&ctx.trace);
-	for (i = 0; i < (size_t)n; i++)
-		free(jobs[i].detail);
+
+out:
+	if (trace_ok)
+		qwe_trace_close(&ctx.trace);
 	free(ctx.run_dir_abs);
+	qwe_jobs_free(L, jobs, (size_t)n);
 	lua_close(L);
 	free(results);
+	free(trace_path);
 	free(run_dir);
 	free(dir);
 	return rc;

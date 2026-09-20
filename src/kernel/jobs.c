@@ -70,8 +70,10 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 		n++;
 	}
 	lua_pop(L, 1); /* jobs */
-	if (bad)
+	if (bad) {
+		qwe_jobs_free(L, jobs, n);
 		return -1;
+	}
 	qsort(jobs, n, sizeof *jobs, cmp_job);
 
 	for (i = 0; i < n; i++) {
@@ -122,9 +124,36 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 		lua_pop(L, 2); /* steps, job */
 		j->nsteps = nsteps;
 	}
-	if (bad)
+	if (bad) {
+		qwe_jobs_free(L, jobs, n);
 		return -1;
+	}
 	*out = jobs;
 	return (long)n;
 }
 
+
+/* Frees everything qwe_jobs_load and the run put into the jobs, and releases their
+ * registry refs in L. Call it before lua_close(L). */
+void qwe_jobs_free(lua_State *L, struct job *jobs, size_t n)
+{
+	size_t i, k;
+
+	for (i = 0; i < n; i++) {
+		struct job *j = &jobs[i];
+
+		for (k = 0; k < j->nneeds; k++)
+			free(j->needs[k]);
+		free(j->needs);
+		for (k = 0; k < j->nsteps && j->steps; k++) {
+			free((char *)j->steps[k].id);
+			free(j->steps[k].outputs_json);
+		}
+		free(j->steps);
+		free(j->id);
+		free(j->detail);
+		free(j->target);
+		luaL_unref(L, LUA_REGISTRYINDEX, j->ref);
+	}
+	free(jobs);
+}

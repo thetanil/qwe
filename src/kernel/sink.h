@@ -6,7 +6,7 @@
 #include <stddef.h>
 
 struct qwe_sink {
-	const char *job;
+	const char *job; /* borrowed, not copied: it is the job's id, which must outlive the sink */
 	int log_fd;
 	int term_fd;
 	char *line; /* the terminal's unfinished line */
