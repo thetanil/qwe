@@ -2,6 +2,8 @@
 #ifndef QWE_KERNEL_QWE_H
 #define QWE_KERNEL_QWE_H
 
+#include <stddef.h>
+
 #define QWE_VERSION "0.1.0"
 
 /* Exit codes (spec, "Exit codes"). */
@@ -16,6 +18,8 @@ const char *qwe_version_string(void);
 struct qwe_run_options {
 	int debug; /* --debug: the lifecycle trace also records every event */
 	const char *inventory; /* -i: the inventory file, or NULL for inventory.yaml next to the workflow */
+	const char *const *jobs; /* --job: the jobs to run (with what they need), or NULL for all */
+	size_t njobs;
 };
 
 /* Runs the workflow at path to completion; returns the process exit code. */

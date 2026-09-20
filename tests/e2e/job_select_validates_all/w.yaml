@@ -1,0 +1,9 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - run: echo a
+  bad:
+    target: nowhere
+    steps:
+      - run: echo b

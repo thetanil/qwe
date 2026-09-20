@@ -1385,6 +1385,53 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 	return rc;
 }
 
+/* --job: keeps the chosen jobs and everything they need, transitively, and drops
+ * the rest from the list, so they are not run and not in result.json. An id that
+ * names no job is an error. Returns 0, or -1 after printing why. */
+static int select_jobs(struct job *jobs, long *n, const struct qwe_run_options *opts)
+{
+	size_t total = (size_t)*n, i, k, m, kept = 0;
+	char *keep = calloc(total ? total : 1, 1);
+	int changed;
+
+	for (i = 0; i < opts->njobs; i++) {
+		struct job *j = find_job(jobs, total, opts->jobs[i]);
+
+		if (!j) {
+			fprintf(stderr, "qwe run: --job %s: the workflow has no such job\n", opts->jobs[i]);
+			free(keep);
+			return -1;
+		}
+		keep[j - jobs] = 1;
+	}
+	do {
+		changed = 0;
+		for (i = 0; i < total; i++)
+			for (k = 0; keep[i] && k < jobs[i].nneeds; k++) {
+				size_t need = (size_t)(find_job(jobs, total, jobs[i].needs[k]) - jobs);
+
+				if (!keep[need]) {
+					keep[need] = 1;
+					changed = 1;
+				}
+			}
+	} while (changed);
+	for (i = 0; i < total; i++) {
+		if (!keep[i]) {
+			for (m = 0; m < jobs[i].nneeds; m++)
+				free(jobs[i].needs[m]);
+			free(jobs[i].needs);
+			free(jobs[i].id);
+			free(jobs[i].target);
+			continue;
+		}
+		jobs[kept++] = jobs[i];
+	}
+	*n = (long)kept;
+	free(keep);
+	return 0;
+}
+
 int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 {
 	char run_id[64], *dir, *run_dir, *trace_path;
@@ -1404,6 +1451,8 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 		return QWE_EXIT_USAGE;
 	n = qwe_jobs_load(L, path, &jobs);
 	if (n < 0)
+		return QWE_EXIT_USAGE;
+	if (opts && opts->jobs && select_jobs(jobs, &n, opts) < 0)
 		return QWE_EXIT_USAGE;
 
 	/* .qwe/runs/<run-id>/ next to the workflow. */

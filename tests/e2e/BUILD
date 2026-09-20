@@ -221,3 +221,11 @@ e2e_test(name = "secret_not_in_argv")
 e2e_test(name = "ssh_secret_not_in_argv")
 
 e2e_test(name = "secret_outputs_multiple")
+
+e2e_test(name = "job_select_closure")
+
+e2e_test(name = "job_select_multiple")
+
+e2e_test(name = "job_select_unknown")
+
+e2e_test(name = "job_select_validates_all")

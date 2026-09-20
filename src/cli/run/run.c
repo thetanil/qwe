@@ -2,11 +2,12 @@
 #include "src/kernel/qwe.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int usage(void)
 {
-	fprintf(stderr, "usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--debug]\n");
+	fprintf(stderr, "usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]... [--debug]\n");
 	return QWE_EXIT_USAGE;
 }
 
@@ -14,6 +15,8 @@ int qwe_cmd_run(int argc, char **argv)
 {
 	struct qwe_run_options opts = {0};
 	const char *path = NULL;
+	const char **jobs = calloc((size_t)argc, sizeof *jobs);
+	size_t njobs = 0;
 	int i;
 
 	for (i = 1; i < argc; i++) {
@@ -23,6 +26,10 @@ int qwe_cmd_run(int argc, char **argv)
 			if (++i >= argc || opts.inventory)
 				return usage();
 			opts.inventory = argv[i];
+		} else if (strcmp(argv[i], "--job") == 0) {
+			if (++i >= argc)
+				return usage();
+			jobs[njobs++] = argv[i];
 		} else if (argv[i][0] == '-' || path) {
 			return usage(); /* an unknown option, or a second file */
 		} else {
@@ -31,5 +38,7 @@ int qwe_cmd_run(int argc, char **argv)
 	}
 	if (!path)
 		return usage();
+	opts.jobs = njobs ? jobs : NULL;
+	opts.njobs = njobs;
 	return qwe_run_workflow(path, &opts);
 }

@@ -1,0 +1,19 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - run: echo a
+  b:
+    target: local
+    needs: [a]
+    steps:
+      - run: echo b
+  c:
+    target: local
+    needs: [b]
+    steps:
+      - run: echo c
+  d:
+    target: local
+    steps:
+      - run: echo d
