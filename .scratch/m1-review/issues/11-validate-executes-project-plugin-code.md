@@ -1,6 +1,6 @@
 # 11: `qwe validate` executes a project plugin's top level
 
-Status: resolved
+Status: ready-for-human
 Category: bug
 Type: task
 Blocked by: none
@@ -47,11 +47,7 @@ whether to make it true instead.
 
 ## Acceptance criteria
 
-- [x] The decision is recorded in `CONTEXT.md` ("Trust boundary") and an ADR if the format changes.
-- [x] If validation stops executing plugin code: `tests/e2e/validate_runs_plugin_top_level/` is replaced by a case asserting the side effect does **not** happen, and `qwe validate` says nothing about it in its output.
+- [ ] The decision is recorded in `CONTEXT.md` ("Trust boundary") and an ADR if the format changes.
+- [ ] If validation stops executing plugin code: `tests/e2e/validate_runs_plugin_top_level/` is replaced by a case asserting the side effect does **not** happen, and `qwe validate` says nothing about it in its output.
 
 ## Comments
-
-Resolved 2026-09-20, by the second option, on the operator's decision that validate must not run plugin code.
-
-`schema.json` gains a required `kind` (`check-apply` | `argv`). `plugincheck.check` now does luacheck, compile-only `loadstring`, and the schema/kind check; nothing is executed. The contract check moved to `plugins.run_step`, which checks the loaded module against its kind before use and fails the step with `plugin-error` (`plugins.contract_problem`). Built-in plugins declare a kind too, and `lint_test` uses `plugincheck.check_builtin`, which does load them (our own code) and checks the contract there. Cases: `validate_runs_plugin_top_level` became `validate_runs_no_plugin_code` (no file is written by validate); `plugin_contract_missing_apply` is now a `run` case (validate passes, the step fails `plugin-error`); new `plugin_kind_required`. All 14 project-plugin fixtures gained `"kind": "check-apply"`. Cost accepted: a plugin missing `apply` is found at run time, not in `validate`.

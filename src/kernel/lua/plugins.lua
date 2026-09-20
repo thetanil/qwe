@@ -23,18 +23,7 @@ function M.decode_schema(text)
   return assert(json.decode(text, 1, cbor.null, cbor.map_mt, cbor.array_mt))
 end
 
--- The contract a plugin's schema.json declares as its kind, against its module: nil
--- when it holds, else what is wrong.
-function M.contract_problem(kind, mod)
-  if type(mod) ~= "table" then return "the plugin must return a table" end
-  if kind == "argv" then
-    if type(mod.argv) ~= "function" then return "the plugin declares kind argv but does not export an argv function" end
-  elseif type(mod.check) ~= "function" or type(mod.apply) ~= "function" then
-    return "the plugin declares kind check-apply but does not export check and apply functions"
-  end
-end
-
--- Every built-in plugin: { name, uses, builtin, source, kind, schema (its with:
+-- Every built-in plugin: { name, uses, builtin, source, schema (its with:
 -- schema), outputs }.
 function M.builtin_all()
   local list = {}
@@ -45,7 +34,6 @@ function M.builtin_all()
       uses = b.uses,
       builtin = true,
       source = "built-in",
-      kind = doc.kind,
       schema = doc.with,
       outputs = doc.outputs,
     }
@@ -108,7 +96,6 @@ local function load_project(name, path)
     uses = true,
     project = true,
     source = path,
-    kind = doc.kind,
     schema = doc.with,
     outputs = doc.outputs,
     lua_path = lua_path,
@@ -193,9 +180,6 @@ function M.run_step(step)
   local with = step.uses and (step["with"] or cbor.map({})) or { run = step.run }
   local ok, argv, result = pcall(function()
     local mod = open(plugin)
-    -- what validation could not check without running the plugin
-    local broken = M.contract_problem(plugin.kind, mod)
-    if broken then error(broken, 0) end
     local remote = step.__qwe
     local ctx = {
       backend = remote and require("backend.ssh").for_target(remote.target, step.env, step.become)

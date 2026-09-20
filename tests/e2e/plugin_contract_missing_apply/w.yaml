@@ -2,4 +2,4 @@ jobs:
   j:
     target: local
     steps:
-      - uses: half
+      - run: echo hi

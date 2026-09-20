@@ -38,9 +38,7 @@ local function line_col(text, pos)
   return line, col
 end
 
--- A schema.json is { "kind": "check-apply" | "argv", "with": <schema>,
--- "outputs": { name: <schema with "secret": bool> } }. The kind says which
--- functions the plugin exports, so that it can be checked without running it.
+-- A schema.json is { "with": <schema>, "outputs": { name: <schema with "secret": bool> } }.
 local function check_schema_file(path, text, problems)
   local function add(message) problems[#problems + 1] = { where = path, message = message } end
   local doc, pos, err = require("dkjson").decode(text, 1, cbor.null, cbor.map_mt, cbor.array_mt)
@@ -55,14 +53,10 @@ local function check_schema_file(path, text, problems)
   end
   local ok = true
   for key in pairs(doc) do
-    if key ~= "kind" and key ~= "with" and key ~= "outputs" then
-      add('at /' .. key .. ': unknown key "' .. key .. '" (only kind, with and outputs)')
+    if key ~= "with" and key ~= "outputs" then
+      add('at /' .. key .. ': unknown key "' .. key .. '" (only with and outputs)')
       ok = false
     end
-  end
-  if doc.kind ~= "check-apply" and doc.kind ~= "argv" then
-    add('at /kind: required, "check-apply" (the plugin exports check and apply) or "argv" (a run-like plugin, which exports argv)')
-    ok = false
   end
   if type(doc.with) ~= "table" or getmetatable(doc.with) ~= cbor.map_mt then
     add("at /with: a with: schema (a JSON object) is required")
@@ -97,9 +91,7 @@ local function check_schema_file(path, text, problems)
   return doc
 end
 
--- Reads plugin.lua: luacheck, then compile. Compiling runs nothing. With run set (built-in
--- plugins only, which are our own code) the chunk is also executed, for its module.
-local function check_lua(name, path, src, problems, run)
+local function check_lua(name, path, src, problems)
   local luacheck = require("luacheck")
   local report = luacheck.check_strings({ src }, { std = "luajit", max_line_length = false })
   local file = report[1]
@@ -123,7 +115,6 @@ local function check_lua(name, path, src, problems, run)
     problems[#problems + 1] = { where = path, message = "cannot load: " .. tostring(err) }
     return nil
   end
-  if not run then return true end
   local ok, mod = pcall(strict.run, name, chunk)
   if not ok then
     problems[#problems + 1] = { where = path, message = "cannot load: " .. tostring(mod) }
@@ -132,38 +123,36 @@ local function check_lua(name, path, src, problems, run)
   return mod
 end
 
--- The contract for a built-in plugin, whose module is loaded to check it.
-local function check_contract(path, kind, mod, problems)
-  local why = plugins.contract_problem(kind, mod)
-  if why then problems[#problems + 1] = { where = path, message = why } end
+-- The contract: the module is a table exporting check and apply, or argv (a
+-- run-like plugin, whose step is the command it returns).
+local function check_contract(path, mod, problems)
+  if type(mod) ~= "table" then
+    problems[#problems + 1] = { where = path, message = "the plugin must return a table" }
+  elseif type(mod.argv) == "function" then
+    return
+  elseif type(mod.check) ~= "function" or type(mod.apply) ~= "function" then
+    problems[#problems + 1] = {
+      where = path,
+      message = "the plugin must export check and apply functions, or argv (a run-like plugin)",
+    }
+  end
 end
 
--- Checks one project plugin without running any of it: schema.json (with its kind),
--- luacheck, and that plugin.lua compiles. `lua_src` and `schema_text` are the file
--- contents; the paths are only for messages. Returns a list of { where, message },
--- empty when the plugin passes, and the decoded schema.json when it parsed. Whether
--- the module really exports what its kind says is checked when a step uses it
--- (plugins.run_step): that takes running it, which validation never does.
+-- Checks one plugin. `lua_src` and `schema_text` are the file contents; the
+-- paths are only for messages. Returns a list of { where, message }, empty when
+-- the plugin passes, and the decoded schema.json when it parsed.
 function M.check(name, lua_path, lua_src, schema_path, schema_text)
   local problems = {}
   local schema_doc = check_schema_file(schema_path, schema_text, problems)
-  check_lua(name, lua_path, lua_src, problems)
-  return problems, schema_doc
-end
-
--- The same for a built-in plugin, and it also loads the module to check its contract.
-function M.check_builtin(name, lua_path, lua_src, schema_path, schema_text)
-  local problems = {}
-  local schema_doc = check_schema_file(schema_path, schema_text, problems)
-  local mod = check_lua(name, lua_path, lua_src, problems, true)
-  if mod ~= nil and schema_doc then check_contract(lua_path, schema_doc.kind, mod, problems) end
+  local mod = check_lua(name, lua_path, lua_src, problems)
+  if mod ~= nil then check_contract(lua_path, mod, problems) end
   return problems, schema_doc
 end
 
 -- luacheck only, for built-in Lua that is not a step plugin (a backend).
 function M.check_lua_only(name, lua_path, lua_src)
   local problems = {}
-  check_lua(name, lua_path, lua_src, problems, true)
+  check_lua(name, lua_path, lua_src, problems)
   return problems
 end
 
