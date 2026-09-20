@@ -3,5 +3,5 @@ jobs:
     target: self
     steps:
       - run: hostname
-      - run: pkill -STOP -f '[s]sh -M -N -f -S xdgwedge/qwe/'; touch started; sleep 30
+      - run: pkill -STOP -f '[s]sh -M -N -f -S /tmp/qwe-e2e-wedge/'; touch started; sleep 30
         on: local

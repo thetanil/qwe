@@ -1,5 +1,7 @@
 #!/bin/sh
-# Logs every ssh call, then runs the real one.
+# Logs every ssh call, then runs the real one. Starting a master takes 1 s here, so
+# when it happens shows in the trace: before the first job event or after it.
 echo "$*" >> ssh.calls
+case "$1" in -M) sleep 1 ;; esac
 PATH=${PATH#*:}
 exec ssh "$@"

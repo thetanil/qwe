@@ -1,2 +1,2 @@
-qwe run: job j: target self: the socket directory xdgrefused/qwe has mode 0777: it must not be accessible by group or others (chmod 700)
+qwe run: job j: target self: the socket directory /tmp/qwe-e2e-refused has mode 0777: it must not be accessible by group or others (chmod 700)
 qwe run: cannot start a step of job j: ssh-master failed: Connection refused

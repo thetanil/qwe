@@ -224,3 +224,5 @@ Resolved 2026-09-20.
 - The two unreachable cases each take ~10 s (the bound) and use the TEST-NET address 192.0.2.1; they need a network that drops rather than rejects it.
 
 Follow-up 2026-09-20: one full-suite run failed two tests and could not be reproduced. The likely cause was shared patterns between concurrently running ssh cases (`pkill -f 'ssh -M … xdg/qwe/'` in the wedged case reaches other cases' masters, and two cases waited on `sleep 27182`), so each ssh case that pattern-matches processes now has its own socket-directory name and sleep number. Full runs since were green.
+
+Follow-up 2026-09-20: `ssh_preconnect_runs_first` now proves connect-before-first-event. The shim makes `-M` take 1 s and `check.sh` requires the first trace event at ≥0.9 s (the trace clock starts before pre-connect); with `preconnect()` disabled it fails at 0.000012 s. `ProxyCommand=false` only stops a *step's* ssh from connecting; the parent's `remote_ensure` reconnect (ssh_connection_lost) is a deliberate lazy path, so "impossible" is proven by timing, not by flags.

@@ -84,6 +84,8 @@ run_qwe() {
 	fi
 	exec "$qwe" "$@"
 }
+# a case never inherits the runner's XDG_RUNTIME_DIR: its owner and mode differ per machine
+unset XDG_RUNTIME_DIR
 if [ -f "$case_dir/env" ]; then
 	while IFS= read -r line; do [ -n "$line" ] && export "$line"; done < "$case_dir/env"
 fi

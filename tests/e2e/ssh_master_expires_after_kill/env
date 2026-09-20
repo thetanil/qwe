@@ -1,2 +1,2 @@
-XDG_RUNTIME_DIR=xdgkill
+QWE_TEST_SOCKET_DIR=/tmp/qwe-e2e-kill
 QWE_TEST_MASTER_TTL=2

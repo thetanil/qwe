@@ -4,3 +4,8 @@ masters=$(grep -c '^-M ' ssh.calls)
 first_step=$(grep -n 'ControlMaster=no' ssh.calls | head -1 | cut -d: -f1)
 last_master=$(grep -n '^-M ' ssh.calls | tail -1 | cut -d: -f1)
 [ -n "$first_step" ] && [ "$last_master" -lt "$first_step" ] || { echo "a master started after a step began" >&2; cat ssh.calls >&2; exit 1; }
+# The trace clock starts before pre-connect, and no job event can precede it. A lazy
+# connect would start the master after the first job event, at about 0 s; connecting
+# up front puts the first event after the master's 1 s.
+first=$(head -1 lifecycle.raw | cut -d' ' -f1)
+awk -v t="$first" 'BEGIN {exit !(t >= 0.9)}' || { echo "first job event at $first s: the master was not started before it" >&2; exit 1; }

@@ -200,13 +200,16 @@ function M.ensure(name, host, connect_timeout)
   local m = masters[name]
   if not m then
     m = { host = host, name = name }
-    place(m, M.socket_dir(exec.getuid(), os.getenv("XDG_RUNTIME_DIR")))
+    -- QWE_TEST_SOCKET_DIR pins the directory for tests, so none depends on the
+    -- environment's XDG_RUNTIME_DIR (whose owner and mode vary by machine)
+    m.pinned = os.getenv("QWE_TEST_SOCKET_DIR")
+    place(m, m.pinned or M.socket_dir(exec.getuid(), os.getenv("XDG_RUNTIME_DIR")))
     masters[name] = m
   end
   -- Checked before anything is asked of a socket in it, every time: whoever owns
   -- the directory owns what the step's commands and secrets are sent to.
   local ok, problem, kind = fs.private_dir(m.dir, "the socket directory")
-  if not ok and kind == "create" and m.dir ~= M.socket_dir(exec.getuid(), nil) then
+  if not ok and kind == "create" and not m.pinned and m.dir ~= M.socket_dir(exec.getuid(), nil) then
     -- $XDG_RUNTIME_DIR names a directory this user cannot write to (a container, su):
     -- /tmp, which is checked just the same, rather than a step that cannot run
     place(m, M.socket_dir(exec.getuid(), nil))

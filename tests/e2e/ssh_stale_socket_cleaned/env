@@ -1,2 +1,2 @@
-XDG_RUNTIME_DIR=xdgstale
+QWE_TEST_SOCKET_DIR=/tmp/qwe-e2e-stale
 QWE_TEST_MASTER_TTL=2

@@ -1,5 +1,0 @@
-jobs:
-  j:
-    target: self
-    steps:
-      - run: hostname
