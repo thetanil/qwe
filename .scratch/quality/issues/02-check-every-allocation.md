@@ -1,7 +1,7 @@
 # 02: Check every allocation, and fail cleanly when one fails
 
 Status: ready-for-agent
-Category: chore
+Category: enhancement
 Type: task
 Blocked by: none
 

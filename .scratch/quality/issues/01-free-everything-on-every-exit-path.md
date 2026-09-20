@@ -1,7 +1,7 @@
 # 01: Free everything, on every exit path
 
 Status: ready-for-agent
-Category: chore
+Category: enhancement
 Type: task
 Blocked by: none
 

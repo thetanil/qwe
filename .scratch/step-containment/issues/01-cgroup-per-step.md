@@ -1,6 +1,7 @@
 # 01: Contain each step in its own cgroup
 
 Status: needs-triage
+Category: bug
 Type: task
 Blocked by: m1-engine/19
 

@@ -1,7 +1,7 @@
 # 09: Write down that a workflow directory is trusted code
 
 Status: ready-for-agent
-Category: docs
+Category: enhancement
 Type: task
 Blocked by: none
 

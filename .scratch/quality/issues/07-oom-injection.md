@@ -1,7 +1,7 @@
 # 07: An OOM-injection harness
 
 Status: ready-for-agent
-Category: chore
+Category: enhancement
 Type: task
 Blocked by: 02
 

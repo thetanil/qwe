@@ -181,7 +181,7 @@ The kernel assembles the overall contract from the kernel's own workflow structu
 
 > **Superseded in part by ADR-0010.** The job lifecycle is one flat table (with the step phase part of the job state). Where this section differs from ADR-0010, the ADR wins. In particular, `terminating` becomes the `settling-cancel-*` states.
 
-The kernel's real job is managing state transitions at two levels: jobs in the graph, and steps inside a running job. Every finished job and step has an **outcome** (`success | failed | skipped | cancelled`) and a **reason** recorded next to it. There are no other terminal states, and "why" is always carried by the reason (for example `timeout`, `cancel-requested`, `dependency-failed`, `exit-code`, `not-converged`, `connection-lost`, `become-denied`, `plugin-error`).
+The kernel's real job is managing state transitions at two levels: jobs in the graph, and steps inside a running job. Every finished job and step has an **outcome** (`success | failed | skipped | cancelled`) and a **reason** recorded next to it. There are no other terminal states, and "why" is always carried by the reason (for example `timeout`, `cancel-requested`, `dependency-failed`, `exit-code`, `not-converged`, `unreachable`, `connection-lost`, `become-denied`, `plugin-error`).
 
 ### 7.1 Job states
 

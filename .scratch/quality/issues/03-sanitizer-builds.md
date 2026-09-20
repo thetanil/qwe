@@ -1,7 +1,7 @@
 # 03: Sanitizer builds for ASan, UBSan and MSan
 
 Status: ready-for-agent
-Category: chore
+Category: enhancement
 Type: task
 Blocked by: none
 

@@ -1,7 +1,7 @@
 # 04: A valgrind gate over the unit tests and a chosen set of e2e cases
 
 Status: ready-for-agent
-Category: chore
+Category: enhancement
 Type: task
 Blocked by: 01
 

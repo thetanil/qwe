@@ -29,6 +29,7 @@ The kernel starts every process itself, through fork/exec, the process group, pi
 ### I.2 Connection is a service; output rides the existing path
 
 - **The connection is owned by the ssh service plugin, in the parent process only.** It starts a ControlMaster per target before the kernel forks that target's first step, health-checks it with `ssh -O check`, and closes it with `ssh -O exit` when the workflow run ends. Masters are keyed by destination and options.
+- **Every master is opened before the first job starts**, one per distinct target the selected jobs use, and never while a job or step timer is armed. The parent blocks on a connect, so doing it inside the event loop makes one slow host delay every other job's timeout — measured at 10 s, against a step that asked for 1 s. Connecting up front keeps the timeout guarantee exact (§I.5) and costs about 306 ms per target, paid before any timer exists. A target that cannot be reached fails its own jobs with reason `unreachable`; the rest of the run proceeds.
 - **Only the parent ever creates a master.** A forked step inherits the control socket *path* and only ever runs `ssh -S <sock> -o ControlMaster=no`. A master a child opened itself could be neither seen nor closed by the parent. So what a step receives is the connection's *address*, not a connection object.
 - **The master lives outside every step's process group**, in its own session. Otherwise cancelling a step (`kill -pgid`) would kill the connection the next step needs.
 - **The ControlPath is short and per run** (`/tmp/qwe-<uid>/<qwe pid>.%C`), because Unix socket paths are limited to about 108 bytes, and test and sandbox temp directories are often longer than that.
@@ -63,13 +64,23 @@ The "cached connection" is the control socket; the "channel" between the connect
 
 ### I.5 Cancellation & timeouts over SSH
 
+**Timing guarantee.** A step or job timeout fires within **100 ms** of its deadline, whatever else the run is doing. The event loop itself is far better than that — a 1.000 s timeout was measured firing at 0.996 s, unmoved by 40 MB of concurrent output — so the budget exists to bound the parent's ssh work, not the loop. It holds because masters are opened before any timer is armed (§I.2), the remote kill is fire-and-forget, and every remaining parent-side ssh call is bounded. **The one exception** is a mid-run reconnect after a master dies: that blocks for up to 3 s, so other jobs' timers may be late by that much on that error path, and no other.
+
 Cancellation uses the existing teardown: the local `ssh -S` client is signalled with the step's process group (§9.3). That alone is not enough: sshd tells a command run without a tty nothing when its channel closes, so the remote processes would keep running. So every remote step carries `QWE_STEP=<token>` in its environment (children inherit it), and on TERM or KILL the parent also runs a short `sh` over the master that signals every process whose `/proc/<pid>/environ` has that token. It needs `/proc`, `tr` and `grep` on the target. A process that escapes by scrubbing its environment is not found: the remote counterpart of the §9.3 known gap. Steps use `-o ProxyCommand=false`, so a client whose master died fails (`connection-lost`) instead of opening a connection of its own. Step timeouts, job timeouts and operator cancel use the same teardown path as any local step (§7.3, §9).
 
 If the master dies partway through a step, that step's `ssh -S` fails, and the step is `failed` with reason `connection-lost`. The parent re-establishes the master before the next step. **No step is ever retried automatically**, because it might not be idempotent.
 
 **What counts as a lost connection** is two facts together: the local client exited **255**, ssh's own error status, *and* `ssh -O check` finds no master. Exit 255 alone is not enough, because a remote command is free to exit 255 itself; asking the master settles which it was. This applies to `run:` steps. A plugin step that loses its connection fails as `plugin-error`, because the plugin is what saw the failure and the engine has only its result to go on.
 
-**If the master cannot be started at all** — the host is unreachable, the key is refused, `ConnectTimeout` expires — the step fails on the start-failed path with reason `engine-error`, and ssh's own message goes to the job's log. It is not `connection-lost`: nothing was connected to lose.
+**If the master cannot be started at all** — the host is unreachable, the key is refused, `ConnectTimeout` expires — the step fails with reason **`unreachable`**, and ssh's own message goes to the job's log. It is not `connection-lost`: nothing was connected to lose. Nor is it `engine-error`, which is reserved for faults in qwe itself (a failed `fork`, a log or timer it could not open). A host being down is a fact about the world, and a lab tool has to report it as one.
+
+The three cases read differently on purpose:
+
+| Situation | Reason |
+|---|---|
+| Never reached it: the master could not be started | `unreachable` |
+| Was connected, the master died under a running step | `connection-lost` |
+| Was connected, the master died, the bounded reconnect then failed | `unreachable` |
 
 ### I.6 Deferred: in-process SSH (libssh2)
 
