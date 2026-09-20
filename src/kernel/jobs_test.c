@@ -10,6 +10,15 @@
 void *__real_calloc(size_t a, size_t b);
 char *__real_strdup(const char *s);
 void __real_free(void *p);
+void *__real_realloc(void *p, size_t n);
+
+/* Allocation number fail_at (1-based, over calloc, strdup and realloc) returns NULL; 0 = never. */
+static int fail_at, calls;
+
+static int should_fail(void)
+{
+	return fail_at && ++calls == fail_at;
+}
 
 #define MAX_TRACKED 256
 static void *tracked[MAX_TRACKED];
@@ -29,7 +38,7 @@ static void track(void *p)
 
 void *__wrap_calloc(size_t a, size_t b)
 {
-	void *p = __real_calloc(a, b);
+	void *p = should_fail() ? NULL : __real_calloc(a, b);
 
 	track(p);
 	return p;
@@ -37,10 +46,15 @@ void *__wrap_calloc(size_t a, size_t b)
 
 char *__wrap_strdup(const char *s)
 {
-	char *p = __real_strdup(s);
+	char *p = should_fail() ? NULL : __real_strdup(s);
 
 	track(p);
 	return p;
+}
+
+void *__wrap_realloc(void *p, size_t n)
+{
+	return should_fail() ? NULL : __real_realloc(p, n);
 }
 
 void __wrap_free(void *p)
@@ -149,8 +163,36 @@ TEST jobs_free_handles_partial_load(void)
 	PASS();
 }
 
+TEST jobs_load_fails_cleanly_when_any_allocation_fails(void)
+{
+	int at;
+
+	for (at = 1; at < 64; at++) {
+		lua_State *L = luaL_newstate();
+		struct job *jobs = NULL;
+		long n;
+
+		fail_at = at;
+		calls = 0;
+		n = load_two_jobs(L, &jobs);
+		fail_at = 0;
+		if (n >= 0) { /* past the last allocation: the load succeeded */
+			ASSERT(at > 3);
+			qwe_jobs_free(L, jobs, (size_t)n);
+			lua_close(L);
+			break;
+		}
+		ASSERT_EQ_FMT(-1L, n, "%ld");
+		ASSERT_EQ_FMT(0, live, "%d"); /* nothing left behind, at = */
+		lua_close(L);
+	}
+	ASSERT(at < 64);
+	PASS();
+}
+
 SUITE(jobs)
 {
+	RUN_TEST(jobs_load_fails_cleanly_when_any_allocation_fails);
 	RUN_TEST(jobs_free_handles_partial_load);
 	RUN_TEST(jobs_free_releases_everything);
 	RUN_TEST(timeout_conversion_is_total);

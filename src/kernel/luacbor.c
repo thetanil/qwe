@@ -265,6 +265,11 @@ static int encode_table(lua_State *L, int idx, CborEncoder *enc, int depth, cons
 		const char **keys = malloc(cap * sizeof *keys);
 		int r2 = 0;
 
+		if (!keys) {
+			*err = "out of memory";
+			return -1;
+		}
+
 		lua_pushnil(L);
 		while (lua_next(L, idx)) {
 			lua_pop(L, 1); /* the value; the key stays for lua_next */
@@ -274,8 +279,18 @@ static int encode_table(lua_State *L, int idx, CborEncoder *enc, int depth, cons
 				*err = "map key is not a string";
 				return -1;
 			}
-			if (n == cap)
-				keys = realloc(keys, (cap *= 2) * sizeof *keys);
+			if (n == cap) {
+				const char **grown = realloc(keys, (cap * 2) * sizeof *keys);
+
+				if (!grown) {
+					lua_pop(L, 1);
+					free(keys);
+					*err = "out of memory";
+					return -1;
+				}
+				keys = grown;
+				cap *= 2;
+			}
 			keys[n++] = lua_tostring(L, -1);
 		}
 		qsort(keys, n, sizeof *keys, key_cmp);

@@ -19,6 +19,11 @@ int qwe_cmd_run(int argc, char **argv)
 	size_t njobs = 0;
 	int i, rc;
 
+	if (!jobs) {
+		fprintf(stderr, "qwe run: out of memory\n");
+		return QWE_EXIT_USAGE;
+	}
+
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--debug") == 0) {
 			opts.debug = 1;

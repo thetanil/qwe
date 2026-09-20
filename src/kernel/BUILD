@@ -18,6 +18,7 @@ cc_library(
         "validate.h",
     ],
     deps = [
+        ":alloc",
         ":dag",
         ":lifecycle",
         ":redact",
@@ -86,6 +87,7 @@ cc_library(
     name = "redact",
     srcs = ["redact.c"],
     hdrs = ["redact.h"],
+    deps = [":alloc"],
 )
 
 cc_test(
@@ -102,6 +104,7 @@ cc_library(
     name = "sink",
     srcs = ["sink.c"],
     hdrs = ["sink.h"],
+    deps = [":alloc"],
 )
 
 cc_library(
@@ -277,12 +280,63 @@ cc_test(
     linkopts = [
         "-Wl,--wrap=calloc",
         "-Wl,--wrap=strdup",
+        "-Wl,--wrap=realloc",
         "-Wl,--wrap=free",
     ],
     deps = [
         ":kernel",
         "//third_party/greatest",
         "//third_party/luajit",
+    ],
+)
+
+cc_library(
+    name = "alloc",
+    srcs = ["alloc.c"],
+    hdrs = ["alloc.h"],
+)
+
+cc_test(
+    name = "alloc_test",
+    size = "small",
+    srcs = ["alloc_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    linkopts = ["-Wl,--wrap=malloc"],
+    deps = [
+        ":alloc",
+        "//third_party/greatest",
+    ],
+)
+
+# Fails every allocation on the load path in turn (ticket quality/02).
+cc_test(
+    name = "load_oom_test",
+    size = "small",
+    srcs = ["load_oom_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    linkopts = [
+        "-Wl,--wrap=malloc",
+        "-Wl,--wrap=calloc",
+        "-Wl,--wrap=realloc",
+        "-Wl,--wrap=strdup",
+        "-Wl,--wrap=strndup",
+    ],
+    deps = [
+        ":kernel",
+        "//third_party/greatest",
+    ],
+)
+
+# Fails allocation in the forked step child (ticket quality/02).
+cc_test(
+    name = "workflow_test",
+    size = "small",
+    srcs = ["workflow_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    linkopts = ["-Wl,--wrap=calloc"],
+    deps = [
+        ":kernel",
+        "//third_party/greatest",
     ],
 )
 

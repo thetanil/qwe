@@ -32,9 +32,18 @@ static int fs_list(lua_State *L)
 	while ((e = readdir(d))) {
 		if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0)
 			continue;
-		if (n == cap)
-			names = realloc(names, (cap = cap ? cap * 2 : 16) * sizeof *names);
-		names[n++] = strdup(e->d_name);
+		if (n == cap) {
+			char **grown = realloc(names, (cap ? cap * 2 : 16) * sizeof *names);
+
+			if (!grown)
+				goto nomem;
+			names = grown;
+			cap = cap ? cap * 2 : 16;
+		}
+		names[n] = strdup(e->d_name);
+		if (!names[n])
+			goto nomem;
+		n++;
 	}
 	closedir(d);
 	if (n > 1) /* qsort of a null array is undefined, even for zero elements */
@@ -47,6 +56,14 @@ static int fs_list(lua_State *L)
 	}
 	free(names);
 	return 1;
+nomem:
+	closedir(d);
+	while (n-- > 0)
+		free(names[n]);
+	free(names);
+	lua_pushnil(L);
+	lua_pushstring(L, strerror(ENOMEM));
+	return 2;
 }
 
 static int fs_isdir(lua_State *L)

@@ -16,26 +16,46 @@ struct problem {
 struct problems {
 	struct problem *v;
 	size_t n, cap;
+	int oom; /* something could not be recorded or checked for want of memory */
 };
 
 static void add(struct problems *ps, struct qwe_pos pos, const char *message)
 {
+	char *copy;
+
 	if (ps->n == ps->cap) {
-		ps->cap = ps->cap ? ps->cap * 2 : 16;
-		ps->v = realloc(ps->v, ps->cap * sizeof *ps->v);
+		size_t cap = ps->cap ? ps->cap * 2 : 16;
+		struct problem *grown = realloc(ps->v, cap * sizeof *ps->v);
+
+		if (!grown) {
+			ps->oom = 1;
+			return;
+		}
+		ps->v = grown;
+		ps->cap = cap;
+	}
+	copy = strdup(message);
+	if (!copy) {
+		ps->oom = 1;
+		return;
 	}
 	ps->v[ps->n].pos = pos;
-	ps->v[ps->n].message = strdup(message);
+	ps->v[ps->n].message = copy;
 	ps->n++;
 }
 
 /* Finds the position an error should be reported at. A pointer with no entry
  * of its own (for example a missing key) falls back to its nearest ancestor. */
-static struct qwe_pos locate(const struct qwe_positions *pos, const char *pointer, int want_key)
+static struct qwe_pos locate(const struct qwe_positions *pos, const char *pointer, int want_key, struct problems *ps)
 {
 	char *p = strdup(pointer);
 	struct qwe_pos out = {1, 1};
 	int first = 1;
+
+	if (!p) {
+		ps->oom = 1;
+		return out;
+	}
 
 	for (;;) {
 		char *slash;
@@ -55,6 +75,9 @@ static struct qwe_pos locate(const struct qwe_positions *pos, const char *pointe
 static char *escape_token(const char *s)
 {
 	char *out = malloc(strlen(s) * 2 + 1), *o = out;
+
+	if (!out)
+		return NULL;
 
 	for (; *s; s++) {
 		if (*s == '~') {
@@ -87,73 +110,102 @@ static int cmp_problem(const void *a, const void *b)
 	return strcmp(x->message, y->message);
 }
 
-/* Runs the needs: graph checks on doc (at stack index doc). */
+/* Runs the needs: graph checks on doc (at stack index doc). A failure to
+ * allocate is recorded in ps->oom, and the check is not run. */
 static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, struct problems *ps)
 {
 	char **ids = NULL;
-	struct qwe_dag_job *jobs;
+	struct qwe_dag_job *jobs = NULL;
 	size_t n = 0, cap = 0, i, k;
 	struct qwe_dag_error err;
 	enum qwe_dag_status st;
+	int base = lua_gettop(L);
+	char *tok = NULL, *ptr = NULL;
 
 	lua_getfield(L, doc, "jobs");
 	lua_pushnil(L);
 	while (lua_next(L, -2)) {
 		lua_pop(L, 1);
-		if (n == cap)
-			ids = realloc(ids, (cap = cap ? cap * 2 : 8) * sizeof *ids);
-		ids[n++] = strdup(lua_tostring(L, -1));
+		if (n == cap) {
+			size_t ncap = cap ? cap * 2 : 8;
+			char **grown = realloc(ids, ncap * sizeof *ids);
+
+			if (!grown)
+				goto nomem;
+			ids = grown;
+			cap = ncap;
+		}
+		ids[n] = strdup(lua_tostring(L, -1));
+		if (!ids[n])
+			goto nomem;
+		n++;
 	}
 	qsort(ids, n, sizeof *ids, cmp_str);
 
 	jobs = calloc(n ? n : 1, sizeof *jobs);
+	if (!jobs)
+		goto nomem;
 	for (i = 0; i < n; i++) {
 		size_t nn = 0;
 		const char **needs = NULL;
 
+		jobs[i].id = ids[i];
 		lua_getfield(L, -1, ids[i]);
 		lua_getfield(L, -1, "needs");
 		if (lua_istable(L, -1)) {
 			nn = lua_objlen(L, -1);
 			needs = calloc(nn ? nn : 1, sizeof *needs);
+			if (!needs)
+				goto nomem;
+			jobs[i].needs = needs;
+			jobs[i].nneeds = nn;
 			for (k = 0; k < nn; k++) {
 				lua_rawgeti(L, -1, (int)k + 1);
 				needs[k] = strdup(lua_tostring(L, -1));
+				if (!needs[k])
+					goto nomem;
 				lua_pop(L, 1);
 			}
 		}
 		lua_pop(L, 2);
-		jobs[i].id = ids[i];
-		jobs[i].needs = needs;
-		jobs[i].nneeds = nn;
 	}
 	lua_pop(L, 1); /* jobs */
 
 	st = qwe_dag_check(jobs, n, &err);
 	if (st != QWE_DAG_OK) {
 		/* a check that could not run is an error too, reported at the jobs it covers */
-		char *tok = st == QWE_DAG_NO_MEMORY ? strdup("") : escape_token(jobs[err.job].id);
-		char *ptr = malloc(strlen(tok) + 64);
-
+		tok = st == QWE_DAG_NO_MEMORY ? strdup("") : escape_token(jobs[err.job].id);
+		if (!tok)
+			goto nomem;
+		ptr = malloc(strlen(tok) + 64);
+		if (!ptr)
+			goto nomem;
 		if (st == QWE_DAG_NO_MEMORY)
 			sprintf(ptr, "/jobs");
 		else if (st == QWE_DAG_UNKNOWN_NEED)
 			sprintf(ptr, "/jobs/%s/needs/%lu", tok, (unsigned long)err.need);
 		else
 			sprintf(ptr, "/jobs/%s", tok);
-		add(ps, locate(pos, ptr, st == QWE_DAG_CYCLE), err.message);
-		free(tok);
-		free(ptr);
+		add(ps, locate(pos, ptr, st == QWE_DAG_CYCLE, ps), err.message);
 	}
-	for (i = 0; i < n; i++) {
+	goto out;
+nomem:
+	ps->oom = 1;
+out:
+	lua_settop(L, base);
+	free(tok);
+	free(ptr);
+	for (i = 0; jobs && i < n; i++) {
 		for (k = 0; k < jobs[i].nneeds; k++)
 			free((char *)jobs[i].needs[k]);
 		free((void *)jobs[i].needs);
-		free(ids[i]);
 	}
+	for (i = 0; i < n; i++)
+		free(ids[i]);
 	free(jobs);
 	free(ids);
 }
+
 
 /* The directory the workflow is in, "" for the current one. */
 static char *workflow_dir(const char *path)
@@ -194,7 +246,7 @@ static void collect_errors(lua_State *L, int idx, const struct qwe_positions *po
 		pointer = lua_tostring(L, -3);
 		kind = lua_tostring(L, -2);
 		message = lua_tostring(L, -1);
-		add(ps, locate(pos, pointer ? pointer : "", kind && strcmp(kind, "key") == 0),
+		add(ps, locate(pos, pointer ? pointer : "", kind && strcmp(kind, "key") == 0, ps),
 		    message ? message : "invalid");
 		lua_pop(L, 4);
 	}
@@ -208,6 +260,8 @@ static char *last_token(const char *pointer)
 
 	tok = tok ? tok + 1 : pointer;
 	out = malloc(strlen(tok) + 1);
+	if (!out)
+		return NULL;
 	for (o = out; *tok; tok++) {
 		if (*tok == '~' && tok[1] == '1') {
 			*o++ = '/';
@@ -225,7 +279,13 @@ static char *last_token(const char *pointer)
 
 static void add_duplicate(const char *pointer, struct qwe_pos first, struct qwe_pos second, void *ud)
 {
+	struct problems *ps = ud;
 	char *key = last_token(pointer), message[512];
+
+	if (!key) {
+		ps->oom = 1;
+		return;
+	}
 
 	snprintf(message, sizeof message, "duplicate key \"%s\" (first at line %u)", key, first.line);
 	free(key);
@@ -251,6 +311,8 @@ static void print_problems(struct problems *ps, const char *cmd, const char *pat
 		free(ps->v[i].message);
 	}
 	free(ps->v);
+	if (ps->oom)
+		fprintf(stderr, "%s: %s: out of memory while checking the workflow\n", cmd, path);
 }
 
 int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const struct qwe_positions *pos)
@@ -267,6 +329,11 @@ int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const stru
 	lua_getfield(L, -1, "validate_project");
 	lua_pushvalue(L, doc);
 	dir = workflow_dir(path);
+	if (!dir) {
+		fprintf(stderr, "%s: %s: out of memory\n", cmd, path);
+		lua_settop(L, doc);
+		return 1;
+	}
 	lua_pushstring(L, dir);
 	free(dir);
 	if (lua_pcall(L, 2, 2, 0) != 0)
@@ -278,10 +345,10 @@ int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const stru
 	collect_duplicates(pos, &ps);
 	lua_pop(L, 2); /* the list and the module */
 
-	if (ps.n == 0)
+	if (ps.n == 0 && !ps.oom)
 		check_dag(L, doc, pos, &ps);
 
-	n = ps.n;
+	n = ps.n + (size_t)ps.oom;
 	print_problems(&ps, cmd, path);
 	return (int)(n + nplugin);
 
@@ -308,7 +375,7 @@ int qwe_validate_inventory(lua_State *L, const char *cmd, const char *path, cons
 	collect_errors(L, lua_gettop(L), pos, &ps);
 	collect_duplicates(pos, &ps);
 	lua_pop(L, 2); /* the list and the module */
-	n = ps.n;
+	n = ps.n + (size_t)ps.oom;
 	print_problems(&ps, cmd, path);
 	return (int)n;
 

@@ -83,6 +83,12 @@ static int exec_run(lua_State *L)
 		lua_rawgeti(L, 1, (int)i + 1);
 		argv[i] = strdup(luaL_checkstring(L, -1));
 		lua_pop(L, 1);
+		if (!argv[i]) {
+			while (i-- > 0)
+				free(argv[i]);
+			free(argv);
+			return luaL_error(L, "qwe.exec.run: out of memory");
+		}
 	}
 
 	if (pipe2(in_p, O_CLOEXEC) < 0 || pipe2(out_p, O_CLOEXEC) < 0 || pipe2(err_p, O_CLOEXEC) < 0) {
@@ -316,9 +322,20 @@ static int exec_preamble(lua_State *L)
 	lua_pushnil(L);
 	while (lua_next(L, 1)) {
 		if (n == cap) {
+			const char **nn, **nv;
+
 			cap = cap ? cap * 2 : 8;
-			names = realloc(names, cap * sizeof *names);
-			values = realloc(values, cap * sizeof *values);
+			nn = realloc(names, cap * sizeof *names);
+			if (nn)
+				names = nn;
+			nv = realloc(values, cap * sizeof *values);
+			if (nv)
+				values = nv;
+			if (!nn || !nv) {
+				free(names);
+				free(values);
+				return luaL_error(L, "qwe.exec.preamble: out of memory");
+			}
 		}
 		/* the strings stay valid: the table holds them */
 		names[n] = luaL_checkstring(L, -2);

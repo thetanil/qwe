@@ -38,6 +38,11 @@ static int cmp_job(const void *a, const void *b)
 static const char *const unimplemented_job_keys[] = {NULL};
 static const char *const unimplemented_step_keys[] = {NULL};
 
+static void oom(const char *path)
+{
+	fprintf(stderr, "qwe run: %s: out of memory\n", path);
+}
+
 static int refuse(const char *path, const char *what, const char *id, const char *key, const char *why)
 {
 	fprintf(stderr, "qwe run: %s: %s %s: %s: %s\n", path, what, id, key, why);
@@ -51,23 +56,30 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 {
 	struct job *jobs = NULL;
 	size_t n = 0, cap = 0, i, k;
-	int bad = 0;
+	int bad = 0, base = lua_gettop(L);
 
 	lua_getfield(L, -1, "jobs");
 	lua_pushnil(L);
 	while (!bad && lua_next(L, -2)) {
-		if (n == cap)
-			jobs = realloc(jobs, (cap = cap ? cap * 2 : 8) * sizeof *jobs);
+		if (n == cap) {
+			struct job *grown = realloc(jobs, (cap ? cap * 2 : 8) * sizeof *jobs);
+
+			if (!grown)
+				goto nomem;
+			jobs = grown;
+			cap = cap ? cap * 2 : 8;
+		}
 		memset(&jobs[n], 0, sizeof jobs[n]);
 		jobs[n].run.timer.fd = jobs[n].run.step_timer.fd = jobs[n].run.grace_timer.fd = -1;
 		jobs[n].run.proc.out_fd = -1;
 		jobs[n].run.live_step = -1;
 		jobs[n].run.outputs_ref = LUA_NOREF;
-		lua_pushvalue(L, -2);
-		jobs[n].id = strdup(lua_tostring(L, -1));
-		lua_pop(L, 1);
-		jobs[n].ref = luaL_ref(L, LUA_REGISTRYINDEX); /* pops the job table; the key stays */
-		n++;
+		jobs[n].ref = LUA_NOREF;
+		n++; /* counted before it is filled, so a failure below frees it */
+		jobs[n - 1].id = strdup(lua_tostring(L, -2));
+		if (!jobs[n - 1].id)
+			goto nomem;
+		jobs[n - 1].ref = luaL_ref(L, LUA_REGISTRYINDEX); /* pops the job table; the key stays */
 	}
 	lua_pop(L, 1); /* jobs */
 	if (bad) {
@@ -83,6 +95,8 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 		lua_rawgeti(L, LUA_REGISTRYINDEX, j->ref);
 		lua_getfield(L, -1, "target");
 		j->target = strdup(lua_isstring(L, -1) ? lua_tostring(L, -1) : "local");
+		if (!j->target)
+			goto nomem;
 		lua_pop(L, 1);
 		for (k = 0; unimplemented_job_keys[k]; k++) {
 			lua_getfield(L, -1, unimplemented_job_keys[k]);
@@ -93,11 +107,17 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 		j->timeout_ms = qwe_timeout_ms_at(L, -1);
 		lua_getfield(L, -1, "needs");
 		if (lua_istable(L, -1)) {
-			j->nneeds = lua_objlen(L, -1);
-			j->needs = calloc(j->nneeds ? j->nneeds : 1, sizeof *j->needs);
+			size_t nn = lua_objlen(L, -1);
+
+			j->needs = calloc(nn ? nn : 1, sizeof *j->needs);
+			if (!j->needs)
+				goto nomem;
+			j->nneeds = nn;
 			for (k = 0; k < j->nneeds; k++) {
 				lua_rawgeti(L, -1, (int)k + 1);
 				j->needs[k] = strdup(lua_tostring(L, -1));
+				if (!j->needs[k])
+					goto nomem;
 				lua_pop(L, 1);
 			}
 		}
@@ -130,6 +150,12 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 	}
 	*out = jobs;
 	return (long)n;
+
+nomem:
+	oom(path);
+	lua_settop(L, base);
+	qwe_jobs_free(L, jobs, n);
+	return -1;
 }
 
 

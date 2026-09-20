@@ -370,6 +370,10 @@ static int encode(const char *yaml, size_t len, uint8_t *buf, size_t cap, size_t
 
 	while (!done && rc == OK) {
 		if (!yaml_parser_parse(&p, &ev)) {
+			if (p.error == YAML_MEMORY_ERROR) {
+				rc = oom(c);
+				break;
+			}
 			yaml_mark_t m = p.problem_mark;
 			fail(c, &m, p.problem ? p.problem : "invalid YAML");
 			rc = ERR;

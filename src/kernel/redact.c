@@ -1,4 +1,5 @@
 #include "src/kernel/redact.h"
+#include "src/kernel/alloc.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -23,16 +24,11 @@ void qwe_redact_add(const char *value, size_t len)
 		if (set[i].len == len && memcmp(set[i].value, value, len) == 0)
 			return;
 	if (nset == capset) {
-		struct secret *grown = realloc(set, (capset ? capset * 2 : 16) * sizeof *set);
-
-		if (!grown)
-			return;
-		set = grown;
+		/* a secret that is not recorded is a secret that is not masked: never skip one (alloc.h, rule 2) */
+		set = qwe_xrealloc(set, (capset ? capset * 2 : 16) * sizeof *set);
 		capset = capset ? capset * 2 : 16;
 	}
-	set[nset].value = malloc(len);
-	if (!set[nset].value)
-		return;
+	set[nset].value = qwe_xmalloc(len);
 	memcpy(set[nset].value, value, len);
 	set[nset].len = len;
 	nset++;

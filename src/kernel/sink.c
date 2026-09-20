@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "src/kernel/sink.h"
+#include "src/kernel/alloc.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -41,16 +42,15 @@ int qwe_sink_open(struct qwe_sink *s, const char *job, const char *dir, int term
 
 static void emit_line(struct qwe_sink *s)
 {
-	char *out = malloc(strlen(s->job) + s->line_len + 4);
+	/* the log is the source of truth: a line that cannot be assembled stops the run (alloc.h, rule 2) */
+	char *out = qwe_xmalloc(strlen(s->job) + s->line_len + 4);
+	size_t n = (size_t)sprintf(out, "[%s] ", s->job);
 
-	if (out) {
-		size_t n = (size_t)sprintf(out, "[%s] ", s->job);
-		memcpy(out + n, s->line, s->line_len);
-		n += s->line_len;
-		out[n++] = '\n';
-		write_all(s->term_fd, out, n);
-		free(out);
-	}
+	memcpy(out + n, s->line, s->line_len);
+	n += s->line_len;
+	out[n++] = '\n';
+	write_all(s->term_fd, out, n);
+	free(out);
 	s->line_len = 0;
 }
 
@@ -67,10 +67,7 @@ void qwe_sink_write(struct qwe_sink *s, const void *data, size_t n)
 		}
 		if (s->line_len == s->line_cap) {
 			size_t cap = s->line_cap ? s->line_cap * 2 : 256;
-			char *grown = realloc(s->line, cap);
-			if (!grown)
-				return;
-			s->line = grown;
+			s->line = qwe_xrealloc(s->line, cap);
 			s->line_cap = cap;
 		}
 		s->line[s->line_len++] = p[i];

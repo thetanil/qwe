@@ -2,6 +2,7 @@
 #include "src/kernel/qwe.h"
 
 #include "src/edge/yaml/transcode.h"
+#include "src/kernel/alloc.h"
 #include "src/kernel/jobs.h"
 #include "src/kernel/lifecycle.h"
 #include "src/kernel/luacbor.h"
@@ -132,6 +133,25 @@ static char **child_argv(void *arg, int result_fd)
 		fprintf(stderr, "qwe: the plugin returned no argv\n");
 		return NULL;
 	}
+	/* Built before "exec" is sent: a failure here reports itself, and the parent
+	 * never sees a step that started. */
+	n = lua_objlen(L, -2);
+	argv = calloc(n + 1, sizeof *argv);
+	for (i = 0; argv && i < n; i++) {
+		lua_rawgeti(L, -2, (int)i + 1);
+		argv[i] = strdup(lua_tostring(L, -1));
+		lua_pop(L, 1);
+		if (!argv[i])
+			break;
+	}
+	if (!argv || (n > 0 && !argv[n - 1])) {
+		while (argv && i-- > 0)
+			free(argv[i]);
+		free(argv);
+		fprintf(stderr, "qwe: out of memory building the step's command\n");
+		send_status(L, result_fd, "failed", "engine-error");
+		return NULL;
+	}
 	send_status(L, result_fd, "exec", NULL);
 	if (lua_type(L, -1) == LUA_TSTRING) {
 		size_t sl;
@@ -144,15 +164,6 @@ static char **child_argv(void *arg, int result_fd)
 			return NULL;
 		}
 		close(fd);
-	}
-	n = lua_objlen(L, -2);
-	argv = calloc(n + 1, sizeof *argv);
-	if (!argv)
-		return NULL;
-	for (i = 0; i < n; i++) {
-		lua_rawgeti(L, -2, (int)i + 1);
-		argv[i] = strdup(lua_tostring(L, -1));
-		lua_pop(L, 1);
 	}
 	return argv;
 fail:
@@ -187,8 +198,10 @@ static int read_file(const char *path, char **out, size_t *len)
 		}
 	}
 	fclose(fp);
-	if (!buf)
+	if (!buf) {
+		errno = ENOMEM;
 		return -1;
+	}
 	*out = buf;
 	*len = n;
 	return 0;
@@ -199,6 +212,11 @@ static int mkdir_p(const char *path, mode_t mode)
 {
 	char *p = strdup(path), *s;
 	int rc = 0;
+
+	if (!p) {
+		errno = ENOMEM;
+		return -1;
+	}
 
 	for (s = p + 1; rc == 0 && *s; s++) {
 		if (*s != '/')
@@ -389,6 +407,10 @@ static int load_inventory(lua_State *L, const char *cmd, const char *wf_path, co
 		size_t dir_len = slash ? (size_t)(slash - wf_path) + 1 : 0;
 
 		default_path = malloc(dir_len + sizeof "inventory.yaml");
+		if (!default_path) {
+			fprintf(stderr, "%s: %s: out of memory\n", cmd, wf_path);
+			goto fail;
+		}
 		memcpy(default_path, wf_path, dir_len);
 		strcpy(default_path + dir_len, "inventory.yaml");
 		if (access(default_path, F_OK) != 0) {
@@ -538,7 +560,7 @@ static char *step_id(struct job *job, size_t i)
 	lua_getfield(L, -1, "steps");
 	lua_rawgeti(L, -1, (int)i + 1);
 	lua_getfield(L, -1, "id");
-	id = lua_isstring(L, -1) ? strdup(lua_tostring(L, -1)) : NULL;
+	id = lua_isstring(L, -1) ? qwe_xstrdup(lua_tostring(L, -1)) : NULL;
 	lua_pop(L, 4);
 	return id;
 }
@@ -629,7 +651,7 @@ static void job_start(struct run_ctx *ctx, struct job *job)
 		return;
 	}
 	job->started = time(NULL);
-	job->steps = calloc(job->nsteps ? job->nsteps : 1, sizeof *job->steps);
+	job->steps = qwe_xcalloc(job->nsteps, sizeof *job->steps);
 	if (job->timeout_ms > 0)
 		qwe_timer_arm(&r->timer, job->timeout_ms);
 	ev_add(ctx, job, EV_JOB_TIMER, r->timer.fd, -1);
@@ -674,7 +696,7 @@ static long resolve_step(struct run_ctx *ctx, struct job *job)
 	if (lua_istable(L, -1)) {
 		lua_getfield(L, -1, "target");
 		if (lua_isstring(L, -1))
-			r->step_target = strdup(lua_tostring(L, -1));
+			r->step_target = qwe_xstrdup(lua_tostring(L, -1));
 		lua_pop(L, 1);
 	}
 	lua_pop(L, 1);
@@ -706,7 +728,7 @@ static void store_outputs(struct job *job, int tbl)
 	lua_pushvalue(L, tbl);
 	if (lua_pcall(L, 3, 1, 0) == 0 && lua_isstring(L, -1)) {
 		free(r->step_json);
-		r->step_json = strdup(lua_tostring(L, -1));
+		r->step_json = qwe_xstrdup(lua_tostring(L, -1));
 	}
 out:
 	lua_settop(L, top);
@@ -1129,7 +1151,7 @@ enum msg_status { MSG_NONE, MSG_EXEC, MSG_OK, MSG_FAILED };
 
 struct step_msg {
 	enum msg_status status;
-	const char *reason; /* MSG_FAILED: not-converged or plugin-error */
+	const char *reason; /* MSG_FAILED: not-converged, become-denied, engine-error or plugin-error */
 	int changed;
 };
 
@@ -1163,7 +1185,8 @@ static struct step_msg read_step_msg(struct job *job)
 		lua_getfield(L, -1, "reason");
 		reason = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
 		m.reason = strcmp(reason, "not-converged") == 0 ? "not-converged"
-			: strcmp(reason, "become-denied") == 0 ? "become-denied" : "plugin-error";
+			: strcmp(reason, "become-denied") == 0 ? "become-denied"
+			: strcmp(reason, "engine-error") == 0 ? "engine-error" : "plugin-error";
 		lua_pop(L, 1);
 		lua_getfield(L, -1, "changed");
 		if (lua_isboolean(L, -1))
@@ -1346,7 +1369,7 @@ static char *target_disabled_note(lua_State *L, const char *target)
 	lua_pushstring(L, target);
 	lua_call(L, 1, 1);
 	if (lua_isstring(L, -1))
-		note = strdup(lua_tostring(L, -1));
+		note = qwe_xstrdup(lua_tostring(L, -1));
 	lua_settop(L, top);
 	return note;
 }
@@ -1464,9 +1487,9 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 {
 	struct job *jobs = ctx->jobs;
 	size_t n = ctx->njobs;
-	struct qwe_sched_job *sj = calloc(n ? n : 1, sizeof *sj);
-	struct qwe_sched_event *evs = calloc(n ? n : 1, sizeof *evs);
-	long *caps = calloc(n ? n : 1, sizeof *caps);
+	struct qwe_sched_job *sj = qwe_xcalloc(n, sizeof *sj);
+	struct qwe_sched_event *evs = qwe_xcalloc(n, sizeof *evs);
+	long *caps = qwe_xcalloc(n, sizeof *caps);
 	char **group_names = calloc(n ? n : 1, sizeof *group_names);
 	size_t ngroups = 0;
 	struct epoll_event got[32];
@@ -1484,7 +1507,7 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 		epoll_ctl(ctx->ep, EPOLL_CTL_ADD, ctx->cancel_fd, &e);
 	}
 	for (i = 0; i < n; i++) {
-		jobs[i].needs_idx = calloc(jobs[i].nneeds ? jobs[i].nneeds : 1, sizeof(size_t));
+		jobs[i].needs_idx = qwe_xcalloc(jobs[i].nneeds, sizeof(size_t));
 		for (k = 0; k < jobs[i].nneeds; k++)
 			jobs[i].needs_idx[k] = (size_t)(find_job(jobs, n, jobs[i].needs[k]) - jobs);
 		sj[i].state = &jobs[i].state;
@@ -1572,6 +1595,11 @@ static int select_jobs(struct job *jobs, long *n, const struct qwe_run_options *
 	char *keep = calloc(total ? total : 1, 1);
 	int changed;
 
+	if (!keep) {
+		fprintf(stderr, "qwe run: --job: out of memory\n");
+		return -1;
+	}
+
 	for (i = 0; i < opts->njobs; i++) {
 		struct job *j = find_job(jobs, total, opts->jobs[i]);
 
@@ -1616,7 +1644,7 @@ static int select_jobs(struct job *jobs, long *n, const struct qwe_run_options *
 static void report_disabled(const struct job *jobs, size_t n)
 {
 	size_t i, k, skipped = 0, targets = 0;
-	const struct job **seen = calloc(n ? n : 1, sizeof *seen);
+	const struct job **seen = qwe_xcalloc(n, sizeof *seen);
 	char *line = NULL;
 	size_t len = 0;
 
@@ -1678,7 +1706,12 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	slash = strrchr(path, '/');
 	dir = slash ? strndup(path, (size_t)(slash - path)) : strdup(".");
 	fmt_run_id(run_id, sizeof run_id);
-	run_dir = malloc(strlen(dir) + strlen(run_id) + 32);
+	run_dir = dir ? malloc(strlen(dir) + strlen(run_id) + 32) : NULL;
+	if (!run_dir) {
+		fprintf(stderr, "qwe run: %s: out of memory\n", path);
+		rc = QWE_EXIT_USAGE;
+		goto out;
+	}
 	sprintf(run_dir, "%s/.qwe/runs/%s", dir, run_id);
 	if (mkdir_p(run_dir, 0700) < 0) {
 		fprintf(stderr, "qwe run: cannot create %s: %s\n", run_dir, strerror(errno));
@@ -1686,6 +1719,11 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 		goto out;
 	}
 	trace_path = malloc(strlen(run_dir) + 32);
+	if (!trace_path) {
+		fprintf(stderr, "qwe run: %s: out of memory\n", path);
+		rc = QWE_EXIT_USAGE;
+		goto out;
+	}
 	sprintf(trace_path, "%s/lifecycle.trace", run_dir);
 	if (qwe_trace_open(&ctx.trace, trace_path, opts && opts->debug) < 0) {
 		fprintf(stderr, "qwe run: cannot create %s: %s\n", trace_path, strerror(errno));
@@ -1721,7 +1759,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 
 	ctx.run_dir_abs = realpath(run_dir, NULL);
 	if (!ctx.run_dir_abs)
-		ctx.run_dir_abs = strdup(run_dir);
+		ctx.run_dir_abs = qwe_xstrdup(run_dir);
 	lua_pushvalue(L, -1);
 	ctx.wf_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	lua_getfield(L, -1, "max-parallel");
@@ -1734,7 +1772,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	close_masters(L);
 	qwe_redact_clear();
 
-	results = calloc((size_t)n ? (size_t)n : 1, sizeof *results);
+	results = qwe_xcalloc((size_t)n, sizeof *results);
 	for (i = 0; i < (size_t)n; i++) {
 		results[i].id = jobs[i].id;
 		results[i].outcome = qwe_lc_state_name(jobs[i].state);
