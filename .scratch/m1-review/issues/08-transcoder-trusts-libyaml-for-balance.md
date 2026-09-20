@@ -1,6 +1,6 @@
 # 08: The transcoder trusts libyaml to balance its container events
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: none
@@ -47,13 +47,15 @@ While in the same function, two neighbours are worth a look:
 
 ## Acceptance criteria
 
-- [ ] An unbalanced container-end event leaves `depth` at zero and fails the document with a positioned error rather than indexing before the encoder stack. `unit: src/edge/yaml/transcode_test.c::unbalanced_end_is_refused` (drive `handle_event` directly, since libyaml will not emit the event)
-- [ ] Every existing transcoder case still passes unchanged, including the depth-ceiling case. `unit: src/edge/yaml/transcode_test.c`, `src/edge/yaml/limits_test.c` (existing, must stay green)
-- [ ] A scalar with an embedded NUL is encoded as the text it is, not resolved as `null` or a boolean by a prefix match. `unit: src/edge/yaml/transcode_test.c::embedded_nul_is_text`
-- [ ] The secret tag is compared where it is encoded, so `scalar()` does not depend on a check made in another function. `unit: src/edge/yaml/tags_test.c` (existing, must stay green)
+- [x] An unbalanced container-end event leaves `depth` at zero and fails the document with a positioned error rather than indexing before the encoder stack. `unit: src/edge/yaml/transcode_test.c::unbalanced_end_is_refused` (drive `handle_event` directly, since libyaml will not emit the event)
+- [x] Every existing transcoder case still passes unchanged, including the depth-ceiling case. `unit: src/edge/yaml/transcode_test.c`, `src/edge/yaml/limits_test.c` (existing, must stay green)
+- [x] A scalar with an embedded NUL is encoded as the text it is, not resolved as `null` or a boolean by a prefix match. `unit: src/edge/yaml/transcode_test.c::embedded_nul_is_text`
+- [x] The secret tag is compared where it is encoded, so `scalar()` does not depend on a check made in another function. `unit: src/edge/yaml/tags_test.c` (existing, must stay green)
 
 ## Comments
 
 This is hardening at the one place in qwe that reads untrusted bytes, so it
 also sets up the fuzz target in `quality/06`: a fuzzer that drives the
 transcoder will find nothing here only if the floor check exists.
+
+Resolved 2026-09-20. `handle_event` refuses a container end when nothing is open, and also one of the wrong kind (a `}` closing a sequence), with a positioned error. `scalar()` compares the tag itself and refuses anything but `!encrypted` (and any tag on a key); the null/true/false and `<<` matches use `is_lit`, which takes the length. To drive events libyaml will not produce, `transcode.c` exports `qwe_yaml_events_for_test` (declared in `transcode_hooks.h`, a test-only header in the same library). The two new tests were checked against the old code by reading: the old end handler yields no "unbalanced" message and the old `strcmp` turns `null\0x` into null.

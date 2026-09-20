@@ -10,6 +10,7 @@ cc_library(
         "positions.h",
         "secret_tag.h",
         "transcode.h",
+        "transcode_hooks.h",
     ],
     visibility = ["//src:__subpackages__"],
     deps = [

@@ -194,6 +194,12 @@ static int is_float(const char *s, size_t n)
 	return i == n && (dot || exp);
 }
 
+/* Whether the scalar v of length n is exactly the literal lit. */
+static int is_lit(const char *v, size_t n, const char *lit)
+{
+	return n == strlen(lit) && memcmp(v, lit, n) == 0;
+}
+
 static int scalar(struct ctx *c, const yaml_event_t *ev, int as_key)
 {
 	CborEncoder *enc = &c->stack[c->depth];
@@ -203,15 +209,23 @@ static int scalar(struct ctx *c, const yaml_event_t *ev, int as_key)
 	int plain = ev->data.scalar.style == YAML_PLAIN_SCALAR_STYLE;
 
 	if (tag) {
-		int rc = cbor_rc(cbor_encode_tag(enc, QWE_SECRET_TAG));
+		int rc;
+
+		/* the one tag there is, checked here rather than trusted from check_props */
+		if (as_key || strcmp(tag, ENCRYPTED_TAG) != 0) {
+			fail(c, &ev->start_mark, "unknown tag");
+			return ERR;
+		}
+		rc = cbor_rc(cbor_encode_tag(enc, QWE_SECRET_TAG));
 		return rc != OK ? rc : cbor_rc(cbor_encode_text_string(enc, v, n));
 	}
 	if (!as_key && plain) {
-		if (n == 0 || !strcmp(v, "~") || !strcmp(v, "null") || !strcmp(v, "Null") || !strcmp(v, "NULL"))
+		/* compared with the length in hand: a NUL inside is text, not a prefix match */
+		if (n == 0 || is_lit(v, n, "~") || is_lit(v, n, "null") || is_lit(v, n, "Null") || is_lit(v, n, "NULL"))
 			return cbor_rc(cbor_encode_null(enc));
-		if (!strcmp(v, "true") || !strcmp(v, "True") || !strcmp(v, "TRUE"))
+		if (is_lit(v, n, "true") || is_lit(v, n, "True") || is_lit(v, n, "TRUE"))
 			return cbor_rc(cbor_encode_boolean(enc, 1));
-		if (!strcmp(v, "false") || !strcmp(v, "False") || !strcmp(v, "FALSE"))
+		if (is_lit(v, n, "false") || is_lit(v, n, "False") || is_lit(v, n, "FALSE"))
 			return cbor_rc(cbor_encode_boolean(enc, 0));
 		if (is_int(v, n))
 			return cbor_rc(cbor_encode_int(enc, strtoll(v, NULL, 10)));
@@ -284,7 +298,7 @@ static int handle_event(struct ctx *c, yaml_event_t *ev, int *docs)
 		if (rc != OK)
 			return rc;
 		if (is_key && ev->data.scalar.style == YAML_PLAIN_SCALAR_STYLE &&
-		    !strcmp((const char *)ev->data.scalar.value, "<<")) {
+		    is_lit((const char *)ev->data.scalar.value, ev->data.scalar.length, "<<")) {
 			fail(c, &ev->start_mark, "merge keys are not supported");
 			return ERR;
 		}
@@ -318,6 +332,13 @@ static int handle_event(struct ctx *c, yaml_event_t *ev, int *docs)
 	}
 	case YAML_MAPPING_END_EVENT:
 	case YAML_SEQUENCE_END_EVENT:
+		/* libyaml balances its events, but it is the quarantined component: an end
+		 * with nothing open, or of the wrong kind, must not index below the
+		 * encoder stack. */
+		if (c->depth == 0 || (ev->type == YAML_MAPPING_END_EVENT) != !!c->is_map[c->depth]) {
+			fail(c, &ev->start_mark, "unbalanced end of a map or sequence");
+			return ERR;
+		}
 		c->depth--;
 		rc = cbor_rc(cbor_encoder_close_container(&c->stack[c->depth], &c->stack[c->depth + 1]));
 		value_done(c);
@@ -422,4 +443,38 @@ int qwe_yaml_to_cbor(const char *yaml, size_t len, uint8_t **out, size_t *out_le
 	*out = buf;
 	*out_len = used;
 	return 0;
+}
+
+int qwe_yaml_events_for_test(yaml_event_t *events, size_t n, uint8_t **out, size_t *out_len, char *err,
+			     size_t err_size)
+{
+	static uint8_t buf[4096];
+	struct ctx *c = calloc(1, sizeof *c);
+	int docs = 0, rc = OK;
+	size_t i;
+
+	if (!c)
+		return -1;
+	c->err = err;
+	c->err_size = err_size;
+	err[0] = '\0';
+	c->pos = qwe_positions_new();
+	if (!c->pos) {
+		free(c);
+		return -1;
+	}
+	cbor_encoder_init(&c->stack[0], buf, sizeof buf, 0);
+	for (i = 0; i < n && rc == OK; i++)
+		rc = handle_event(c, &events[i], &docs);
+	if (rc == OK) {
+		*out = buf;
+		*out_len = cbor_encoder_get_buffer_size(&c->stack[0], buf);
+	}
+	/* whatever happened, the stack was never indexed out of range */
+	if (c->depth < 0)
+		rc = ERR;
+	qwe_positions_free(c->pos);
+	free(c->path);
+	free(c);
+	return rc == OK ? 0 : -1;
 }
