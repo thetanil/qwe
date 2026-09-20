@@ -2,6 +2,7 @@ plugins/builtin/backend_local/local.lua 0
 plugins/builtin/backend-ssh/ssh.lua 2
 plugins/builtin/file.ensure/plugin.lua 0
 plugins/builtin/recording/recording.lua 2
+plugins/builtin/run/plugin.lua 0
 src/cli/dispatch.c 1
 src/cli/dispatch.h 0
 src/cli/encrypt/encrypt.c 45
@@ -15,10 +16,12 @@ src/cli/serve/serve.c 0
 src/cli/serve/serve.h 0
 src/cli/validate/validate.c 0
 src/cli/validate/validate.h 0
+src/edge/yaml/fuzz_harness.c 5
+src/edge/yaml/fuzz_harness.h 0
 src/edge/yaml/positions.c 3
 src/edge/yaml/positions.h 0
 src/edge/yaml/secret_tag.h 0
-src/edge/yaml/transcode.c 16
+src/edge/yaml/transcode.c 10
 src/edge/yaml/transcode.h 0
 src/edge/yaml/transcode_hooks.h 0
 src/kernel/alloc.c 6

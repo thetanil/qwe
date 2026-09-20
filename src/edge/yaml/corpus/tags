@@ -1,0 +1,3 @@
+k: !encrypted "abc"
+j: !encrypted [1]
+m: !!str x

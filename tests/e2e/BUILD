@@ -287,3 +287,14 @@ e2e_test(name = "plugin_files_malformed")
 e2e_test(name = "validate_unknown_target")
 e2e_test(name = "validate_step_run_and_uses")
 e2e_test(name = "plugin_shape_and_array_args")
+
+# Every workflow and inventory the e2e cases use: the seed corpus for the YAML fuzzers.
+filegroup(
+    name = "yaml_seeds",
+    testonly = True,
+    srcs = glob([
+        "*/w.yaml",
+        "*/inventory.yaml",
+    ]),
+    visibility = ["//src/edge/yaml:__pkg__"],
+)

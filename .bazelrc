@@ -38,3 +38,9 @@ test:valgrind --test_timeout=300
 # Lua coverage (quality/10): the qwe binary and luarun write lcov for the Lua they run into
 # $COVERAGE_DIR, which bazel merges into the combined report with the C.
 coverage --test_env=QWE_LUA_COVERAGE=1
+
+# Fuzz targets (quality/06) need clang's libFuzzer. Combine with --config=asan or --config=ubsan.
+build:fuzz --repo_env=CC=clang
+build:fuzz --action_env=CC=clang
+# Coverage feedback for our own code only (src/): third_party (libyaml, LuaJIT) is not fuzzed for now.
+build:fuzz --per_file_copt=^src/.*@-fsanitize=fuzzer-no-link
