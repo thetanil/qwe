@@ -81,3 +81,40 @@ or undeclared global into an error) prevents mistakes; it is **not** a sandbox, 
 still has `io`, `os.execute` and the rest of the interpreter. The workflow directory and the
 inventory are trusted input: read a workflow directory you did not write before running it
 (`qwe validate` runs none of its plugin code). See "Trust boundary" in `CONTEXT.md`.
+
+## Coverage of plugin code
+
+`bazel coverage` measures the Lua that is compiled into the qwe binary: `src/kernel/lua/` and
+the built-in plugins under `plugins/builtin/`. A project plugin in `.qwe/plugins/` is read by
+path at run time, not compiled in, so it is **not** measured.
+
+To have a built-in plugin measured, add it to the repo like the others:
+
+1. Put it in `plugins/builtin/<name>/` (`plugin.lua`, `schema.json`). The `:plugin_lua` glob in
+   `plugins/builtin/BUILD` picks the `.lua` up, and `:shipped` there declares it to the coverage
+   tool, so nothing to add for a file in that layout.
+2. Register it in `MODULES` in `src/kernel/lua/BUILD` (`plugin.<name>` and `plugin_schema.<name>`),
+   which is what compiles it into the binary.
+3. A Lua file in a *new* directory needs its own `lua_instrumented` target (see
+   `tools/luacov/defs.bzl`) listed in `data` of `//src/kernel:luavm`. Without it Bazel's lcov
+   merger drops the file from the report without a warning.
+4. Write the tests that should exercise it (a Lua test through `luarun`, or an e2e case under
+   `tests/e2e/`). Only code those tests run is counted as hit.
+
+One command runs the coverage and writes the HTML (needs `genhtml`, from the `lcov` package):
+
+```
+bazel run //tools/luacov:html            # writes coverage-html/index.html
+bazel run //tools/luacov:html -- my-dir  # or into another directory
+```
+
+Your plugin's page is under `plugins/builtin/<name>/`, with each line marked hit or missed. The
+same report covers the C; `docs/coverage.md` has the per-file numbers and how the Lua hook works.
+
+## The binary
+
+`bazel build //src/cli:qwe //src/cli:qwe-debug` produces two statically linked executables
+(`bazel-bin/src/cli/`): `qwe`, stripped, which is what ships and what the e2e cases run, and
+`qwe-debug`, the same build with its symbols. The sanitizer (`--config=asan`, `ubsan`) and
+valgrind builds link dynamically, because a sanitizer runtime cannot be linked statically and
+valgrind cannot intercept `malloc` in a static binary; `qwe` keeps its symbols there.
