@@ -65,4 +65,76 @@ echo 'os.exit(7)' >"$dir/exit.lua"
 "$luarun" "$dir/exit.lua"
 check "os.exit" 7 $?
 
+# qwe.fs reports what it cannot read or create as nil plus a message, never a raise.
+cat >"$dir/fs.lua" <<'LUA'
+local fs = require("qwe.fs")
+local root = ...
+local function fails(what, r, msg)
+	assert(r == nil and type(msg) == "string" and #msg > 0, what .. ": want nil, message")
+	return msg
+end
+fails("list missing", fs.list(root .. "/nope"))
+fails("list a file", fs.list(root .. "/plain"))
+fails("private_dir under a file", fs.private_dir(root .. "/plain/x"))
+fails("private_dir on a file", fs.private_dir(root .. "/plain"))
+assert(fs.isdir(root .. "/plain") == false and fs.isdir(root .. "/nope") == false)
+LUA
+: >"$dir/plain"
+"$luarun" "$dir/fs.lua" "$dir" 2>"$dir/err"
+check "fs errors" 0 $?
+# A directory it cannot read (root reads anything, so this needs a user).
+if [ "$(id -u)" != 0 ]; then
+	mkdir "$dir/locked" && chmod 000 "$dir/locked"
+	echo 'local r, m = require("qwe.fs").list(...); assert(r == nil and m:find("Permission denied"), tostring(m))' \
+		>"$dir/locked.lua"
+	"$luarun" "$dir/locked.lua" "$dir/locked" 2>"$dir/err"
+	check "unreadable directory" 0 $?
+	chmod 700 "$dir/locked"
+fi
+
+# qwe.secrets.reveal: a table with no value, no key file, and a value that is not an envelope.
+cat >"$dir/sec.lua" <<'LUA'
+local s = require("qwe.secrets")
+local ok, e = pcall(s.reveal, {})
+assert(not ok and tostring(e):find("not a secret"), "no value: " .. tostring(e))
+ok, e = pcall(s.reveal, { value = "qwe:1:xchacha20poly1305:AAAA" })
+assert(not ok and tostring(e):find("cannot read the key file"), "no key: " .. tostring(e))
+LUA
+mkdir "$dir/nokey"
+HOME="$dir/nokey" "$luarun" "$dir/sec.lua" 2>"$dir/err"
+check "reveal without a key" 0 $?
+cat >"$dir/sec2.lua" <<'LUA'
+local s = require("qwe.secrets")
+for _, bad in ipairs({ "plain text", "qwe:1:xchacha20poly1305:", "qwe:1:xchacha20poly1305:!!!!", "qwe:1:xchacha20poly1305:AAAA" }) do
+	local ok, e = pcall(s.reveal, { value = bad })
+	assert(not ok and tostring(e):find("cannot decrypt a secret"), bad .. ": " .. tostring(e))
+end
+LUA
+mkdir -p "$dir/withkey/.config/qwe"
+head -c 32 /dev/zero >"$dir/withkey/.config/qwe/secret"
+chmod 600 "$dir/withkey/.config/qwe/secret"
+HOME="$dir/withkey" "$luarun" "$dir/sec2.lua" 2>"$dir/err"
+check "reveal a malformed envelope" 0 $?
+
+# qwe.exec.run's poll loop: a command that never reads its stdin (SIGPIPE is
+# ignored, the write just fails), stdin larger than the pipe (partial writes),
+# a command that cannot be exec'd, a timeout, a command killed by a signal.
+cat >"$dir/exec.lua" <<'LUA'
+local exec = require("qwe.exec")
+local big = string.rep("x", 1 << 20)
+local code = exec.run({ "true" }, big)
+assert(code == 0, "no read: " .. tostring(code))
+local out
+code, out = exec.run({ "cat" }, big)
+assert(code == 0 and #out == #big, "partial writes: " .. tostring(code) .. " " .. #out)
+code = exec.run({ "/nonexistent/cmd" })
+assert(code == 127, "missing command: " .. tostring(code))
+local r, why = exec.run({ "sleep", "5" }, nil, { timeout = 0.2 })
+assert(r == nil and why:find("timed out"), "timeout: " .. tostring(why))
+code = exec.run({ "sh", "-c", "kill -9 $$" })
+assert(code == -9, "signalled: " .. tostring(code))
+LUA
+"$luarun" "$dir/exec.lua" 2>"$dir/err"
+check "exec poll loop" 0 $?
+
 exit $fail

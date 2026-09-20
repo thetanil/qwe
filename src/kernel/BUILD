@@ -107,10 +107,30 @@ cc_library(
     deps = [":alloc"],
 )
 
+cc_test(
+    name = "sink_test",
+    size = "small",
+    srcs = ["sink_test.c"],
+    deps = [
+        ":sink",
+        "//third_party/greatest",
+    ],
+)
+
 cc_library(
     name = "result",
     srcs = ["result.c"],
     hdrs = ["result.h"],
+)
+
+cc_test(
+    name = "result_test",
+    size = "small",
+    srcs = ["result_test.c"],
+    deps = [
+        ":result",
+        "//third_party/greatest",
+    ],
 )
 
 cc_library(
@@ -253,6 +273,16 @@ cc_library(
     srcs = ["trace.c"],
     hdrs = ["trace.h"],
     deps = [":lifecycle"],
+)
+
+cc_test(
+    name = "trace_test",
+    size = "small",
+    srcs = ["trace_test.c"],
+    deps = [
+        ":trace",
+        "//third_party/greatest",
+    ],
 )
 
 # The stdin preamble that carries env to a command (design §12).

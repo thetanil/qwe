@@ -1,0 +1,21 @@
+jobs:
+  z:
+    steps:
+      - run: echo
+        bad_z: 1
+  m:
+    steps:
+      - run: echo
+        bad_m: 1
+  a:
+    steps:
+      - run: echo
+        bad_a: 1
+  q:
+    steps:
+      - run: echo
+        bad_q: 1
+  c:
+    steps:
+      - run: echo
+        bad_c: 1

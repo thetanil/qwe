@@ -24,6 +24,7 @@ e2e_test(name = "validate_malformed_yaml")
 
 e2e_test(name = "validate_ok")
 
+e2e_test(name = "validate_errors_in_position_order")
 e2e_test(name = "validate_unknown_key")
 
 e2e_test(name = "validate_with_schema")

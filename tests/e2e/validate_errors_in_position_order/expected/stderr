@@ -1,0 +1,10 @@
+qwe validate: w.yaml:3:5: must have required property target
+qwe validate: w.yaml:5:9: unknown key "bad_z"
+qwe validate: w.yaml:7:5: must have required property target
+qwe validate: w.yaml:9:9: unknown key "bad_m"
+qwe validate: w.yaml:11:5: must have required property target
+qwe validate: w.yaml:13:9: unknown key "bad_a"
+qwe validate: w.yaml:15:5: must have required property target
+qwe validate: w.yaml:17:9: unknown key "bad_q"
+qwe validate: w.yaml:19:5: must have required property target
+qwe validate: w.yaml:21:9: unknown key "bad_c"

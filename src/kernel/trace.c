@@ -51,8 +51,10 @@ void qwe_trace_record(struct qwe_trace *t, const char *job, long step, enum qwe_
 	n = snprintf(line, sizeof line, "%ld.%06ld %s %s %s %s %s %s %s%s%s\n", sec, usec, job ? job : "-", stepbuf,
 		     qwe_lc_state_name(state), event, next ? next : "-", kind, reason ? reason : "-",
 		     detail ? " " : "", detail ? detail : "");
-	if (n > (int)sizeof line - 1)
+	if (n > (int)sizeof line - 1) { /* cut, but keep the record one line */
 		n = (int)sizeof line - 1;
+		line[n - 1] = '\n';
+	}
 	/* One write per line: the file is never behind, so an abort loses nothing. */
 	if (write(t->fd, line, (size_t)n) < 0)
 		return;
