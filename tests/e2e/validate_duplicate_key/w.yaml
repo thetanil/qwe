@@ -1,0 +1,15 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: echo first
+jobs:
+  k:
+    target: local
+    steps:
+      - run: echo second
+jobs:
+  m:
+    target: local
+    steps:
+      - run: echo third

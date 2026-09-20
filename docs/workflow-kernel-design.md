@@ -419,9 +419,11 @@ The kernel speaks CBOR + JSON Schema. YAML exists only for ease of writing. It's
 4. The `!encrypted` tag becomes the secret CBOR tag, and the envelope passes through **unchanged and undecrypted**. Any other tag is rejected.
 5. Schema validation and graph construction operate **only** on the resulting CBOR, never on YAML.
 
-### 15.4 YAML anchors, aliases and merge keys are rejected
+### 15.4 YAML anchors, aliases, merge keys and duplicate keys are rejected
 
 Anchors, aliases and merge keys (`&`, `*`, `<<`) are **rejected with their position**, as in GitHub Actions. Banning them removes a whole class of parser risk and ambiguity.
+
+A **duplicate mapping key** is rejected too, at the second occurrence, with the line of the first in the message; every duplicate in a document is reported. The decoded table would otherwise keep only the last one and validation could not tell. The check is one pass over the transcoder's sorted position table (ADR-0008), so it costs no second parse. Repeated sequence entries are unaffected.
 
 ---
 

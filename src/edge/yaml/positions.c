@@ -73,9 +73,34 @@ void qwe_positions_set_value(struct qwe_positions *p, long index, struct qwe_pos
 	p->e[index].has_value = 1;
 }
 
+/* Orders by pointer, then by key position, so that of several entries with one
+ * pointer the first in the source comes first. */
 static int cmp(const void *a, const void *b)
 {
-	return strcmp(((const struct entry *)a)->pointer, ((const struct entry *)b)->pointer);
+	const struct entry *x = a, *y = b;
+	int c = strcmp(x->pointer, y->pointer);
+
+	if (c || !x->has_key || !y->has_key)
+		return c;
+	if (x->key.line != y->key.line)
+		return x->key.line < y->key.line ? -1 : 1;
+	if (x->key.col != y->key.col)
+		return x->key.col < y->key.col ? -1 : 1;
+	return 0;
+}
+
+void qwe_positions_duplicates(const struct qwe_positions *p, qwe_dup_fn fn, void *ud)
+{
+	size_t i, first = 0;
+
+	for (i = 1; i < p->n; i++) {
+		if (strcmp(p->e[i].pointer, p->e[first].pointer) != 0) {
+			first = i;
+			continue;
+		}
+		if (p->e[first].has_key && p->e[i].has_key)
+			fn(p->e[i].pointer, p->e[first].key, p->e[i].key, ud);
+	}
 }
 
 void qwe_positions_finish(struct qwe_positions *p)
@@ -85,7 +110,7 @@ void qwe_positions_finish(struct qwe_positions *p)
 
 static const struct entry *find(const struct qwe_positions *p, const char *pointer)
 {
-	struct entry probe;
+	struct entry probe = {0};
 
 	probe.pointer = (char *)pointer;
 	return bsearch(&probe, p->e, p->n, sizeof *p->e, cmp);

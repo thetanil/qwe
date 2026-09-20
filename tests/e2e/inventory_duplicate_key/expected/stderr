@@ -1,0 +1,1 @@
+qwe validate: inventory.yaml:3:3: duplicate key "T" (first at line 2)

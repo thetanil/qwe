@@ -1,0 +1,6 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: echo first
+        run: echo second

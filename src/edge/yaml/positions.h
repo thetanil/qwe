@@ -22,6 +22,13 @@ size_t qwe_positions_count(const struct qwe_positions *p);
 int qwe_positions_value(const struct qwe_positions *p, const char *pointer, struct qwe_pos *out);
 int qwe_positions_key(const struct qwe_positions *p, const char *pointer, struct qwe_pos *out);
 
+/* Calls fn once for every repeated mapping key: pointer is the shared JSON
+ * Pointer, first the key's earliest position, second the repeat's. A key
+ * written three times is reported twice, both against the first. One pass over
+ * the sorted table; nothing is allocated. */
+typedef void (*qwe_dup_fn)(const char *pointer, struct qwe_pos first, struct qwe_pos second, void *ud);
+void qwe_positions_duplicates(const struct qwe_positions *p, qwe_dup_fn fn, void *ud);
+
 /* Builder interface, for the transcoder. */
 long qwe_positions_add(struct qwe_positions *p, const char *pointer, size_t len,
 		       const struct qwe_pos *key, const struct qwe_pos *value);

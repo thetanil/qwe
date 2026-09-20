@@ -1,0 +1,2 @@
+qwe validate: w.yaml:6:1: duplicate key "jobs" (first at line 1)
+qwe validate: w.yaml:11:1: duplicate key "jobs" (first at line 1)

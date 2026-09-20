@@ -1,6 +1,6 @@
 # 01: Duplicate YAML keys are accepted, and the last one silently wins
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: none
@@ -56,12 +56,14 @@ caught.
 
 ## Acceptance criteria
 
-- [ ] Two `jobs:` keys in one workflow are a validation error at the second key, and the message names the line of the first. `qwe validate` and `qwe run` both exit 2 and `qwe run` creates no run directory. `e2e: tests/e2e/validate_duplicate_key/`
-- [ ] A duplicate key nested in a step (two `run:` keys in one step) is reported at its own position, not at the document root. `e2e: tests/e2e/validate_duplicate_key_nested/`
-- [ ] A duplicate name in an inventory `secrets:` map is reported against the inventory file, with the inventory's own path in the error. `e2e: tests/e2e/inventory_duplicate_key/`
-- [ ] Every duplicate in a document is reported, not only the first, consistent with the other validation errors. `e2e: tests/e2e/validate_duplicate_key/`
-- [ ] Repeated sequence entries are not affected: a workflow with two identical `run:` steps in a list still runs both. `e2e: tests/e2e/steps_in_order/` (existing, must stay green)
-- [ ] The duplicate check is in the transcoder's position table, so it costs one pass and no second parse. `unit: src/edge/yaml/positions_test.c::duplicate_pointers_are_found`
-- [ ] Design §15.4 says duplicate mapping keys are rejected, next to anchors and aliases.
+- [x] Two `jobs:` keys in one workflow are a validation error at the second key, and the message names the line of the first. `qwe validate` and `qwe run` both exit 2 and `qwe run` creates no run directory. `e2e: tests/e2e/validate_duplicate_key/`
+- [x] A duplicate key nested in a step (two `run:` keys in one step) is reported at its own position, not at the document root. `e2e: tests/e2e/validate_duplicate_key_nested/`
+- [x] A duplicate name in an inventory `secrets:` map is reported against the inventory file, with the inventory's own path in the error. `e2e: tests/e2e/inventory_duplicate_key/`
+- [x] Every duplicate in a document is reported, not only the first, consistent with the other validation errors. `e2e: tests/e2e/validate_duplicate_key/`
+- [x] Repeated sequence entries are not affected: a workflow with two identical `run:` steps in a list still runs both. `e2e: tests/e2e/steps_in_order/` (existing, must stay green)
+- [x] The duplicate check is in the transcoder's position table, so it costs one pass and no second parse. `unit: src/edge/yaml/positions_test.c::duplicate_pointers_are_found`
+- [x] Design §15.4 says duplicate mapping keys are rejected, next to anchors and aliases.
 
 ## Comments
+
+Resolved 2026-09-20. `qwe_positions_duplicates` (src/edge/yaml/positions.c) walks the sorted position table once; the sort now tie-breaks equal pointers by key position so "first" is deterministic. `validate.c` adds one error per repeat to both workflow and inventory validation, so `qwe run` exits 2 before creating a run directory. The `qwe_positions_find` probe is now zero-initialised because the comparator reads `has_key`. Extra check: `validate_duplicate_key/check.sh` runs `qwe run` on the same file.

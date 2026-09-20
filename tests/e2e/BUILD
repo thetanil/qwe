@@ -229,3 +229,6 @@ e2e_test(name = "job_select_multiple")
 e2e_test(name = "job_select_unknown")
 
 e2e_test(name = "job_select_validates_all")
+e2e_test(name = "validate_duplicate_key")
+e2e_test(name = "validate_duplicate_key_nested")
+e2e_test(name = "inventory_duplicate_key")

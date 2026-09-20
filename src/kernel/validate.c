@@ -197,6 +197,45 @@ static void collect_errors(lua_State *L, int idx, const struct qwe_positions *po
 	}
 }
 
+/* The last token of a JSON Pointer, unescaped, as a new string. */
+static char *last_token(const char *pointer)
+{
+	const char *tok = strrchr(pointer, '/');
+	char *out, *o;
+
+	tok = tok ? tok + 1 : pointer;
+	out = malloc(strlen(tok) + 1);
+	for (o = out; *tok; tok++) {
+		if (*tok == '~' && tok[1] == '1') {
+			*o++ = '/';
+			tok++;
+		} else if (*tok == '~' && tok[1] == '0') {
+			*o++ = '~';
+			tok++;
+		} else {
+			*o++ = *tok;
+		}
+	}
+	*o = '\0';
+	return out;
+}
+
+static void add_duplicate(const char *pointer, struct qwe_pos first, struct qwe_pos second, void *ud)
+{
+	char *key = last_token(pointer), message[512];
+
+	snprintf(message, sizeof message, "duplicate key \"%s\" (first at line %u)", key, first.line);
+	free(key);
+	add(ud, second, message);
+}
+
+/* Adds an error at every repeated mapping key: the parse keeps only the last
+ * of them, so nothing later could tell. */
+static void collect_duplicates(const struct qwe_positions *pos, struct problems *ps)
+{
+	qwe_positions_duplicates(pos, add_duplicate, ps);
+}
+
 /* Prints the problems in source order and frees them. */
 static void print_problems(struct problems *ps, const char *cmd, const char *path)
 {
@@ -232,6 +271,7 @@ int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const stru
 	lua_pop(L, 1); /* the plugin problems; the workflow's errors are on top */
 
 	collect_errors(L, lua_gettop(L), pos, &ps);
+	collect_duplicates(pos, &ps);
 	lua_pop(L, 2); /* the list and the module */
 
 	if (ps.n == 0)
@@ -262,6 +302,7 @@ int qwe_validate_inventory(lua_State *L, const char *cmd, const char *path, cons
 	if (lua_pcall(L, 1, 1, 0) != 0)
 		goto internal;
 	collect_errors(L, lua_gettop(L), pos, &ps);
+	collect_duplicates(pos, &ps);
 	lua_pop(L, 2); /* the list and the module */
 	n = ps.n;
 	print_problems(&ps, cmd, path);

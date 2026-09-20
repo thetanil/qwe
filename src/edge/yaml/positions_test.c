@@ -1,6 +1,7 @@
 #include "greatest.h"
 #include "src/edge/yaml/transcode.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -89,8 +90,56 @@ TEST pointer_lookup_key_and_value(void)
 	PASS();
 }
 
+struct dups {
+	int n;
+	char pointer[4][32];
+	struct qwe_pos first[4], second[4];
+};
+
+static void collect_dup(const char *pointer, struct qwe_pos first, struct qwe_pos second, void *ud)
+{
+	struct dups *d = ud;
+
+	if (d->n < 4) {
+		snprintf(d->pointer[d->n], sizeof d->pointer[0], "%s", pointer);
+		d->first[d->n] = first;
+		d->second[d->n] = second;
+	}
+	d->n++;
+}
+
+TEST duplicate_pointers_are_found(void)
+{
+	static const char doc[] =
+		"jobs:\n"
+		"  a: 1\n"
+		"jobs:\n"
+		"  b: 2\n"
+		"steps:\n"
+		"  - run: x\n"
+		"  - run: x\n"
+		"  - run: y\n"
+		"    run: z\n";
+	struct qwe_positions *pos = load(doc);
+	struct dups d = {0};
+
+	ASSERT(pos != NULL);
+	qwe_positions_duplicates(pos, collect_dup, &d);
+	/* /jobs and /steps/2/run; the repeated list entries are not duplicates. */
+	ASSERT_EQ(2, d.n);
+	ASSERT_STR_EQ("/jobs", d.pointer[0]);
+	ASSERT_EQ(1, (int)d.first[0].line);
+	ASSERT_EQ(3, (int)d.second[0].line);
+	ASSERT_STR_EQ("/steps/2/run", d.pointer[1]);
+	ASSERT_EQ(8, (int)d.first[1].line);
+	ASSERT_EQ(9, (int)d.second[1].line);
+	qwe_positions_free(pos);
+	PASS();
+}
+
 SUITE(positions)
 {
+	RUN_TEST(duplicate_pointers_are_found);
 	RUN_TEST(block_and_flow_positions);
 	RUN_TEST(pointer_lookup_key_and_value);
 }
