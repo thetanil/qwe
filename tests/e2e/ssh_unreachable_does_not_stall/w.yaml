@@ -1,0 +1,10 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - run: sleep 30
+        timeout-seconds: 1
+  b:
+    target: dead
+    steps:
+      - run: hostname

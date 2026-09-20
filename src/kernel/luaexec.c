@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 struct buf {
@@ -53,7 +54,9 @@ static int exec_run(lua_State *L)
 	struct sigaction ign, old_pipe;
 	pid_t pid;
 	int status = 0, failed = 0, saved = 0;
-	int detach = 0;
+	int detach = 0, background = 0, timed_out = 0;
+	long timeout_ms = -1;
+	struct timespec t0;
 
 	luaL_checktype(L, 1, LUA_TTABLE);
 	n = lua_objlen(L, 1);
@@ -64,6 +67,13 @@ static int exec_run(lua_State *L)
 	if (lua_istable(L, 3)) {
 		lua_getfield(L, 3, "detach");
 		detach = lua_toboolean(L, -1);
+		lua_pop(L, 1);
+		lua_getfield(L, 3, "background");
+		background = lua_toboolean(L, -1);
+		lua_pop(L, 1);
+		lua_getfield(L, 3, "timeout");
+		if (lua_isnumber(L, -1) && lua_tonumber(L, -1) > 0)
+			timeout_ms = (long)(lua_tonumber(L, -1) * 1000.0);
 		lua_pop(L, 1);
 	}
 	argv = calloc(n + 1, sizeof *argv);
@@ -100,11 +110,12 @@ static int exec_run(lua_State *L)
 		dup2(in_p[0], 0);
 		dup2(out_p[1], 1);
 		dup2(err_p[1], 2);
-		if (detach) {
-			/* its own session, out of every step's group, and no output of its own */
+		if (detach || background) {
+			/* no output of its own; a detached command also gets a session of its own, out of every step's group */
 			int nul = open("/dev/null", O_WRONLY);
 
-			setsid();
+			if (detach)
+				setsid();
 			if (nul >= 0) {
 				dup2(nul, 1);
 				dup2(nul, 2);
@@ -118,13 +129,26 @@ static int exec_run(lua_State *L)
 	close_fd(&err_p[1]);
 	if (in_len == 0)
 		close_fd(&in_p[1]);
+	if (background) {
+		/* fire and forget: the caller never waits, the parent's child reaper collects it */
+		close_fd(&in_p[1]);
+		close_fd(&out_p[0]);
+		close_fd(&err_p[0]);
+		sigaction(SIGPIPE, &old_pipe, NULL);
+		for (i = 0; i < n; i++)
+			free(argv[i]);
+		free(argv);
+		lua_pushinteger(L, (lua_Integer)pid);
+		return 1;
+	}
+	clock_gettime(CLOCK_MONOTONIC, &t0);
 	fcntl(in_p[1], F_SETFL, O_NONBLOCK);
 
 	while (out_p[0] >= 0 || err_p[0] >= 0 || in_p[1] >= 0) {
 		struct pollfd pf[3];
 		char chunk[16384];
 		int np = 0, k;
-		int which[3];
+		int which[3], w = -1;
 
 		if (in_p[1] >= 0) {
 			pf[np].fd = in_p[1];
@@ -141,7 +165,19 @@ static int exec_run(lua_State *L)
 			pf[np].events = POLLIN;
 			which[np++] = 2;
 		}
-		if (poll(pf, (nfds_t)np, -1) < 0) {
+		if (timeout_ms >= 0) {
+			struct timespec now;
+			long left;
+
+			clock_gettime(CLOCK_MONOTONIC, &now);
+			left = timeout_ms - ((long)(now.tv_sec - t0.tv_sec) * 1000 + (now.tv_nsec - t0.tv_nsec) / 1000000);
+			if (left <= 0) {
+				timed_out = 1;
+				break;
+			}
+			w = (int)left;
+		}
+		if (poll(pf, (nfds_t)np, w) < 0) {
 			if (errno == EINTR)
 				continue;
 			break;
@@ -175,8 +211,24 @@ static int exec_run(lua_State *L)
 	close_fd(&in_p[1]);
 	close_fd(&out_p[0]);
 	close_fd(&err_p[0]);
+	/* Its output is closed, but it may still be running: the bound covers the wait too. */
+	while (timeout_ms >= 0 && !timed_out) {
+		struct timespec now;
+		pid_t r = waitpid(pid, &status, WNOHANG);
+
+		if (r != 0)
+			goto reaped;
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		if ((long)(now.tv_sec - t0.tv_sec) * 1000 + (now.tv_nsec - t0.tv_nsec) / 1000000 >= timeout_ms)
+			timed_out = 1;
+		else
+			usleep(2000);
+	}
+	if (timed_out)
+		kill(pid, SIGKILL);
 	while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
 		;
+reaped:
 	sigaction(SIGPIPE, &old_pipe, NULL);
 	for (i = 0; i < n; i++)
 		free(argv[i]);
@@ -185,6 +237,13 @@ static int exec_run(lua_State *L)
 		free(out.data);
 		free(err.data);
 		return luaL_error(L, "qwe.exec.run: out of memory");
+	}
+	if (timed_out) {
+		free(out.data);
+		free(err.data);
+		lua_pushnil(L);
+		lua_pushfstring(L, "timed out after %d ms", (int)timeout_ms);
+		return 2;
 	}
 	lua_pushinteger(L, WIFEXITED(status) ? WEXITSTATUS(status) : -WTERMSIG(status));
 	lua_pushlstring(L, out.data ? out.data : "", out.len);
@@ -206,6 +265,31 @@ spawn_failed:
 	lua_pushnil(L);
 	lua_pushstring(L, strerror(saved));
 	return 2;
+}
+
+/* qwe.exec.wait(pid, seconds) -> true once the child (started with background = true)
+ * is gone, false if it is still running after the bound. A child the event loop's
+ * reaper collected first counts as gone. */
+static int exec_wait(lua_State *L)
+{
+	pid_t pid = (pid_t)luaL_checkinteger(L, 1);
+	long ms = (long)(luaL_checknumber(L, 2) * 1000.0), waited = 0;
+
+	for (;;) {
+		int status;
+		pid_t r = waitpid(pid, &status, WNOHANG);
+
+		if (r != 0) {
+			lua_pushboolean(L, 1); /* exited, or not ours (any more) */
+			return 1;
+		}
+		if (waited >= ms) {
+			lua_pushboolean(L, 0);
+			return 1;
+		}
+		usleep(2000);
+		waited += 2;
+	}
 }
 
 static int exec_getpid(lua_State *L)
@@ -274,7 +358,7 @@ static int exec_preamble(lua_State *L)
 
 int luaopen_qwe_exec(lua_State *L)
 {
-	lua_createtable(L, 0, 5);
+	lua_createtable(L, 0, 6);
 	lua_pushcfunction(L, exec_getpid);
 	lua_setfield(L, -2, "getpid");
 	lua_pushcfunction(L, exec_getuid);
@@ -285,5 +369,7 @@ int luaopen_qwe_exec(lua_State *L)
 	lua_setfield(L, -2, "bootstrap");
 	lua_pushcfunction(L, exec_run);
 	lua_setfield(L, -2, "run");
+	lua_pushcfunction(L, exec_wait);
+	lua_setfield(L, -2, "wait");
 	return 1;
 }

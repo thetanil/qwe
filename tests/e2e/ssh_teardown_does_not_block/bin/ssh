@@ -1,0 +1,5 @@
+#!/bin/sh
+# The remote kill is slow (1 s) to start, so a parent that waited for it would show.
+case "$*" in *'tok=$1'*) sleep 1 ;; esac
+PATH=${PATH#*:}
+exec ssh "$@"

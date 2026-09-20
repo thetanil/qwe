@@ -1,0 +1,9 @@
+jobs:
+  local_job:
+    target: local
+    steps:
+      - run: echo fine
+  remote_job:
+    target: dead
+    steps:
+      - run: hostname

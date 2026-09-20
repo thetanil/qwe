@@ -65,7 +65,8 @@ static int fs_private_dir(lua_State *L)
 	if (mkdir(path, 0700) < 0 && errno != EEXIST) {
 		lua_pushnil(L);
 		lua_pushfstring(L, "cannot create %s %s: %s", what, path, strerror(errno));
-		return 2;
+		lua_pushstring(L, "create");
+		return 3;
 	}
 	/* lstat: a symlink is refused, whatever it points at */
 	if (lstat(path, &st) < 0 || !S_ISDIR(st.st_mode)) {

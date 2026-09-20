@@ -8,7 +8,8 @@
  * . and ..), or nil, message; qwe.fs.isdir(path) -> boolean;
  * qwe.fs.private_dir(path, what) -> true, or nil, message: makes the directory
  * 0700 if it is missing, then requires a real directory that is owned by this
- * user with no group or other access (what names it in the message). */
+ * user with no group or other access (what names it in the message). When it
+ * cannot even make the directory a third value, "create", says so. */
 int luaopen_qwe_fs(lua_State *L);
 
 #endif

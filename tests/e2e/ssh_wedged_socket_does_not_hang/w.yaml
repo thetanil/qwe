@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: self
+    steps:
+      - run: hostname
+      - run: pkill -STOP -f '[s]sh -M -N -f -S xdg/qwe/'; touch started; sleep 30
+        on: local

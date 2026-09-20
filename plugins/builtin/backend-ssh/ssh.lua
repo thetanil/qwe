@@ -93,10 +93,21 @@ end
 -- that an abandoned master does not linger. QWE_TEST_MASTER_TTL overrides it (seconds).
 M.MASTER_TTL = 120
 
-function M.master_argv(host, sock, log, ttl)
+-- The bounds on the parent's own ssh calls, in seconds. The parent runs an event loop
+-- and every call here blocks it, so none may wait on a slow or dead host for long
+-- (qwe-ssh-sec I.5). CONNECT_TIMEOUT is for the pre-connect phase, before any timer is
+-- armed; RECONNECT_TIMEOUT for a master that died mid-run, the one place another
+-- job's timer may be late. CHECK_TIMEOUT covers -O check and -O exit, which take a
+-- few milliseconds unless the master is wedged.
+M.CONNECT_TIMEOUT = 10
+M.RECONNECT_TIMEOUT = 3
+M.CHECK_TIMEOUT = 2
+M.KILL_WAIT = 5 -- the most close_all waits for one remote kill
+
+function M.master_argv(host, sock, log, ttl, connect_timeout)
   return {
     "ssh", "-M", "-N", "-f", "-S", sock, "-o", "ControlPersist=" .. tostring(ttl or M.MASTER_TTL),
-    "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "LogLevel=ERROR", "-E", log, host,
+    "-o", "BatchMode=yes", "-o", "ConnectTimeout=" .. tostring(connect_timeout or M.CONNECT_TIMEOUT), "-o", "LogLevel=ERROR", "-E", log, host,
   }
 end
 
@@ -154,13 +165,13 @@ local function sweep(dir, my_pid)
     if pid and tonumber(pid) ~= my_pid and not fs.isdir("/proc/" .. pid) then
       local path = dir .. "/" .. name
       -- the destination is required by ssh but unused by -O check
-      if exec.run(M.check_argv("stale", path)) ~= 0 then os.remove(path) end
+      if exec.run(M.check_argv("stale", path), nil, { timeout = M.CHECK_TIMEOUT }) ~= 0 then os.remove(path) end
     end
   end
 end
 
 local function alive(m)
-  return exec.run(M.check_argv(m.host, m.sock)) == 0
+  return exec.run(M.check_argv(m.host, m.sock), nil, { timeout = M.CHECK_TIMEOUT }) == 0
 end
 
 local function read_all(path)
@@ -171,38 +182,62 @@ local function read_all(path)
   return (text:gsub("%s+$", ""))
 end
 
+-- Where the master's socket and log go: the directory dir.
+local function place(m, dir)
+  local pid = exec.getpid()
+
+  m.dir = dir
+  m.sock = M.sock_path(dir, pid)
+  m.log = string.format("%s/%d.%s.log", dir, pid, m.name)
+end
+
 -- Makes sure the target's master is running: starts it, or starts it again if
--- it died. Returns true, or nil and why it could not.
-function M.ensure(name, host)
+-- it died, giving the connection connect_timeout seconds (default CONNECT_TIMEOUT).
+-- Returns true; or nil, why it could not, and "refused" when the socket directory
+-- failed its check (a fault to report, not a host to give up on). A target that
+-- could not be connected to is marked unreachable, and the run stops asking.
+function M.ensure(name, host, connect_timeout)
   local m = masters[name]
   if not m then
-    local pid = exec.getpid()
-    local dir = M.socket_dir(exec.getuid(), os.getenv("XDG_RUNTIME_DIR"))
-    m = {
-      host = host,
-      sock = M.sock_path(dir, pid),
-      log = string.format("%s/%d.%s.log", dir, pid, name),
-      dir = dir,
-    }
+    m = { host = host, name = name }
+    place(m, M.socket_dir(exec.getuid(), os.getenv("XDG_RUNTIME_DIR")))
     masters[name] = m
   end
   -- Checked before anything is asked of a socket in it, every time: whoever owns
   -- the directory owns what the step's commands and secrets are sent to.
-  local ok, problem = fs.private_dir(m.dir, "the socket directory")
-  if not ok then return nil, problem end
+  local ok, problem, kind = fs.private_dir(m.dir, "the socket directory")
+  if not ok and kind == "create" and m.dir ~= M.socket_dir(exec.getuid(), nil) then
+    -- $XDG_RUNTIME_DIR names a directory this user cannot write to (a container, su):
+    -- /tmp, which is checked just the same, rather than a step that cannot run
+    place(m, M.socket_dir(exec.getuid(), nil))
+    ok, problem = fs.private_dir(m.dir, "the socket directory")
+  end
+  if not ok then return nil, problem, "refused" end
   if not swept[m.dir] then
     swept[m.dir] = true
     sweep(m.dir, exec.getpid())
   end
   if alive(m) then return true end
-  local code, _, err = exec.run(M.master_argv(m.host, m.sock, m.log, tonumber(os.getenv("QWE_TEST_MASTER_TTL"))), nil, { detach = true })
+  local ct = connect_timeout or M.CONNECT_TIMEOUT
+  local argv = M.master_argv(m.host, m.sock, m.log, tonumber(os.getenv("QWE_TEST_MASTER_TTL")), ct)
+  local code, out, err = exec.run(argv, nil, { detach = true, timeout = ct })
+  if code == nil then err = out end -- it could not start, or it timed out
   local why = read_all(m.log)
   os.remove(m.log)
   if code ~= 0 then
+    m.unreachable = true
     if why == "" then why = err ~= "" and err or ("ssh exited with " .. tostring(code)) end
     return nil, "cannot connect to " .. host .. ": " .. why
   end
+  m.unreachable = nil
   return true
+end
+
+-- Whether the run has given up on the target: its master could not be started.
+-- Its steps still run and fail at once on a socket that is not there.
+function M.unreachable(name)
+  local m = masters[name]
+  return m ~= nil and m.unreachable == true
 end
 
 -- Whether the target's master is still up.
@@ -219,16 +254,26 @@ function M.for_target(name, env, become_value)
   return M.new({ host = m.host, sock = m.sock, env = env, become = become_value })
 end
 
--- Stops the processes of the step with this token on the target's host.
+-- Stops the processes of the step with this token on the target's host. It does
+-- not wait: the parent is inside the grace window of a teardown, and the result
+-- was never used. Nothing is sent through a master that is not up.
+local kills = {} -- pids of the kills in flight
+
 function M.kill(name, token, signal)
   local m = masters[name]
-  if m then exec.run(M.kill_argv(m.host, m.sock, token, signal)) end
+
+  if not m or m.unreachable or not alive(m) then return end
+  local pid = exec.run(M.kill_argv(m.host, m.sock, token, signal), nil, { background = true })
+  if pid then kills[#kills + 1] = pid end
 end
 
--- Ends every master this process started.
+-- Ends every master this process started, after the kills in flight have had their
+-- say (closing the master first would cut them off).
 function M.close_all()
+  for _, pid in ipairs(kills) do exec.wait(pid, M.KILL_WAIT) end
+  kills = {}
   for name, m in pairs(masters) do
-    exec.run(M.exit_argv(m.host, m.sock))
+    if not m.unreachable then exec.run(M.exit_argv(m.host, m.sock), nil, { timeout = M.CHECK_TIMEOUT }) end
     masters[name] = nil
   end
 end

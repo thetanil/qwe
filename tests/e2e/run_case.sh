@@ -32,6 +32,9 @@
 # result.json has its run id and times replaced by RUN and TIME, and the first
 # field (the time) of each lifecycle.trace line by TIME, so goldens can say
 # expected/RUN/j.log, expected/RUN/result.json and expected/RUN/lifecycle.trace.
+# check.sh sees the trace with its real times as lifecycle.raw (seconds since the
+# run started, first field).
+#
 #
 # Exit: 0 pass, 1 golden mismatch, 3 harness error.
 qwe=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
@@ -128,6 +131,8 @@ if [ -d "$work/.qwe/runs" ] && [ "$(ls "$work/.qwe/runs" | wc -l)" = 1 ]; then
 			mv "$work/RUN/result.json.new" "$work/RUN/result.json"
 	fi
 	if [ -f "$work/RUN/lifecycle.trace" ]; then
+		# check.sh can still measure: the unblanked trace is kept as lifecycle.raw
+		cp "$work/RUN/lifecycle.trace" "$work/lifecycle.raw"
 		# the first field is the time since the run started
 		sed -e 's/^[0-9][0-9]*\.[0-9][0-9]* /TIME /' "$work/RUN/lifecycle.trace" >"$work/RUN/lifecycle.trace.new" &&
 			mv "$work/RUN/lifecycle.trace.new" "$work/RUN/lifecycle.trace"

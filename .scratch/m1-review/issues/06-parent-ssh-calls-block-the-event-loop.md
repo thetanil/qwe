@@ -1,6 +1,6 @@
 # 06: Parent-side ssh calls block the event loop
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: none
@@ -126,19 +126,19 @@ step succeeds on a fresh master.
 
 ## Acceptance criteria
 
-- [ ] A step timeout fires within 100 ms of its deadline while another job is starting a master to a healthy target, checked against the microsecond timestamps in `lifecycle.trace`. `e2e: tests/e2e/ssh_preconnect_timeout_is_exact/`
-- [ ] The same holds while another job's target is **unreachable**: a 1 s step timeout on job A fires within 100 ms even though job B's target is `192.0.2.1`. This is the case that fails today at 10 s. `e2e: tests/e2e/ssh_unreachable_does_not_stall/`
-- [ ] Every master is opened before the first job's first step spawns, checked from the ssh call log and the trace's ordering. `e2e: tests/e2e/ssh_preconnect_runs_first/`
-- [ ] Only the targets of the selected jobs are contacted: with `--job` naming a `local` job, a workflow whose inventory holds an unreachable target opens no master and the run succeeds. `e2e: tests/e2e/ssh_preconnect_only_selected/`
-- [ ] A target that cannot be reached fails its own jobs with reason `unreachable`, skips their dependents with `dependency-failed`, runs every unrelated job, and exits non-zero. `e2e: tests/e2e/ssh_unreachable_fails_its_jobs/`
-- [ ] `engine-error` no longer appears for an unreachable host, and still appears for a genuine engine fault. `e2e: tests/e2e/ssh_unreachable_fails_its_jobs/`, `tests/e2e/engine_error_spawn/` (existing, must stay green)
-- [ ] There is no `--no-preconnect` option: passing it is a usage error. `unit: src/cli/run/run_test.c::option_parsing`
-- [ ] Teardown does not block: a remote step that times out has its grace window honoured within 100 ms, with the remote kill in flight. `e2e: tests/e2e/ssh_teardown_does_not_block/`
-- [ ] A remote kill is skipped when the master is not alive, and the step still ends. `e2e: tests/e2e/ssh_connection_lost/` (existing, must stay green)
-- [ ] No parent-side ssh call can hang: with a wedged control socket, `-O check` and `-O exit` give up within their bound rather than hanging the run, and SIGINT is still honoured. `e2e: tests/e2e/ssh_wedged_socket_does_not_hang/`
-- [ ] A master that dies mid-run is reconnected within the 3 s bound and the next step succeeds. `e2e: tests/e2e/ssh_connection_lost/` (existing, must stay green)
-- [ ] Every existing ssh case stays green. `e2e: tests/e2e/ssh_hostname/`, `ssh_one_master_sequential/`, `ssh_one_master_parallel/`, `ssh_parallel_rendezvous/`, `ssh_session_cap/`, `ssh_timeout_kills_remote/`, `ssh_master_closed/`, `ssh_env_and_stdin/`, `on_local_override/`
-- [ ] The 100 ms bound, the 3 s reconnect exception and the `unreachable` reason are written into `docs/qwe-ssh-sec.md` and the design's reason list.
+- [x] A step timeout fires within 100 ms of its deadline while another job is starting a master to a healthy target, checked against the microsecond timestamps in `lifecycle.trace`. `e2e: tests/e2e/ssh_preconnect_timeout_is_exact/`
+- [x] The same holds while another job's target is **unreachable**: a 1 s step timeout on job A fires within 100 ms even though job B's target is `192.0.2.1`. This is the case that fails today at 10 s. `e2e: tests/e2e/ssh_unreachable_does_not_stall/`
+- [x] Every master is opened before the first job's first step spawns, checked from the ssh call log and the trace's ordering. `e2e: tests/e2e/ssh_preconnect_runs_first/`
+- [x] Only the targets of the selected jobs are contacted: with `--job` naming a `local` job, a workflow whose inventory holds an unreachable target opens no master and the run succeeds. `e2e: tests/e2e/ssh_preconnect_only_selected/`
+- [x] A target that cannot be reached fails its own jobs with reason `unreachable`, skips their dependents with `dependency-failed`, runs every unrelated job, and exits non-zero. `e2e: tests/e2e/ssh_unreachable_fails_its_jobs/`
+- [x] `engine-error` no longer appears for an unreachable host, and still appears for a genuine engine fault. `e2e: tests/e2e/ssh_unreachable_fails_its_jobs/`, `tests/e2e/engine_error_spawn/` (existing, must stay green)
+- [x] There is no `--no-preconnect` option: passing it is a usage error. `unit: src/cli/run/run_test.c::option_parsing`
+- [x] Teardown does not block: a remote step that times out has its grace window honoured within 100 ms, with the remote kill in flight. `e2e: tests/e2e/ssh_teardown_does_not_block/`
+- [x] A remote kill is skipped when the master is not alive, and the step still ends. `e2e: tests/e2e/ssh_connection_lost/` (existing, must stay green)
+- [x] No parent-side ssh call can hang: with a wedged control socket, `-O check` and `-O exit` give up within their bound rather than hanging the run, and SIGINT is still honoured. `e2e: tests/e2e/ssh_wedged_socket_does_not_hang/`
+- [x] A master that dies mid-run is reconnected within the 3 s bound and the next step succeeds. `e2e: tests/e2e/ssh_connection_lost/` (existing, must stay green)
+- [x] Every existing ssh case stays green. `e2e: tests/e2e/ssh_hostname/`, `ssh_one_master_sequential/`, `ssh_one_master_parallel/`, `ssh_parallel_rendezvous/`, `ssh_session_cap/`, `ssh_timeout_kills_remote/`, `ssh_master_closed/`, `ssh_env_and_stdin/`, `on_local_override/`
+- [x] The 100 ms bound, the 3 s reconnect exception and the `unreachable` reason are written into `docs/qwe-ssh-sec.md` and the design's reason list.
 
 ## Comments
 
@@ -211,3 +211,14 @@ section.
   qwe-ssh-sec, deliberately not solved here.
 - Renaming `timeout-minutes` to `timeout-seconds` (`m1-review/02`). It touches this ticket's
   fixtures only incidentally.
+
+Resolved 2026-09-20.
+
+- `qwe.exec.run` gained `timeout` (kills and returns `nil, "timed out after N ms"`) and `background` (returns the pid at once); `qwe.exec.wait(pid, s)` waits for such a child. `backend.ssh` uses them: `-O check` and `-O exit` 2 s, master start `ConnectTimeout` = hard bound (10 s pre-connect, 3 s reconnect), remote kill fire-and-forget and skipped when the master is not up. `close_all` waits (≤5 s each) for kills in flight before `-O exit`, because closing the master would cut them off; that is after every timer is done.
+- `workflow.c`: `preconnect()` runs between `select_jobs` and `run_all`, serial, over the distinct targets of selected jobs. A job whose steps are all `on: local` is not counted as using its target: `secret_per_target` and four other fixtures have such jobs on the unreachable `192.0.2.x`, and would otherwise each have cost 10 s.
+- A failed connect marks the target `unreachable` in `backend.ssh`; `step_spawn` then skips `remote_ensure`, spawns the step anyway (ssh exits 255 on the missing socket) and `leader_exit_event` gives it reason `unreachable`. A failed mid-run reconnect does the same. A socket-directory *refusal* (ticket 04) is not unreachable: it stays a start-failed at the job, so `ssh_socket_dir_refused` still expects `engine-error`.
+- `--no-preconnect` was already a usage error (any unknown option is); `run_test.c::option_parsing` pins that.
+- `run_case.sh` keeps the unblanked trace as `lifecycle.raw` so `check.sh` can measure deadlines.
+- A stale `$XDG_RUNTIME_DIR` (here it is a root-owned `/run/user/1000`) made every ssh run fail under ticket 04's change. `ensure` now falls back to `/tmp/qwe-<uid>` when it cannot *create* the `qwe` subdirectory; a directory that exists but fails the owner/mode check is still refused.
+- Limits of the evidence: `ssh_preconnect_runs_first` proves the master precedes the first step's ssh but cannot tell pre-connect from a lazy connect on a single target (two targets need two distinct host strings, and only one host is reachable here); the exactness cases carry that proof. The wedged-socket case was checked to be non-vacuous by hand: `ssh -O check` on a SIGSTOPped master blocks indefinitely.
+- The two unreachable cases each take ~10 s (the bound) and use the TEST-NET address 192.0.2.1; they need a network that drops rather than rejects it.

@@ -34,6 +34,7 @@ struct job_run {
 	int outputs_ref;             /* registry ref of the job's { step id -> { key -> value } } */
 	char *out_path;              /* the live run: step's $QWE_OUTPUT file */
 	char *step_target;           /* the live step runs on this remote target, or NULL */
+	int step_unreachable;        /* the live step was spawned with its target given up on */
 	char *step_token;            /* what tells its processes apart on the remote host */
 	char *step_json;             /* the live step's outputs, as JSON, for result.json */
 	int timeout_told;            /* the job timeout has been sent as an event */

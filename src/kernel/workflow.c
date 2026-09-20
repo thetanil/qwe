@@ -770,14 +770,17 @@ fail:
 	return -1;
 }
 
-/* Makes sure the master of the live step's target is up (starting it if it died). */
-static int remote_ensure(struct job *job, char *msg, size_t msg_size)
+/* Makes sure the master of the live step's target is up, starting it again if it
+ * died: the one place a running job blocks the loop on ssh, bounded by the
+ * reconnect timeout. Returns 0, or -1 with the reason in msg; *refused is set when
+ * that was a refusal (the socket directory) rather than an unreachable host. */
+static int remote_ensure(struct job *job, char *msg, size_t msg_size, int *refused)
 {
 	lua_State *L = job->L;
-	int top = lua_gettop(L);
+	int top = lua_gettop(L), rc = 0;
 	const char *host;
-	int rc;
 
+	*refused = 0;
 	lua_getglobal(L, "require");
 	lua_pushstring(L, "qwe.inventory");
 	lua_call(L, 1, 1);
@@ -785,9 +788,36 @@ static int remote_ensure(struct job *job, char *msg, size_t msg_size)
 	lua_pushstring(L, job->run.step_target);
 	lua_call(L, 1, 1);
 	host = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
-	rc = ssh_call(job, "ensure", host, NULL, msg, msg_size);
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "backend.ssh");
+	if (lua_pcall(L, 1, 1, 0) != 0)
+		goto fail;
+	lua_getfield(L, -1, "ensure");
+	lua_pushstring(L, job->run.step_target);
+	lua_pushstring(L, host);
+	lua_getfield(L, -4, "RECONNECT_TIMEOUT");
+	if (lua_pcall(L, 3, 3, 0) != 0)
+		goto fail;
+	if (!lua_toboolean(L, -3)) {
+		snprintf(msg, msg_size, "%s", lua_isstring(L, -2) ? lua_tostring(L, -2) : "failed");
+		*refused = lua_isstring(L, -1) && strcmp(lua_tostring(L, -1), "refused") == 0;
+		rc = -1;
+	}
 	lua_settop(L, top);
 	return rc;
+fail:
+	snprintf(msg, msg_size, "%s", lua_tostring(L, -1));
+	lua_settop(L, top);
+	*refused = 0;
+	return -1;
+}
+
+/* Whether the run has given up on the live step's target (see backend.ssh.unreachable). */
+static int remote_unreachable(struct job *job)
+{
+	char msg[8];
+
+	return job->run.step_target && ssh_call(job, "unreachable", NULL, NULL, msg, sizeof msg) == 0;
 }
 
 /* Stops what the live step started on its remote host: killing the local ssh
@@ -847,15 +877,24 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 	r->step_changed = 1;
 	arg.L = L;
 	arg.step_ref = r->cur_ref;
-	if (!op && r->step_target) {
+	r->step_unreachable = 0;
+	if (!op && r->step_target && !remote_unreachable(job)) {
 		char msg[512];
+		int refused;
 
-		if (remote_ensure(job, msg, sizeof msg) < 0) {
+		if (remote_ensure(job, msg, sizeof msg, &refused) < 0) {
 			fprintf(stderr, "qwe run: job %s: target %s: %s\n", job->id, r->step_target, msg);
-			op = "ssh-master";
-			err = ECONNREFUSED;
+			if (refused) {
+				op = "ssh-master";
+				err = ECONNREFUSED;
+			}
+			/* otherwise the target is now given up on: the step is spawned anyway */
 		}
 	}
+	/* A step on a target the run has given up on is spawned and fails at once: its
+	 * ssh finds no socket and exits 255 without a connection (ProxyCommand=false). */
+	if (!op && r->step_target)
+		r->step_unreachable = remote_unreachable(job);
 	if (op) {
 		/* resolve_step failed */
 	} else if (make_output_file(r->out_path) < 0) {
@@ -1164,7 +1203,9 @@ static enum qwe_lc_event leader_exit_event(struct job *job, int status, struct q
 			pl->reason = m.reason;
 			return QWE_LC_EV_LEADER_EXIT_FAIL;
 		}
-		if (remote_lost(job, status))
+		if (r->step_unreachable && WIFEXITED(status) && WEXITSTATUS(status) == 255)
+			pl->reason = "unreachable";
+		else if (remote_lost(job, status))
 			pl->reason = "connection-lost";
 		return exited_ok ? QWE_LC_EV_LEADER_EXIT_OK : QWE_LC_EV_LEADER_EXIT_FAIL;
 	}
@@ -1288,6 +1329,71 @@ static long target_max_sessions(lua_State *L, const char *target)
 		cap = (long)lua_tonumber(L, -1);
 	lua_settop(L, top);
 	return cap;
+}
+
+/* Whether any step of the job runs on the job's target (a step with `on: local` does not). */
+static int job_uses_target(lua_State *L, const struct job *job)
+{
+	int top = lua_gettop(L), used = 0;
+	size_t s, n;
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, job->ref);
+	lua_getfield(L, -1, "steps");
+	n = lua_istable(L, -1) ? lua_objlen(L, -1) : 0;
+	for (s = 1; s <= n && !used; s++) {
+		lua_rawgeti(L, -1, (int)s);
+		lua_getfield(L, -1, "on");
+		used = !(lua_isstring(L, -1) && strcmp(lua_tostring(L, -1), "local") == 0);
+		lua_pop(L, 2);
+	}
+	lua_settop(L, top);
+	return used;
+}
+
+/* Opens a master to every remote target the selected jobs use, one after another,
+ * before the first job starts. Nothing is timed yet, so a slow host costs startup
+ * time and cannot make another job's timeout late. A target that cannot be reached
+ * is reported here and given up on: its jobs fail with reason unreachable. A job
+ * whose steps all run `on: local` never needs its target, so it is not contacted. */
+static void preconnect(struct run_ctx *ctx)
+{
+	lua_State *L = ctx->L;
+	size_t i, k;
+
+	for (i = 0; i < ctx->njobs; i++) {
+		const char *target = ctx->jobs[i].target;
+		int top = lua_gettop(L);
+		const char *host;
+
+		if (strcmp(target, "local") == 0 || !job_uses_target(L, &ctx->jobs[i]))
+			continue;
+		for (k = 0; k < i; k++)
+			if (strcmp(ctx->jobs[k].target, target) == 0 && job_uses_target(L, &ctx->jobs[k]))
+				break;
+		if (k < i)
+			continue;
+		lua_getglobal(L, "require");
+		lua_pushstring(L, "qwe.inventory");
+		lua_call(L, 1, 1);
+		lua_getfield(L, -1, "host");
+		lua_pushstring(L, target);
+		lua_call(L, 1, 1);
+		host = lua_isstring(L, -1) ? lua_tostring(L, -1) : "";
+		lua_getglobal(L, "require");
+		lua_pushstring(L, "backend.ssh");
+		if (lua_pcall(L, 1, 1, 0) == 0) {
+			lua_getfield(L, -1, "ensure");
+			lua_pushstring(L, target);
+			lua_pushstring(L, host);
+			if (lua_pcall(L, 2, 3, 0) != 0)
+				fprintf(stderr, "qwe run: target %s: %s\n", target, lua_tostring(L, -1));
+			else if (!lua_toboolean(L, -3) && !lua_isstring(L, -1)) /* a refusal is reported when its job starts */
+				fprintf(stderr, "qwe run: target %s: %s\n", target, lua_tostring(L, -2));
+		} else {
+			fprintf(stderr, "qwe run: target %s: %s\n", target, lua_tostring(L, -1));
+		}
+		lua_settop(L, top);
+	}
 }
 
 /* Ends the ssh masters this run started, if it started any. */
@@ -1526,6 +1632,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	lua_getfield(L, -1, "max-parallel");
 	max_parallel = lua_isnumber(L, -1) ? (long)lua_tonumber(L, -1) : 0;
 	lua_pop(L, 1);
+	preconnect(&ctx);
 	if (run_all(&ctx, max_parallel) < 0)
 		rc = QWE_EXIT_FAILED;
 	close_masters(L);

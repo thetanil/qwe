@@ -209,6 +209,7 @@ The kernel's real job is managing state transitions at two levels: jobs in the g
 A step is `pending → running → success | failed`, or `skipped` if its job ends before it starts, or `cancelled` if its job is torn down while it runs.
 
 - **Step timeout** (the step's own `timeout-seconds`): the step is torn down the same way (§9), and its outcome is **`failed`** with reason `timeout`. `continue-on-error` applies. A step timeout is a limit the author scoped to one step, and it's recoverable.
+- **The timeout guarantee.** A step or job timeout fires within **100 ms** of its deadline whatever else the run is doing, including a slow or unreachable host on another job's target: the parent connects to every target the selected jobs use *before* the first job starts, and every parent-side ssh call after that is bounded or does not wait. The one exception is a mid-run reconnect after a lost connection, which may delay other jobs' timers by up to 3 s (qwe-ssh-sec I.5). A target that cannot be connected to fails its own jobs with reason `unreachable`, not `engine-error`.
 - **Job timeout or operator cancel**: the current step is torn down, and the step and job are **`cancelled`**. `continue-on-error` can't override it. It's a limit imposed from outside.
 - **Plugin steps with check/apply** (§12.3): the step fails with reason `not-converged` if the check after apply still reports a change is needed.
 

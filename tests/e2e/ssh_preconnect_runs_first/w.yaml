@@ -1,0 +1,13 @@
+jobs:
+  a:
+    target: self
+    steps:
+      - run: hostname
+  b:
+    target: self
+    steps:
+      - run: hostname
+  c:
+    target: self
+    steps:
+      - run: hostname

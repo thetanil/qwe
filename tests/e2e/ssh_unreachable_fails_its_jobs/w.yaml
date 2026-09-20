@@ -1,0 +1,15 @@
+jobs:
+  b:
+    target: dead
+    steps:
+      - id: s
+        run: hostname
+  c:
+    needs: [b]
+    target: local
+    steps:
+      - run: echo NEVER
+  d:
+    target: local
+    steps:
+      - run: echo unrelated-ran

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Logs every ssh call, then runs the real one.
+echo "$*" >> ssh.calls
+PATH=${PATH#*:}
+exec ssh "$@"

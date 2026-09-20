@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
     name = "run",
@@ -6,4 +6,14 @@ cc_library(
     hdrs = ["run.h"],
     visibility = ["//src/cli:__pkg__"],
     deps = ["//src/kernel"],
+)
+
+cc_test(
+    name = "run_test",
+    srcs = ["run_test.c"],
+    deps = [
+        ":run",
+        "//src/kernel",
+        "//third_party/greatest",
+    ],
 )
