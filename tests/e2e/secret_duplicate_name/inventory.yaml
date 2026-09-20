@@ -1,0 +1,2 @@
+secrets:
+  T: !encrypted "qwe:1:xchacha20poly1305:D02IeNifE++kjbRs6ZUiPfhAOLdmpOmsMVqUq5i7TxGQJhpTI4qT6D+6OCkcUNr3t6D42+It"

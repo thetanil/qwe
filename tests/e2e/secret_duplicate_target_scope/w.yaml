@@ -1,0 +1,11 @@
+jobs:
+  ok:
+    target: other
+    steps:
+      - run: echo hi
+        on: local
+  dup:
+    target: box
+    steps:
+      - run: echo hi
+        on: local

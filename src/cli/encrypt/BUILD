@@ -5,5 +5,9 @@ cc_library(
     srcs = ["encrypt.c"],
     hdrs = ["encrypt.h"],
     visibility = ["//src/cli:__pkg__"],
-    deps = ["//src/kernel"],
+    deps = [
+        "//src/kernel",
+        "//src/secrets",
+        "//third_party/libsodium",
+    ],
 )

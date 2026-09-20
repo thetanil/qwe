@@ -1,0 +1,2 @@
+qwe encrypt: takes no arguments: the plaintext is read from stdin, so it never
+appears in a command line (echo -n "..." | qwe encrypt)

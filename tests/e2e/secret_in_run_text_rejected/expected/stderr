@@ -1,0 +1,1 @@
+qwe validate: w.yaml:7:14: a secret cannot be substituted into run: text, where it would be in the command line of every process on the host: map it with env: (env: { NAME: ${{ secrets.T }} }) and read $NAME

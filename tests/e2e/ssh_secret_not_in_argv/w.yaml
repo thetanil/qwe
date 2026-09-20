@@ -1,0 +1,16 @@
+secrets:
+  C: !encrypted "qwe:1:xchacha20poly1305:ztcWUQDOtIf27Vlpu6g27qXQeml5SoSkcUCCAFzWh3HuCwUlf22AMr9KWrihala/nco+7INavJXDfP8="
+jobs:
+  j:
+    target: self
+    env:
+      CANARY: ${{ secrets.C }}
+    steps:
+      - run: |
+          # every process's command line, read while this step runs
+          for f in /proc/[0-9]*/cmdline; do
+            case "$(tr '\0' ' ' 2>/dev/null < "$f")" in
+              *"in-argv-canary-"9f3k*) echo "FOUND in $f: $(tr "\0" " " < "$f" | cut -c1-200)"; exit 1 ;;
+            esac
+          done
+          [ -n "$CANARY" ] && echo "clean, and the step still has the secret"

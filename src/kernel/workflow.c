@@ -8,6 +8,7 @@
 #include "src/kernel/luavm.h"
 #include "src/kernel/validate.h"
 #include "src/kernel/proc.h"
+#include "src/kernel/redact.h"
 #include "src/kernel/timer.h"
 #include "src/kernel/trace.h"
 #include "src/kernel/result.h"
@@ -213,15 +214,33 @@ static int mkdir_p(const char *path)
 
 /* Feeds whatever is readable on fd through the ring into the sink.
  * Returns 1 at end of file, 0 if it would block. */
-static int drain(int fd, struct qwe_ring *ring, struct qwe_sink *sink)
+/* Puts bytes (already redacted) into the ring and on to the sink. */
+static void emit(struct qwe_ring *ring, struct qwe_sink *sink, const char *data, size_t n)
+{
+	unsigned long before = ring->dropped;
+	char out[CHUNK];
+	size_t got;
+
+	qwe_ring_write(ring, data, n);
+	while ((got = qwe_ring_read(ring, out, sizeof out)) > 0)
+		qwe_sink_write(sink, out, got);
+	if (ring->dropped != before) {
+		char alarm[96];
+		snprintf(alarm, sizeof alarm, "qwe: ALARM: ring overflow, %lu bytes dropped\n", ring->dropped);
+		qwe_sink_write(sink, alarm, strlen(alarm));
+	}
+}
+
+/* Reads what the step wrote. Every byte passes through the redactor before it
+ * reaches the ring, so a known secret is never in the log, on the terminal or
+ * in any consumer (qwe-ssh-sec II.7). */
+static int drain(int fd, struct qwe_ring *ring, struct qwe_sink *sink, struct qwe_redactor *red)
 {
 	char buf[CHUNK];
 
 	for (;;) {
 		ssize_t n = read(fd, buf, sizeof buf);
-		unsigned long before = ring->dropped;
-		char out[CHUNK];
-		size_t got;
+		struct qwe_redact_buf safe = {0};
 
 		if (n < 0 && errno == EINTR)
 			continue;
@@ -229,15 +248,20 @@ static int drain(int fd, struct qwe_ring *ring, struct qwe_sink *sink)
 			return 0; /* EAGAIN */
 		if (n == 0)
 			return 1;
-		qwe_ring_write(ring, buf, (size_t)n);
-		while ((got = qwe_ring_read(ring, out, sizeof out)) > 0)
-			qwe_sink_write(sink, out, got);
-		if (ring->dropped != before) {
-			char alarm[96];
-			snprintf(alarm, sizeof alarm, "qwe: ALARM: ring overflow, %lu bytes dropped\n", ring->dropped);
-			qwe_sink_write(sink, alarm, strlen(alarm));
-		}
+		if (qwe_redact_feed(red, buf, (size_t)n, &safe) == 0 && safe.len > 0)
+			emit(ring, sink, safe.data, safe.len);
+		qwe_redact_buf_free(&safe);
 	}
+}
+
+/* The step's output has ended: what the redactor held back was not a secret. */
+static void drain_flush(struct qwe_ring *ring, struct qwe_sink *sink, struct qwe_redactor *red)
+{
+	struct qwe_redact_buf safe = {0};
+
+	if (qwe_redact_flush(red, &safe) == 0 && safe.len > 0)
+		emit(ring, sink, safe.data, safe.len);
+	qwe_redact_buf_free(&safe);
 }
 
 /* The result pipe carries a few hundred bytes. A step that sends more than this
@@ -533,6 +557,7 @@ static void job_release(struct run_ctx *ctx, struct job *job)
 	if (r->ring_ok) {
 		job->dropped = r->ring.dropped;
 		qwe_ring_free(&r->ring);
+		qwe_redactor_free(&r->red);
 		r->ring_ok = 0;
 	}
 	if (r->outputs_ref != LUA_NOREF) {
@@ -662,8 +687,6 @@ static void store_outputs(struct job *job, int tbl)
 	lua_getfield(L, -1, "store");
 	lua_rawgeti(L, LUA_REGISTRYINDEX, r->outputs_ref);
 	lua_rawgeti(L, LUA_REGISTRYINDEX, r->cur_ref);
-	lua_getfield(L, -1, "id");
-	lua_remove(L, -2);
 	lua_pushvalue(L, tbl);
 	if (lua_pcall(L, 3, 1, 0) == 0 && lua_isstring(L, -1)) {
 		free(r->step_json);
@@ -855,7 +878,8 @@ static void step_finish(struct run_ctx *ctx, struct job *job)
 		return;
 	if (r->proc_ok) {
 		/* The child is gone; whatever it wrote is already in the pipe. */
-		drain(r->proc.out_fd, &r->ring, &r->sink);
+		drain(r->proc.out_fd, &r->ring, &r->sink, &r->red);
+		drain_flush(&r->ring, &r->sink, &r->red);
 		ev_del(ctx, r->proc.out_fd);
 		close(r->proc.out_fd);
 		ev_del(ctx, r->proc.res_fd);
@@ -1185,7 +1209,7 @@ static void job_event(struct run_ctx *ctx, struct job *job, enum evkind kind, lo
 
 	switch (kind) {
 	case EV_OUT:
-		if (live && drain(r->proc.out_fd, &r->ring, &r->sink))
+		if (live && drain(r->proc.out_fd, &r->ring, &r->sink, &r->red))
 			ev_del(ctx, r->proc.out_fd);
 		break;
 	case EV_RESULT:
@@ -1437,6 +1461,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	if (run_all(&ctx, max_parallel) < 0)
 		rc = QWE_EXIT_FAILED;
 	close_masters(L);
+	qwe_redact_clear();
 
 	results = calloc((size_t)n ? (size_t)n : 1, sizeof *results);
 	for (i = 0; i < (size_t)n; i++) {

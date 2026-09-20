@@ -153,6 +153,12 @@ local function ensure_registry()
   return registry
 end
 
+-- The outputs a loaded plugin declares ({ name -> { type, secret } }), or nil.
+function M.outputs_of(name)
+  local p = ensure_registry()[name]
+  return p and p.outputs
+end
+
 -- The module of a built-in plugin, loaded under strict globals like any
 -- plugin. For plugin tests.
 function M.builtin_module(name)

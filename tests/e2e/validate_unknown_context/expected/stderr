@@ -1,1 +1,1 @@
-qwe validate: w.yaml:5:14: unknown expression "matrix.os" (only env.NAME, vars.NAME and steps.ID.outputs.KEY exist)
+qwe validate: w.yaml:5:14: unknown expression "matrix.os" (only env.NAME, vars.NAME, secrets.NAME and steps.ID.outputs.KEY exist)

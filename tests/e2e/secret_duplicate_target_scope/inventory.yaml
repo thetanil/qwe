@@ -1,0 +1,13 @@
+secrets:
+  SUDO: !encrypted "qwe:1:xchacha20poly1305:D02IeNifE++kjbRs6ZUiPfhAOLdmpOmsMVqUq5i7TxGQJhpTI4qT6D+6OCkcUNr3t6D42+It"
+targets:
+  box:
+    backend: ssh
+    host: 192.0.2.1
+    secrets:
+      SUDO: !encrypted "qwe:1:xchacha20poly1305:1DTX3uXcM7aoRAs0ubDxgExZpsrNSWwVYE2434RxdmNQM2sevw5kdRwqRgQKEFrSJ1m8pPO9"
+  other:
+    backend: ssh
+    host: 192.0.2.2
+    secrets:
+      OTHER: !encrypted "qwe:1:xchacha20poly1305:1DTX3uXcM7aoRAs0ubDxgExZpsrNSWwVYE2434RxdmNQM2sevw5kdRwqRgQKEFrSJ1m8pPO9"

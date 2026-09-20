@@ -1,0 +1,15 @@
+jobs:
+  ja:
+    target: a
+    env:
+      S: ${{ secrets.SUDO }}
+    steps:
+      - run: '[ "$S" = "sudo-pass-of-a" ] && echo is-a || echo wrong'
+        on: local
+  jb:
+    target: b
+    env:
+      S: ${{ secrets.SUDO }}
+    steps:
+      - run: '[ "$S" = "sudo-pass-of-b" ] && echo is-b || echo wrong'
+        on: local

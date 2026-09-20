@@ -180,6 +180,31 @@ local function structure(doc, plugin_list, inventory)
       end
     end
   end
+  -- secrets: maps, and a name may be defined in only one place a job can see
+  local wf_secrets = type(doc.secrets) == "table" and doc.secrets or {}
+  for _, e in ipairs(inv.secret_map_errors(wf_secrets, "/secrets")) do errors[#errors + 1] = e end
+  local inv_secrets = (inventory or inv.current()).secrets or {}
+  for name in pairs(wf_secrets) do
+    if inv_secrets[name] ~= nil then
+      errors[#errors + 1] = {
+        pointer = "/secrets/" .. esc(name), kind = "key",
+        message = 'secret "' .. name .. '" is defined in the workflow and in the inventory',
+      }
+    end
+  end
+  for _, job_id in ipairs(ids) do
+    local target = doc.jobs[job_id].target
+    local t = target ~= "local" and ((inventory or inv.current()).targets or {})[target]
+    for name in pairs(t and t.secrets or {}) do
+      local where = wf_secrets[name] ~= nil and "the workflow" or inv_secrets[name] ~= nil and "the inventory" or nil
+      if where then
+        errors[#errors + 1] = {
+          pointer = "/jobs/" .. esc(job_id) .. "/target", kind = "value",
+          message = 'secret "' .. name .. '" is defined in both ' .. where .. " and target \"" .. target .. "\", which this job uses",
+        }
+      end
+    end
+  end
   local outputs = {}
   for _, p in ipairs(plugin_list) do
     if p.outputs then outputs[p.name] = p.outputs end

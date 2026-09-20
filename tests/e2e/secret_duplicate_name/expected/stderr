@@ -1,0 +1,1 @@
+qwe validate: w.yaml:2:3: secret "T" is defined in the workflow and in the inventory

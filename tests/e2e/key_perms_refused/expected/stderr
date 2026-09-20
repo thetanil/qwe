@@ -1,0 +1,2 @@
+qwe run: job j: cannot prepare step 1: the key file ./home/.config/qwe/secret has mode 0644: it must not be accessible by group or others (chmod 600)
+qwe run: cannot start a step of job j: template failed: Invalid argument

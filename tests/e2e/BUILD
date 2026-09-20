@@ -193,3 +193,29 @@ e2e_test(name = "ssh_become_denied")
 e2e_test(name = "local_become")
 
 e2e_test(name = "validate_become_type")
+
+e2e_test(name = "keygen")
+
+e2e_test(name = "key_perms_refused")
+
+e2e_test(name = "encrypt_rejects_argv")
+
+e2e_test(name = "secret_redacted_env")
+
+e2e_test(name = "secret_in_run_text_rejected")
+
+e2e_test(name = "secret_taint_with")
+
+e2e_test(name = "secret_output_redacted")
+
+e2e_test(name = "secret_output_not_in_result")
+
+e2e_test(name = "secret_duplicate_name")
+
+e2e_test(name = "secret_duplicate_target_scope")
+
+e2e_test(name = "secret_per_target")
+
+e2e_test(name = "secret_not_in_argv")
+
+e2e_test(name = "ssh_secret_not_in_argv")

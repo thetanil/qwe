@@ -1,0 +1,9 @@
+secrets:
+  T: !encrypted "qwe:1:xchacha20poly1305:QZuZ5O0iS2RaEtQ8m8VhNN+se53SgMqMBEzl6TJtgo2dfX8B7j78GbqaFW/RV8Jwdk9z4U/uR+Y="
+jobs:
+  j:
+    target: local
+    env:
+      TOKEN: ${{ secrets.T }}
+    steps:
+      - run: echo "$TOKEN"

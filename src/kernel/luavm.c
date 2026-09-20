@@ -4,6 +4,7 @@
 #include "src/kernel/luacbor.h"
 #include "src/kernel/luaexec.h"
 #include "src/kernel/luafs.h"
+#include "src/kernel/luasecrets.h"
 
 #include <lauxlib.h>
 #include <lualib.h>
@@ -36,6 +37,8 @@ lua_State *qwe_lua_new(void)
 	lua_setfield(L, -2, "qwe.fs");
 	lua_pushcfunction(L, luaopen_qwe_exec);
 	lua_setfield(L, -2, "qwe.exec");
+	lua_pushcfunction(L, luaopen_qwe_secrets);
+	lua_setfield(L, -2, "qwe.secrets");
 	for (m = qwe_embedded_modules; m->name; m++) {
 		if (luaL_loadbuffer(L, (const char *)m->data, m->len, m->name) != 0) {
 			fprintf(stderr, "qwe: built-in module %s: %s\n", m->name, lua_tostring(L, -1));

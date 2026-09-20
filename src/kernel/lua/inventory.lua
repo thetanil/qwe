@@ -65,6 +65,44 @@ function M.host(target, inv)
   return t and t.host
 end
 
+-- The secrets a job on target can name: { name -> secret } from the inventory-wide
+-- map and the target's own. (The workflow's are added by the caller: an inventory
+-- knows nothing of the workflow.)
+function M.secrets_for(target, inv)
+  local i = inv or current
+  local out = {}
+  for name, s in pairs(i.secrets or {}) do out[name] = s end
+  local t = (i.targets or {})[target]
+  for name, s in pairs(t and t.secrets or {}) do out[name] = s end
+  return out
+end
+
+-- Problems with a secrets: map (a decoded table), as { pointer, kind, message }:
+-- every entry must be an !encrypted envelope, under a plain name.
+function M.secret_map_errors(map, pointer)
+  local errors = {}
+  if type(map) ~= "table" then return errors end
+  local secrets = require("qwe.secrets")
+  for name, value in pairs(map) do
+    local at = pointer .. "/" .. esc(name)
+    if not name:match(NAME) then
+      errors[#errors + 1] = { pointer = at, kind = "key", message = 'secret name "' .. name .. '" must match [A-Za-z_][A-Za-z0-9_-]*' }
+    end
+    if not cbor.is_secret(value) then
+      errors[#errors + 1] = {
+        pointer = at, kind = "value",
+        message = "a secret must be an !encrypted value (make one with: printf %s \"...\" | qwe encrypt)",
+      }
+    else
+      local ok, why = secrets.check(value.value)
+      if not ok then
+        errors[#errors + 1] = { pointer = at, kind = "value", message = "not a valid envelope: " .. why }
+      end
+    end
+  end
+  return errors
+end
+
 -- Every !encrypted value in doc that is not the value of an entry of a
 -- secrets: map (the root's, or a target's). allowed(tokens) says whether the
 -- path (a list of keys) is inside one.
@@ -125,12 +163,20 @@ function M.validate(inv)
     -- the same value, already reported as an envelope in the wrong place
     if not flagged[e.pointer] then errors[#errors + 1] = e end
   end
+  for _, e in ipairs(M.secret_map_errors(inv.secrets, "/secrets")) do errors[#errors + 1] = e end
   local targets = type(inv.targets) == "table" and inv.targets or {}
   if targets["local"] ~= nil then
     errors[#errors + 1] = {
       pointer = "/targets/local", kind = "key",
       message = '"local" is built in and cannot be defined in the inventory',
     }
+  end
+  for name, t in pairs(targets) do
+    if type(t) == "table" then
+      for _, e in ipairs(M.secret_map_errors(t.secrets, "/targets/" .. esc(name) .. "/secrets")) do
+        errors[#errors + 1] = e
+      end
+    end
   end
   for name, t in pairs(targets) do
     if type(t) == "table" and type(t.vars) == "table" then

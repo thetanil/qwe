@@ -1,0 +1,1 @@
+qwe validate: w.yaml:8:13: secret "SUDO" is defined in both the inventory and target "box", which this job uses

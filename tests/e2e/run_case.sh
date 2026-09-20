@@ -20,6 +20,7 @@
 #   needs-ssh         optional marker: the case needs the devcontainer's ssh target. It
 #                     is skipped (prints SKIP, passes) unless REMOTE_CONTAINERS is set
 #                     and `ssh -o BatchMode=yes 172.18.0.1 true` works
+#   setup.sh          optional: run in the work dir before qwe (chmod a key file, say)
 #   bin/              optional directory of commands put first on PATH (a shim)
 #   check.sh          optional extra assertions, run in the work dir after qwe;
 #                     sees $QWE_STDOUT (qwe's stdout) and must exit 0
@@ -49,9 +50,10 @@ work=$(mktemp -d) || exit 3
 trap 'rm -rf "$work"' EXIT
 cp -R "$case_dir"/. "$work"/ || exit 3
 rm -rf "$work/expected" "$work/args"
-rm -f "$work/check.sh" "$work/env" "$work/signal" "$work/ulimit" "$work/needs-ssh"
+rm -f "$work/check.sh" "$work/env" "$work/signal" "$work/ulimit" "$work/needs-ssh" "$work/setup.sh"
 [ -d "$work/bin" ] && PATH="$work/bin:$PATH"
 
+[ -f "$case_dir/setup.sh" ] && { (cd "$work" && sh "$case_dir/setup.sh") || exit 3; }
 set --
 if [ -f "$case_dir/args" ]; then
 	while IFS= read -r line; do set -- "$@" "$line"; done < "$case_dir/args"

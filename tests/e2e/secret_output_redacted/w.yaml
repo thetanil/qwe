@@ -1,0 +1,8 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: mk
+        run: echo "tok=out-canary-77x" >> "$QWE_OUTPUT"
+        secret-outputs: [tok]
+      - run: echo "the token is ${{ steps.mk.outputs.tok }}"

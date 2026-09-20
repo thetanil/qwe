@@ -20,6 +20,7 @@ cc_library(
     deps = [
         ":dag",
         ":lifecycle",
+        ":redact",
         ":trace",
         ":luacbor",
         ":luavm",
@@ -79,6 +80,21 @@ cc_test(
 )
 
 cc_library(
+    name = "redact",
+    srcs = ["redact.c"],
+    hdrs = ["redact.h"],
+)
+
+cc_test(
+    name = "redact_test",
+    srcs = ["redact_test.c"],
+    deps = [
+        ":redact",
+        "//third_party/greatest",
+    ],
+)
+
+cc_library(
     name = "sink",
     srcs = ["sink.c"],
     hdrs = ["sink.h"],
@@ -103,9 +119,12 @@ cc_library(
 
 cc_library(
     name = "luavm",
-    srcs = ["luavm.c", "luafs.c", "luaexec.c"],
-    hdrs = ["luavm.h", "luafs.h", "luaexec.h"],
+    srcs = ["luavm.c", "luafs.c", "luaexec.c", "luasecrets.c"],
+    hdrs = ["luavm.h", "luafs.h", "luaexec.h", "luasecrets.h"],
     deps = [
+        ":redact",
+        "//src/secrets",
+        "//third_party/libsodium",
         ":luacbor",
         ":preamble",
         "//src/kernel/lua:modules",

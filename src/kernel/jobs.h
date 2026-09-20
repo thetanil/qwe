@@ -4,6 +4,7 @@
 #define QWE_KERNEL_JOBS_H
 
 #include "src/kernel/lifecycle.h"
+#include "src/kernel/redact.h"
 #include "src/kernel/proc.h"
 #include "src/kernel/result.h"
 #include "src/kernel/ring.h"
@@ -18,6 +19,7 @@
 struct job_run {
 	struct qwe_ring ring;
 	struct qwe_sink sink;
+	struct qwe_redactor red;     /* between the step's pipe and the ring */
 	struct qwe_timer timer;      /* the job's own limit */
 	struct qwe_timer step_timer; /* the live step's limit */
 	struct qwe_timer grace_timer;
