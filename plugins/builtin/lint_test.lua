@@ -25,7 +25,7 @@ for _, path in ipairs({ ... }) do
     local schema = dir .. "/schema.json"
     local problems
     if exists(schema) then
-      problems = plugincheck.check(name, path, read(path), schema, read(schema))
+      problems = plugincheck.check_builtin(name, path, read(path), schema, read(schema))
     else
       problems = plugincheck.check_lua_only(name, path, read(path))
     end

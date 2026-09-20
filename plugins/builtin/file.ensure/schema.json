@@ -1,4 +1,5 @@
 {
+  "kind": "check-apply",
   "with": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "description": "with: inputs of the file.ensure step plugin",

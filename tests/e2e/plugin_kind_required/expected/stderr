@@ -1,0 +1,2 @@
+qwe validate: .qwe/plugins/half/schema.json: at /kind: required, "check-apply" (the plugin exports check and apply) or "argv" (a run-like plugin, which exports argv)
+qwe validate: w.yaml:5:15: unknown plugin "half" (built-in: file.ensure)
