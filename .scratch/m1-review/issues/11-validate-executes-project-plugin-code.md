@@ -1,6 +1,6 @@
 # 11: `qwe validate` executes a project plugin's top level
 
-Status: ready-for-human
+Status: resolved
 Category: bug
 Type: task
 Blocked by: none
@@ -47,7 +47,13 @@ whether to make it true instead.
 
 ## Acceptance criteria
 
-- [ ] The decision is recorded in `CONTEXT.md` ("Trust boundary") and an ADR if the format changes.
-- [ ] If validation stops executing plugin code: `tests/e2e/validate_runs_plugin_top_level/` is replaced by a case asserting the side effect does **not** happen, and `qwe validate` says nothing about it in its output.
+- [x] The decision is recorded in `CONTEXT.md` ("Trust boundary") and an ADR if the format changes.
+- [x] If validation stops executing plugin code: `tests/e2e/validate_runs_plugin_top_level/` is replaced by a case asserting the side effect does **not** happen, and `qwe validate` says nothing about it in its output.
 
 ## Comments
+
+Resolved 2026-09-20. The first attempt (a `kind:` field in `schema.json`, contract checked at step time) was reverted: it moved the check for `apply` to run time, and it left top-level code possible. The decision is static analysis of the source, so that validation both guarantees `check` and `apply` exist and guarantees load has no side effects.
+
+`qwe.pluginshape` parses `plugin.lua` with luacheck's parser and refuses anything at the top level but: `local` declarations of inert values (literals, function literals, table constructors, reads, operators, `require` of a module qwe embeds), `M.name = <inert>` assignments (which is what `function M.x()` is) and a final `return` of the module table. Calls, methods, loops, `if`, `do`, rebinds and foreign `require`s are refused with `file:line:col`. The returned module must export `check` and `apply` as function literals or local functions, or `argv`. `plugincheck.check` no longer executes anything. Built-in plugins pass the same check via `lint_test`. Cases: `plugin_top_level_refused` (validate and run both refuse, and the side effect never happens), `plugin_contract_missing_apply` (validate error again), `pluginshape_test.lua` for the accept/refuse table.
+
+Known limits, stated rather than hidden: a function value that is reassigned later or computed (`M.apply = pick()`) is refused as a call, so the check is conservative; `require` of a project file is refused (a plugin needing shared code must be one file or use qwe's modules). Runtime still loads plugin.lua under strict globals in the step child. No `init` hook was added.

@@ -22,6 +22,7 @@ MODULES = {
     "qwe.checkapply": ":checkapply.lua",
     "qwe.inventory": ":inventory.lua",
     "qwe.plugincheck": ":plugincheck.lua",
+    "qwe.pluginshape": ":pluginshape.lua",
     "qwe.plugins": ":plugins.lua",
     "qwe.strict": ":strict.lua",
     "qwe.template": ":template.lua",
@@ -103,9 +104,11 @@ exports_files([
     "inventory.lua",
     "inventory.schema.json",
     "plugincheck.lua",
+    "pluginshape.lua",
     "plugins.lua",
     "strict.lua",
     "template.lua",
+    "pluginshape_test.lua",
     "template_test.lua",
     "validate.lua",
     "workflow.schema.json",
@@ -140,7 +143,8 @@ sh_test(
         "$(location template_test.lua)",
     ],
     data = [
-        "template_test.lua",
+        "pluginshape_test.lua",
+    "template_test.lua",
         "//src/kernel:luarun",
     ],
 )
@@ -154,6 +158,19 @@ sh_test(
     ],
     data = [
         "validate_test.lua",
+        "//src/kernel:luarun",
+    ],
+)
+
+sh_test(
+    name = "pluginshape_test",
+    srcs = ["//tests:run_lua_test.sh"],
+    args = [
+        "$(location //src/kernel:luarun)",
+        "$(location pluginshape_test.lua)",
+    ],
+    data = [
+        "pluginshape_test.lua",
         "//src/kernel:luarun",
     ],
 )

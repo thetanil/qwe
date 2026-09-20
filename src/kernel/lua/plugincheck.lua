@@ -1,9 +1,9 @@
--- The three checks every plugin passes, built-in (as Bazel tests) and project
--- (in `qwe validate` and `qwe run`): its schemas against the strict
--- metaschema, its contract, and luacheck.
+-- The checks every plugin passes, built-in (as Bazel tests) and project (in
+-- `qwe validate` and `qwe run`): its schemas against the strict metaschema and its
+-- source, without running it: luacheck, and the shape (no top-level code, check and
+-- apply exported).
 local cbor = require("qwe.cbor")
 local plugins = require("qwe.plugins")
-local strict = require("qwe.strict")
 local validate = require("qwe.validate")
 
 local M = {}
@@ -91,6 +91,7 @@ local function check_schema_file(path, text, problems)
   return doc
 end
 
+-- Reads plugin.lua without running it: luacheck, then compile.
 local function check_lua(name, path, src, problems)
   local luacheck = require("luacheck")
   local report = luacheck.check_strings({ src }, { std = "luajit", max_line_length = false })
@@ -115,25 +116,16 @@ local function check_lua(name, path, src, problems)
     problems[#problems + 1] = { where = path, message = "cannot load: " .. tostring(err) }
     return nil
   end
-  local ok, mod = pcall(strict.run, name, chunk)
-  if not ok then
-    problems[#problems + 1] = { where = path, message = "cannot load: " .. tostring(mod) }
-    return nil
-  end
-  return mod
+  return true
 end
 
--- The contract: the module is a table exporting check and apply, or argv (a
--- run-like plugin, whose step is the command it returns).
-local function check_contract(path, mod, problems)
-  if type(mod) ~= "table" then
-    problems[#problems + 1] = { where = path, message = "the plugin must return a table" }
-  elseif type(mod.argv) == "function" then
-    return
-  elseif type(mod.check) ~= "function" or type(mod.apply) ~= "function" then
+-- The shape of a step plugin, from its source (see qwe.pluginshape): no top-level code,
+-- and check and apply (or argv) exported.
+local function check_shape(path, src, problems)
+  for _, p in ipairs(require("qwe.pluginshape").check(src)) do
     problems[#problems + 1] = {
-      where = path,
-      message = "the plugin must export check and apply functions, or argv (a run-like plugin)",
+      where = p.line and (path .. ":" .. p.line .. ":" .. p.col) or path,
+      message = p.message,
     }
   end
 end
@@ -144,8 +136,7 @@ end
 function M.check(name, lua_path, lua_src, schema_path, schema_text)
   local problems = {}
   local schema_doc = check_schema_file(schema_path, schema_text, problems)
-  local mod = check_lua(name, lua_path, lua_src, problems)
-  if mod ~= nil then check_contract(lua_path, mod, problems) end
+  if check_lua(name, lua_path, lua_src, problems) then check_shape(lua_path, lua_src, problems) end
   return problems, schema_doc
 end
 
