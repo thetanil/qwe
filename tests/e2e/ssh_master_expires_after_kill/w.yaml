@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: self
+    steps:
+      - run: hostname
+      - run: touch started; sleep 30
+        on: local

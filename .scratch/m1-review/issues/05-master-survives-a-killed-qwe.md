@@ -1,6 +1,6 @@
 # 05: An ssh ControlMaster outlives a killed qwe, for good
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: none
@@ -52,11 +52,13 @@ from growing without bound on a machine where runs get killed often.
 
 ## Acceptance criteria
 
-- [ ] A run killed with SIGKILL mid-step leaves no master behind once the ttl has passed. `e2e: tests/e2e/ssh_master_expires_after_kill/` (kill the run, then poll for the master to disappear, with the ttl overridden to something short for the test the way `QWE_TEST_GRACE_MS` overrides the grace period)
-- [ ] Ten sequential steps still use exactly one master: the ttl does not cause a reconnect between steps. `e2e: tests/e2e/ssh_one_master_sequential/` (existing, must stay green)
-- [ ] Two jobs held apart by `max-sessions: 1` still share one master: the second job does not pay a new handshake. `e2e: tests/e2e/ssh_session_cap/` (existing, must stay green)
-- [ ] A normal end still closes the master immediately rather than leaving it for the ttl, including after SIGINT. `e2e: tests/e2e/ssh_master_closed/` (existing, must stay green)
-- [ ] A socket left by an earlier killed run does not accumulate: a run removes sockets in its socket directory whose master is gone. `e2e: tests/e2e/ssh_stale_socket_cleaned/`
-- [ ] The ttl and the reason for its value are recorded in qwe-ssh-sec I.3.
+- [x] A run killed with SIGKILL mid-step leaves no master behind once the ttl has passed. `e2e: tests/e2e/ssh_master_expires_after_kill/` (kill the run, then poll for the master to disappear, with the ttl overridden to something short for the test the way `QWE_TEST_GRACE_MS` overrides the grace period)
+- [x] Ten sequential steps still use exactly one master: the ttl does not cause a reconnect between steps. `e2e: tests/e2e/ssh_one_master_sequential/` (existing, must stay green)
+- [x] Two jobs held apart by `max-sessions: 1` still share one master: the second job does not pay a new handshake. `e2e: tests/e2e/ssh_session_cap/` (existing, must stay green)
+- [x] A normal end still closes the master immediately rather than leaving it for the ttl, including after SIGINT. `e2e: tests/e2e/ssh_master_closed/` (existing, must stay green)
+- [x] A socket left by an earlier killed run does not accumulate: a run removes sockets in its socket directory whose master is gone. `e2e: tests/e2e/ssh_stale_socket_cleaned/`
+- [x] The ttl and the reason for its value are recorded in qwe-ssh-sec I.3.
 
 ## Comments
+
+Resolved 2026-09-20. `master_argv` passes `-o ControlPersist=120` (`QWE_TEST_MASTER_TTL` overrides it, read in `ensure`). `ensure` sweeps the socket directory once per process: an entry `<pid>.<hash>` whose qwe pid has no `/proc/<pid>` and whose master fails `ssh -O check` is removed. Both new e2e cases were mutation-checked: without ControlPersist the kill case fails after its 10 s poll, and without the sweep the stale-socket case fails. The cases use `XDG_RUNTIME_DIR=xdg` (see ticket 04) so their masters are found by socket path and never confused with another test's; the kill case expects exit 137.

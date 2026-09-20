@@ -86,10 +86,17 @@ function M.command_argv(host, sock, script, become_value)
   return append(client(sock), "-o", "ProxyCommand=false", host, "--", remote)
 end
 
-function M.master_argv(host, sock, log)
+-- How long an unused master lives. A killed qwe (SIGKILL, a crash) cannot close its
+-- masters, so this bounds the leak; a normal end closes them at once (close_all).
+-- It is long enough that a job queued behind max-sessions, or a gap between two
+-- steps, keeps its connection instead of paying a new handshake, and short enough
+-- that an abandoned master does not linger. QWE_TEST_MASTER_TTL overrides it (seconds).
+M.MASTER_TTL = 120
+
+function M.master_argv(host, sock, log, ttl)
   return {
-    "ssh", "-M", "-N", "-f", "-S", sock, "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
-    "-o", "LogLevel=ERROR", "-E", log, host,
+    "ssh", "-M", "-N", "-f", "-S", sock, "-o", "ControlPersist=" .. tostring(ttl or M.MASTER_TTL),
+    "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "LogLevel=ERROR", "-E", log, host,
   }
 end
 
@@ -136,6 +143,21 @@ end
 -- ---- the connection lifecycle (the parent) ----
 
 local masters = {} -- target name -> { host, sock, log }
+local swept = {} -- socket directories already swept by this process
+
+-- Removes the sockets an earlier, killed run left in dir: those of a qwe that is
+-- no longer running and whose master no longer answers. A master that is still up
+-- (waiting out its ttl) keeps its socket; it removes it itself when it expires.
+local function sweep(dir, my_pid)
+  for _, name in ipairs(fs.list(dir) or {}) do
+    local pid = name:match("^(%d+)%.%x+$")
+    if pid and tonumber(pid) ~= my_pid and not fs.isdir("/proc/" .. pid) then
+      local path = dir .. "/" .. name
+      -- the destination is required by ssh but unused by -O check
+      if exec.run(M.check_argv("stale", path)) ~= 0 then os.remove(path) end
+    end
+  end
+end
 
 local function alive(m)
   return exec.run(M.check_argv(m.host, m.sock)) == 0
@@ -168,8 +190,12 @@ function M.ensure(name, host)
   -- the directory owns what the step's commands and secrets are sent to.
   local ok, problem = fs.private_dir(m.dir, "the socket directory")
   if not ok then return nil, problem end
+  if not swept[m.dir] then
+    swept[m.dir] = true
+    sweep(m.dir, exec.getpid())
+  end
   if alive(m) then return true end
-  local code, _, err = exec.run(M.master_argv(m.host, m.sock, m.log), nil, { detach = true })
+  local code, _, err = exec.run(M.master_argv(m.host, m.sock, m.log, tonumber(os.getenv("QWE_TEST_MASTER_TTL"))), nil, { detach = true })
   local why = read_all(m.log)
   os.remove(m.log)
   if code ~= 0 then

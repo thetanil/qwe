@@ -23,8 +23,9 @@ end)
 
 case("master_argv_is_fixed", function()
   local argv = ssh.master_argv("box", "/s", "/l")
-  eq("ssh -M -N -f -S /s -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR -E /l box",
+  eq("ssh -M -N -f -S /s -o ControlPersist=120 -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR -E /l box",
     table.concat(argv, " "), "master argv")
+  eq("ControlPersist=2", ssh.master_argv("box", "/s", "/l", 2)[8], "ttl override")
 end)
 
 case("sock_path_is_short", function()
