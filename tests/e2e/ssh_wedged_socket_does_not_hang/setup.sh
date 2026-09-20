@@ -1,1 +1,1 @@
-mkdir -m 700 xdg
+mkdir -m 700 xdgwedge

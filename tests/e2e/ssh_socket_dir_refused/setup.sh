@@ -1,3 +1,3 @@
-mkdir -m 700 xdg
-mkdir xdg/qwe
-chmod 777 xdg/qwe
+mkdir -m 700 xdgrefused
+mkdir xdgrefused/qwe
+chmod 777 xdgrefused/qwe

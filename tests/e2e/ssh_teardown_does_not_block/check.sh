@@ -6,10 +6,10 @@ awk '$2=="j" && $5=="step-timeout" {s=$1} $2=="j" && $5=="group-empty" {e=$1} EN
 }
 i=0
 while [ $i -lt 40 ]; do
-	ssh -o BatchMode=yes 172.18.0.1 "pgrep -f '[s]leep 27182'" >/dev/null || exit 0
+	ssh -o BatchMode=yes 172.18.0.1 "pgrep -f '[s]leep 27183'" >/dev/null || exit 0
 	sleep 0.1
 	i=$((i + 1))
 done
-ssh -o BatchMode=yes 172.18.0.1 "pkill -f '[s]leep 27182'" >/dev/null
+ssh -o BatchMode=yes 172.18.0.1 "pkill -f '[s]leep 27183'" >/dev/null
 echo "a remote sleep outlived the step" >&2
 exit 1
