@@ -77,7 +77,26 @@ never build them.
 ## Not in CI yet
 
 - `--config=valgrind` needs `valgrind` installed (3.22 was measured).
-- Ticket `quality/07` (OOM injection), `08` (audit of bare allocations) and `09`
-  (remaining C coverage gaps) are open; each adds tests to the suites above rather
-  than a new command, except that 08 is blocked on the fuzz and sanitizer runs
-  being in place.
+- Ticket `quality/09` (remaining C coverage gaps) is open; it adds tests to the suites
+  above rather than a new command.
+
+## Allocation checks
+
+No separate command: all of these are ordinary tests in `bazel test //...`, and so
+also run under the asan, ubsan and valgrind configs above.
+
+- **OOM injection** (`quality/07`, `08`): `oom_test` in `src/kernel`, `src/cli/validate`,
+  `src/secrets`, `src/cli/run` and `src/cli/encrypt`, plus `src/kernel:sites_oom_test` and
+  `load_oom_test`. Each fails the nth allocation for every n and fails on a fault, a
+  hang, or a silently short success. Under valgrind they are the slow part.
+- **Bare-call audit**: `//src/kernel:alloc_audit_test` compares the count of bare
+  `malloc`/`calloc`/`realloc`/`strdup`/`strndup` per file with `src/kernel/alloc_audit.txt`.
+  It fails when a call appears or goes; read the new call against `src/kernel/alloc.h`,
+  then update the list. `tools/bcembed.c` is exempt (build-time tool).
+- **Which allocations a test fails**: run the test with
+  `QWE_OOM_SITE_LOG=<file>` (`--test_env`, and `--copt=-g --strip=never`), then
+  `addr2line -i -e <test binary> $(sed 's/^/0x/' <file>)`. Coverage cannot show this,
+  because the injected run is a forked probe that never flushes it.
+- **Coverage floor**: the shim's probe code and the forked step children count as
+  uncovered in `tools/luacov/floor.txt` for the same reason; new injection code can
+  raise those counts, and `--update` is the right response when that is all it is.

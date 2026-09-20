@@ -55,6 +55,8 @@ src/kernel/lua/template.lua 0
 src/kernel/lua/validate.lua 0
 src/kernel/luavm.c 20
 src/kernel/luavm.h 0
+src/kernel/oom_shim.c 46
+src/kernel/oom_shim.h 0
 src/kernel/preamble.c 2
 src/kernel/preamble.h 0
 src/kernel/proc.c 25
@@ -76,7 +78,7 @@ src/kernel/trace.c 9
 src/kernel/trace.h 0
 src/kernel/validate.c 41
 src/kernel/validate.h 0
-src/kernel/workflow.c 185
+src/kernel/workflow.c 190
 src/secrets/envelope.c 13
 src/secrets/envelope.h 0
 src/secrets/keyfile.c 24
