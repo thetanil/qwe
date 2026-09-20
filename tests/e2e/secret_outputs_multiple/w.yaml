@@ -1,0 +1,15 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: mk
+        run: |
+          echo "user=alice" >> "$QWE_OUTPUT"
+          echo "pass=multi-pass-31q" >> "$QWE_OUTPUT"
+          echo "token=multi-token-58z" >> "$QWE_OUTPUT"
+        secret-outputs: [pass, token]
+      - run: |
+          echo "user ${{ steps.mk.outputs.user }}"
+          echo "pass ${{ steps.mk.outputs.pass }}"
+          echo "token ${{ steps.mk.outputs.token }}"
+          echo "both ${{ steps.mk.outputs.pass }}:${{ steps.mk.outputs.token }}"
