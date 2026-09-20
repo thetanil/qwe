@@ -1,0 +1,15 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: a
+        run: |
+          # the parent made the file before this shell started, private
+          [ "$(stat -c %a "$QWE_OUTPUT")" = 600 ] || { echo "MODE $(stat -c %a "$QWE_OUTPUT")"; exit 1; }
+          echo "kept=yes" >> "$QWE_OUTPUT"
+      - id: b
+        run: |
+          # truncating with > keeps the mode, and the value is still collected
+          echo "k=v" > "$QWE_OUTPUT"
+          [ "$(stat -c %a "$QWE_OUTPUT")" = 600 ] || { echo "MODE $(stat -c %a "$QWE_OUTPUT")"; exit 1; }
+      - run: echo "${{ steps.a.outputs.kept }} ${{ steps.b.outputs.k }}"

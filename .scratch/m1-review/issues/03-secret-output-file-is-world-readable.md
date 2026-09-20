@@ -1,6 +1,6 @@
 # 03: A secret `run:` output sits in a world-readable file while the step runs
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: none
@@ -48,12 +48,12 @@ Two details to keep right:
 
 ## Acceptance criteria
 
-- [ ] The `$QWE_OUTPUT` file exists before the step starts and has mode 0600, checked from inside the step itself. `e2e: tests/e2e/output_file_is_private/`
-- [ ] `.qwe/runs/<id>/` is created with mode 0700. `e2e: tests/e2e/output_file_is_private/`
-- [ ] A step that writes with `>` rather than `>>` still ends up with a 0600 file and its outputs are still collected. `e2e: tests/e2e/output_file_is_private/`
-- [ ] The file is still deleted after the step, and a secret output is still masked and still absent from `result.json`. `e2e: tests/e2e/secret_output_not_in_result/`, `tests/e2e/output_file_cleaned/` (existing, must stay green)
-- [ ] Outputs from a step that never writes the file still work (no output is not an error). `e2e: tests/e2e/run_outputs/` (existing, must stay green)
-- [ ] qwe-ssh-sec II.9 records that the parent creates the output file 0600, so "travels on the output channel" has a stated meaning for `run:` steps.
+- [x] The `$QWE_OUTPUT` file exists before the step starts and has mode 0600, checked from inside the step itself. `e2e: tests/e2e/output_file_is_private/`
+- [x] `.qwe/runs/<id>/` is created with mode 0700. `e2e: tests/e2e/output_file_is_private/`
+- [x] A step that writes with `>` rather than `>>` still ends up with a 0600 file and its outputs are still collected. `e2e: tests/e2e/output_file_is_private/`
+- [x] The file is still deleted after the step, and a secret output is still masked and still absent from `result.json`. `e2e: tests/e2e/secret_output_not_in_result/`, `tests/e2e/output_file_cleaned/` (existing, must stay green)
+- [x] Outputs from a step that never writes the file still work (no output is not an error). `e2e: tests/e2e/run_outputs/` (existing, must stay green)
+- [x] qwe-ssh-sec II.9 records that the parent creates the output file 0600, so "travels on the output channel" has a stated meaning for `run:` steps.
 
 ## Comments
 
@@ -61,3 +61,5 @@ A remote `run:` step has no `$QWE_OUTPUT` at all (m1-engine ticket 13): the file
 would be on the wrong host. So this ticket is about local steps and `on: local`
 steps only. When remote outputs arrive, they will need their own answer to the
 same question, and it should not be "a file in /tmp on the target".
+
+Resolved 2026-09-20. `step_spawn` creates the `$QWE_OUTPUT` file `O_CREAT|O_EXCL` 0600 before the fork (failure is a start-failed with op `output-file`); `mkdir_p` takes the final directory's mode and the run directory is 0700 (`.qwe` and `.qwe/runs` stay 0755). The file is also created for remote steps, which never write it; it is read and deleted as before.

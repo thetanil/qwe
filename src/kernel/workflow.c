@@ -17,6 +17,7 @@
 #include "src/kernel/sink.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio_ext.h>
 #include <lauxlib.h>
@@ -193,7 +194,8 @@ static int read_file(const char *path, char **out, size_t *len)
 	return 0;
 }
 
-static int mkdir_p(const char *path)
+/* Creates path and any missing parents (0755); path itself gets mode. */
+static int mkdir_p(const char *path, mode_t mode)
 {
 	char *p = strdup(path), *s;
 	int rc = 0;
@@ -206,10 +208,24 @@ static int mkdir_p(const char *path)
 			rc = -1;
 		*s = '/';
 	}
-	if (rc == 0 && mkdir(p, 0755) < 0 && errno != EEXIST)
+	if (rc == 0 && mkdir(p, mode) < 0 && errno != EEXIST)
 		rc = -1;
 	free(p);
 	return rc;
+}
+
+/* Creates the step's $QWE_OUTPUT file 0600 before the step exists, so a secret it
+ * writes there is never readable by another user. The step appends to it. */
+static int make_output_file(const char *path)
+{
+	int fd;
+
+	if (!path)
+		return 0;
+	fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+	if (fd < 0)
+		return -1;
+	return close(fd);
 }
 
 /* Feeds whatever is readable on fd through the ring into the sink.
@@ -842,6 +858,9 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 	}
 	if (op) {
 		/* resolve_step failed */
+	} else if (make_output_file(r->out_path) < 0) {
+		op = "output-file";
+		err = errno;
 	} else if (qwe_timer_open(&r->step_timer) < 0) {
 		op = "timer";
 		err = errno;
@@ -1461,7 +1480,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	fmt_run_id(run_id, sizeof run_id);
 	run_dir = malloc(strlen(dir) + strlen(run_id) + 32);
 	sprintf(run_dir, "%s/.qwe/runs/%s", dir, run_id);
-	if (mkdir_p(run_dir) < 0) {
+	if (mkdir_p(run_dir, 0700) < 0) {
 		fprintf(stderr, "qwe run: cannot create %s: %s\n", run_dir, strerror(errno));
 		return QWE_EXIT_USAGE;
 	}

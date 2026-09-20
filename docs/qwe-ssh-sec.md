@@ -180,7 +180,7 @@ Command-line arguments are world-readable via `/proc/<pid>/cmdline`. Decrypted s
 
 ### II.9 Secret step outputs
 
-A step may produce a value that is itself secret. For example, `github.runner-token`, running `on: local` with the operator's GitHub credential, produces a short-lived runner registration token for a later step on the controller to use. Such outputs are **declared** secret, in the plugin's output schema (`secret: true`) or with `secret-outputs:` on a `run:` step. They travel on the output channel, never in stdout (ADR-0005). Their plaintext joins the redaction set before any later byte is logged, and they never appear in `result.json`. They're readable only by later steps in the same job.
+A step may produce a value that is itself secret. For example, `github.runner-token`, running `on: local` with the operator's GitHub credential, produces a short-lived runner registration token for a later step on the controller to use. Such outputs are **declared** secret, in the plugin's output schema (`secret: true`) or with `secret-outputs:` on a `run:` step. They travel on the output channel, never in stdout (ADR-0005). For a `run:` step the output channel is the file named by `$QWE_OUTPUT`: the parent creates it mode `0600` before the step starts (and the run directory `0700`), so the plaintext is never readable by another local user while the step runs. Their plaintext joins the redaction set before any later byte is logged, and they never appear in `result.json`. They're readable only by later steps in the same job.
 
 ---
 
