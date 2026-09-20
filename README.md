@@ -96,7 +96,7 @@ To have a built-in plugin measured, add it to the repo like the others:
 2. Register it in `MODULES` in `src/kernel/lua/BUILD` (`plugin.<name>` and `plugin_schema.<name>`),
    which is what compiles it into the binary.
 3. A Lua file in a *new* directory needs its own `lua_instrumented` target (see
-   `tools/luacov/defs.bzl`) listed in `data` of `//src/kernel:luavm`. Without it Bazel's lcov
+   `tools/coverage/defs.bzl`) listed in `data` of `//src/kernel:luavm`. Without it Bazel's lcov
    merger drops the file from the report without a warning.
 4. Write the tests that should exercise it (a Lua test through `luarun`, or an e2e case under
    `tests/e2e/`). Only code those tests run is counted as hit.
@@ -104,14 +104,14 @@ To have a built-in plugin measured, add it to the repo like the others:
 One command runs the coverage and writes the HTML (needs `genhtml`, from the `lcov` package):
 
 ```
-bazel run //tools/luacov:html            # writes coverage-html/index.html
-bazel run //tools/luacov:html -- my-dir  # or into another directory
+bazel run //tools/coverage:html            # writes coverage-html/index.html
+bazel run //tools/coverage:html -- my-dir  # or into another directory
 ```
 
 Before you send a change, check that coverage has not dropped:
 
 ```
-bazel run //tools/luacov:check
+bazel run //tools/coverage:check
 ```
 
 (See "Keeping coverage from dropping" below.)
@@ -130,11 +130,11 @@ valgrind cannot intercept `malloc` in a static binary; `qwe` keeps its symbols t
 ## Keeping coverage from dropping
 
 ```
-bazel run //tools/luacov:check              # fails if a file has more uncovered lines than floor.txt allows
-bazel run //tools/luacov:check -- --update  # after improving coverage: ratchet floor.txt down
+bazel run //tools/coverage:check              # fails if a file has more uncovered lines than floor.txt allows
+bazel run //tools/coverage:check -- --update  # after improving coverage: ratchet floor.txt down
 ```
 
-`tools/luacov/floor.txt` lists, per file under `src/` and `plugins/` (C and Lua), the most
+`tools/coverage/floor.txt` lists, per file under `src/` and `plugins/` (C and Lua), the most
 uncovered lines allowed. Untested new code raises a file's count and fails the check; a new file with misses
 must be listed (run `--update` once it is tested). It is a `bazel run`, not a `bazel test`,
 because a test cannot itself run `bazel coverage`; run it in CI. Commit `floor.txt` changes on purpose.

@@ -11,7 +11,7 @@ everything from the repository root; Bazel 8.7.0; clang for the fuzzers.
 | UBSan | `bazel test --config=ubsan //...` | nightly | about the plain suite | undefined behaviour |
 | Valgrind, unit tests | `bazel test --config=valgrind //...` | nightly | about 130 s (`load_oom_test` is most of it) | any error, leak or unsuppressed report |
 | Valgrind, e2e | `bazel test //tests/e2e:valgrind_e2e` | nightly | about 6 s | the same, in qwe and its step children |
-| Coverage floor | `bazel run //tools/luacov:check` | every change | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/luacov/floor.txt` |
+| Coverage floor | `bazel run //tools/coverage:check` | every change | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/coverage/floor.txt` |
 | Fuzzing | `tools/fuzz/nightly.sh [seconds]` | nightly | one hour by default, four processes in parallel | any crash artifact exists |
 
 Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
@@ -22,14 +22,14 @@ Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
 ```
 bazel test //...
 bazel test --config=asan //...
-bazel run //tools/luacov:check
+bazel run //tools/coverage:check
 ```
 
 `check` runs `bazel coverage //... --combined_report=lcov` itself and compares
-per-file miss counts with `tools/luacov/floor.txt`, a ratchet: new code without
+per-file miss counts with `tools/coverage/floor.txt`, a ratchet: new code without
 tests raises a count and fails; deleting code cannot fail. After adding tests,
-`bazel run //tools/luacov:check -- --update` rewrites the floor, and the result
-is committed on purpose. For a browsable report, `bazel run //tools/luacov:html`
+`bazel run //tools/coverage:check -- --update` rewrites the floor, and the result
+is committed on purpose. For a browsable report, `bazel run //tools/coverage:html`
 (needs `genhtml`, from the `lcov` package) writes `coverage-html/`; publish it as
 a CI artifact.
 
@@ -96,5 +96,5 @@ also run under the asan, ubsan and valgrind configs above.
   `addr2line -i -e <test binary> $(sed 's/^/0x/' <file>)`. Coverage cannot show this,
   because the injected run is a forked probe that never flushes it.
 - **Coverage floor**: the shim's probe code and the forked step children count as
-  uncovered in `tools/luacov/floor.txt` for the same reason; new injection code can
+  uncovered in `tools/coverage/floor.txt` for the same reason; new injection code can
   raise those counts, and `--update` is the right response when that is all it is.

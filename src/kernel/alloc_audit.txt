@@ -1,6 +1,6 @@
 # Bare allocation calls (malloc, calloc, realloc, strdup, strndup) outside
 # alloc.c, the tests and the test shim: "file count". Each is checked at its
-# call site; see the verdicts in .scratch/quality/issues/08. Compared exactly
+# call site; see the verdicts in .scratch/archive/quality/issues/08. Compared exactly
 # by alloc_audit_test.
 src/cli/encrypt/encrypt.c 1
 src/cli/run/run.c 1

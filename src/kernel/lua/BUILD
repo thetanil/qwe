@@ -1,5 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("//tools/luacov:defs.bzl", "lua_instrumented")
+load("//tools/coverage:defs.bzl", "lua_instrumented")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//src:__subpackages__"])
@@ -196,7 +196,7 @@ sh_test(
     ],
 )
 
-# The Lua that ships, for `bazel coverage` (see //tools/luacov:defs.bzl).
+# The Lua that ships, for `bazel coverage` (see //tools/coverage:defs.bzl).
 lua_instrumented(
     name = "shipped",
     # luacov.lua is the measuring tool; its own test replaces its hook, so it cannot measure itself.

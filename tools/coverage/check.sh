@@ -1,13 +1,13 @@
 #!/bin/sh
-# usage: bazel run //tools/luacov:check [-- --update]
+# usage: bazel run //tools/coverage:check [-- --update]
 # Runs `bazel coverage //... --combined_report=lcov` and fails if any file under src/ or
-# plugins/ (C and Lua) has more uncovered lines than tools/luacov/floor.txt allows.
+# plugins/ (C and Lua) has more uncovered lines than tools/coverage/floor.txt allows.
 # It counts misses, not a percentage: new code without tests raises them, new code with
 # tests does not, and deleting code cannot fail it.
 #   --update   rewrite floor.txt from this run (a ratchet: commit the result deliberately)
 set -e
 cd "${BUILD_WORKSPACE_DIRECTORY:?run this with bazel run}"
-floor=tools/luacov/floor.txt
+floor=tools/coverage/floor.txt
 bazel coverage //... --combined_report=lcov
 report=bazel-out/_coverage/_coverage_report.dat
 now=$(mktemp)

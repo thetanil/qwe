@@ -76,7 +76,7 @@ Still open, and not in the ticket's table: `src/cli/encrypt/encrypt.c` (5/50) an
 Whole report: 85.1% of lines (5083 of 5974), 88.9% of functions. (The line count is larger than
 the table above's 4588 because the unit tests added since count too: `src/` includes test-support
 code such as `oom_shim.c`.) Files in `src/` with a miss, hit / found. Compare a later report to this
-table; `tools/luacov/floor.txt` holds the same counts as a ratchet.
+table; `tools/coverage/floor.txt` holds the same counts as a ratchet.
 
 Two things changed how coverage is *measured*, not only what is tested:
 
@@ -165,7 +165,7 @@ How it works. `.bazelrc` sets `QWE_LUA_COVERAGE=1` for `bazel coverage` only. Wh
   lines are in one.
 - **The manifest.** Bazel's lcov merger drops a source that is not in the instrumented-files manifest.
   `//src/kernel/lua:shipped` and `//plugins/builtin:shipped` (rule `lua_instrumented`,
-  `tools/luacov/defs.bzl`) declare the Lua, and `//src/kernel:luavm` carries them as `data`.
+  `tools/coverage/defs.bzl`) declare the Lua, and `//src/kernel:luavm` carries them as `data`.
   A new shipped Lua file under a new directory needs the same.
 
 `luacov.lua` itself is not measured (its own test replaces the hook). The vendored Lua under

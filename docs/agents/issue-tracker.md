@@ -11,6 +11,16 @@ Issues and specs (you may know a spec as a PRD) for this repo live as markdown f
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 - A closed feature moves to `.scratch/archive/<feature-slug>/`, which the frontier glob does not reach. Promote its still-load-bearing decisions to `docs/adr/` or `CONTEXT.md` first — the archived tickets are the record of how the project got somewhere, not the statement of where it is. See `.scratch/archive/README.md`
 
+## Closing a feature
+
+A feature is closed when every ticket under `.scratch/<feature-slug>/issues/` has `Status: resolved` (or `wontfix`, with the reason in its comments), and `bazel test //...` is green. Then, in this order:
+
+1. **Promote what is still load-bearing.** For each decision in the tickets' `## Comments` that a later reader needs as a rule, not as history, write it where an agent reads: `docs/adr/` for a decision with rejected alternatives, `CONTEXT.md` for a term, the design docs or a `docs/<topic>.md` for how a check or a subsystem works. Most of it is usually there already, written as each ticket closed; the promotion is the last sweep for what was not.
+2. **Repoint live references.** `grep -rn ".scratch/<feature-slug>"` outside `.scratch/`: a comment in code or a doc that names a ticket must name the archived path (`.scratch/archive/<feature-slug>/...`) after the move.
+3. **Move it.** `git mv .scratch/<feature-slug> .scratch/archive/<feature-slug>`, keeping the layout. Do not edit the tickets afterwards; a wrong or unfinished one gets a new ticket in a live feature.
+4. **Record it.** Add a row to the table in `.scratch/archive/README.md` (feature, date closed, what it built, ticket and criterion counts) and one paragraph on what was promoted and where.
+5. One commit for the move, so the history shows the feature closing as one step.
+
 ## Acceptance criteria
 
 Every implementation issue has an `## Acceptance criteria` section written as checkboxes.

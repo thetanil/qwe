@@ -56,5 +56,5 @@ New tests: 13 e2e cases (the harness gained an optional `stdin` file), unit test
 `idx < 0` branch of `encode_table` in `luacbor.c`. Not deleted, and why: `escape_token` and
 `last_token` in `validate.c` (a pointer would silently be wrong if the schema ever allowed `/` or `~`).
 
-Not done: the `oom_shim.c` lines, which are test support. `tools/luacov/floor.txt` is updated to the
+Not done: the `oom_shim.c` lines, which are test support. `tools/coverage/floor.txt` is updated to the
 new counts. `docs/ci-checks.md` no longer lists this ticket as open.

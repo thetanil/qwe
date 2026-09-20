@@ -1,5 +1,5 @@
 #!/bin/sh
-# usage: bazel run //tools/luacov:html [-- <output dir>]
+# usage: bazel run //tools/coverage:html [-- <output dir>]
 # Runs `bazel coverage //... --combined_report=lcov` in the workspace, then turns the
 # combined report (C and Lua) into an HTML page. Default output: coverage-html/.
 # bazel run has released the server by the time this runs, so the nested bazel is fine.

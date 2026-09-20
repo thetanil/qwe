@@ -33,6 +33,9 @@ statement of where it is.
 |---|---|---|
 | `m1-engine` | 2026-09-20 | The M1 workflow engine: transcoder, schema validation, the job lifecycle table, steps, timeouts, cancellation, parallelism, plugins, check/apply, env and templating, the inventory, the ssh backend, `become`, secrets and redaction, `--job` selection. 21 tickets, 160 acceptance criteria. |
 | `m1-review` | 2026-09-20 | A review of the finished M1 engine, and the fixes it found: duplicate YAML keys, `timeout-seconds` and a total conversion, the `$QWE_OUTPUT` file's mode, the ControlPath directory's owner, a master outliving a killed run, blocking ssh calls in the event loop, a dag check that approved when it could not run, the transcoder's trust in libyaml, the plugin trust boundary, disabled targets, and validation executing plugin code. 11 tickets, 74 acceptance criteria. |
+| `quality` | 2026-09-20 | Making the C trustworthy: every exit path frees, every allocation is checked (`alloc.h`, and an audit of the bare calls), ASan/LSan, UBSan and Valgrind gates, coverage measurement for C and Lua with a ratchet, fuzzing the YAML edge, OOM injection over validate and run, and closing the C coverage gaps. 10 tickets, 64 acceptance criteria. |
+
+What was promoted out of `quality` when it was archived: nothing new. Its decisions were written as each ticket closed, into `docs/ci-checks.md` (the commands and cadence CI should run), `docs/sanitizers.md`, `docs/valgrind.md`, `docs/fuzzing.md` and `docs/coverage.md` (how coverage is measured, and why each remaining miss is left), and the allocation policy in `src/kernel/alloc.h`. The pointer from `src/kernel/alloc_audit.txt` was repointed to the archived ticket.
 
 What was promoted out of `m1-review` when it was archived: **ADR-0013** (a plugin
 file has no top-level code, and validation reads it rather than running it — the
