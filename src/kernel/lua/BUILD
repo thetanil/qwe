@@ -1,4 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//tools/luacov:defs.bzl", "lua_instrumented")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//src:__subpackages__"])
@@ -21,6 +22,7 @@ MODULES = {
     "qwe.become": ":become.lua",
     "qwe.checkapply": ":checkapply.lua",
     "qwe.inventory": ":inventory.lua",
+    "qwe.luacov": ":luacov.lua",
     "qwe.plugincheck": ":plugincheck.lua",
     "qwe.pluginshape": ":pluginshape.lua",
     "qwe.plugins": ":plugins.lua",
@@ -103,6 +105,8 @@ exports_files([
     "compat53.lua",
     "inventory.lua",
     "inventory.schema.json",
+    "luacov.lua",
+    "luacov_test.lua",
     "plugincheck.lua",
     "pluginshape.lua",
     "plugins.lua",
@@ -176,4 +180,26 @@ sh_test(
         "pluginshape_test.lua",
         "//src/kernel:luarun",
     ],
+)
+
+sh_test(
+    name = "luacov_test",
+    size = "small",
+    srcs = ["//tests:run_lua_test.sh"],
+    args = [
+        "$(location //src/kernel:luarun)",
+        "$(location luacov_test.lua)",
+    ],
+    data = [
+        "luacov_test.lua",
+        "//src/kernel:luarun",
+    ],
+)
+
+# The Lua that ships, for `bazel coverage` (see //tools/luacov:defs.bzl).
+lua_instrumented(
+    name = "shipped",
+    # luacov.lua is the measuring tool; its own test replaces its hook, so it cannot measure itself.
+    srcs = glob(["*.lua"], exclude = ["*_test.lua", "luacov.lua"]),
+    visibility = ["//visibility:public"],
 )

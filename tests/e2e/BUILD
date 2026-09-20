@@ -114,6 +114,8 @@ e2e_test(name = "plugin_luacheck")
 
 e2e_test(name = "file_ensure_idempotent")
 
+e2e_test(name = "luacov_child_process")
+
 e2e_test(name = "not_converged")
 
 e2e_test(name = "plugin_segfault_isolated")
@@ -276,3 +278,12 @@ test_suite(
         ":step_timeout_fails_valgrind_test",
     ],
 )
+e2e_test(name = "validate_secret_not_visible")
+e2e_test(name = "validate_vars_at_workflow_level")
+e2e_test(name = "validate_env_names")
+e2e_test(name = "validate_become_value")
+e2e_test(name = "inventory_bad_names")
+e2e_test(name = "plugin_files_malformed")
+e2e_test(name = "validate_unknown_target")
+e2e_test(name = "validate_step_run_and_uses")
+e2e_test(name = "plugin_shape_and_array_args")

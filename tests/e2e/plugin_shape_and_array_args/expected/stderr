@@ -1,0 +1,4 @@
+qwe validate: .qwe/plugins/shape_item/plugin.lua:2:10: top-level code is not allowed in a plugin: this value is computed when the file loads; put it in check or apply, or in a function they call
+qwe validate: .qwe/plugins/shape_return/plugin.lua:4:1: the plugin must end with a single return of its module table
+qwe validate: .qwe/plugins/shape_return/plugin.lua: the plugin must export check and apply functions, or argv (a run-like plugin)
+qwe validate: w.yaml:7:19: no step "nope" before this one in the job: ${{ steps.nope.outputs.x }} (outputs are visible only within the same job, to later steps)

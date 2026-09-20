@@ -148,6 +148,11 @@ cc_library(
     name = "luavm",
     srcs = ["luavm.c", "luafs.c", "luaexec.c", "luasecrets.c"],
     hdrs = ["luavm.h", "luafs.h", "luaexec.h", "luasecrets.h"],
+    # The Lua sources, so bazel coverage keeps their line coverage (see //tools/luacov:defs.bzl).
+    data = [
+        "//plugins/builtin:shipped",
+        "//src/kernel/lua:shipped",
+    ],
     deps = [
         ":redact",
         "//src/secrets",

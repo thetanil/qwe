@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: lister
+        with:
+          items: ["${{ steps.nope.outputs.x }}"]

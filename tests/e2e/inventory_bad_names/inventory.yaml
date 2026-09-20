@@ -1,0 +1,9 @@
+targets:
+  box:
+    backend: ssh
+    host: 192.0.2.1
+    vars:
+      "bad name": x
+    secrets:
+      "bad secret": whatever
+      ok_name: !encrypted garbage

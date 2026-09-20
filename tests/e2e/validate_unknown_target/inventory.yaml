@@ -1,0 +1,7 @@
+targets:
+  a:
+    backend: ssh
+    host: 192.0.2.1
+  b:
+    backend: ssh
+    host: 192.0.2.2

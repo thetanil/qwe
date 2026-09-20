@@ -1,0 +1,10 @@
+env:
+  1BAD: x
+jobs:
+  j:
+    target: local
+    env:
+      QWE_OUTPUT: x
+      QWE_STEP: y
+    steps:
+      - run: echo hi

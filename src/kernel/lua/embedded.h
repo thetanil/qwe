@@ -6,6 +6,7 @@
 
 struct qwe_embedded {
 	const char *name; /* the module name, as passed to require() */
+	const char *path; /* its source file, relative to the workspace */
 	const unsigned char *data;
 	size_t len;
 };

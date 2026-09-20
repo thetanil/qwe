@@ -1,0 +1,4 @@
+qwe validate: inventory.yaml:6:7: var name "bad name" must match [A-Za-z_][A-Za-z0-9_-]*
+qwe validate: inventory.yaml:8:7: secret name "bad secret" must match [A-Za-z_][A-Za-z0-9_-]*
+qwe validate: inventory.yaml:8:21: a secret must be an !encrypted value (make one with: printf %s "..." | qwe encrypt)
+qwe validate: inventory.yaml:9:16: not a valid envelope: not a qwe envelope (expected qwe:1:xchacha20poly1305:...)

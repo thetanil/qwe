@@ -1,3 +1,4 @@
+load("//tools/luacov:defs.bzl", "lua_instrumented")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # Sources of the built-in plugins. They are compiled into the binary by
@@ -61,3 +62,10 @@ filegroup(
         "recording",
     ]
 ]
+
+# The Lua that ships, for `bazel coverage` (see //tools/luacov:defs.bzl).
+lua_instrumented(
+    name = "shipped",
+    srcs = [":plugin_lua"],
+    visibility = ["//visibility:public"],
+)

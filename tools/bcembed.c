@@ -100,9 +100,9 @@ int main(int argc, char **argv)
 	fputs("\nconst struct qwe_embedded qwe_embedded_modules[] = {\n", out);
 	for (i = 2; i < argc; i++) {
 		char *eq = strchr(argv[i], '=');
-		fprintf(out, "\t{\"%.*s\", data%d, sizeof data%d - 1},\n", (int)(eq - argv[i]), argv[i], i, i);
+		fprintf(out, "\t{\"%.*s\", \"%s\", data%d, sizeof data%d - 1},\n", (int)(eq - argv[i]), argv[i], eq + 1, i, i);
 	}
-	fputs("\t{0, 0, 0},\n};\n", out);
+	fputs("\t{0, 0, 0, 0},\n};\n", out);
 	fclose(out);
 	return 0;
 }

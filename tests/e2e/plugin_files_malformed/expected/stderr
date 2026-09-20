@@ -1,0 +1,7 @@
+qwe validate: .qwe/plugins/bad name: the plugin name "bad name" must match [A-Za-z_][A-Za-z0-9_.-]*
+qwe validate: .qwe/plugins/badjson/schema.json:2:11: invalid JSON: unterminated object at line 1, column 1
+qwe validate: .qwe/plugins/notobject/schema.json: must be an object with a with: schema and optional outputs
+qwe validate: .qwe/plugins/nowith/schema.json: at /with: a with: schema (a JSON object) is required
+qwe validate: .qwe/plugins/outputsnotobject/schema.json: at /outputs: must be an object mapping an output name to its schema
+qwe validate: .qwe/plugins/syntax/plugin.lua:2:1: luacheck: (E011) expected expression near <eof>
+qwe validate: .qwe/plugins/unknownkey/schema.json: at /extra: unknown key "extra" (only with and outputs)

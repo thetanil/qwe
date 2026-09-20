@@ -10,4 +10,8 @@
  * qwe.fs. package.path and cpath are empty: nothing loads from disk. */
 lua_State *qwe_lua_new(void);
 
+/* Writes the Lua coverage gathered so far (a no-op unless enabled). A forked step
+ * child calls it before it execs: the exec discards the child's counts. */
+void qwe_lua_coverage_flush(lua_State *L);
+
 #endif

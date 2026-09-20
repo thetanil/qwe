@@ -1,0 +1,8 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: id
+        become: "not a name!"
+      - run: id
+        become: -1

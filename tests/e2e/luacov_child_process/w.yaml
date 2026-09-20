@@ -1,0 +1,9 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: file.ensure
+        with:
+          path: out.txt
+          content: "hello\n"
+      - run: cat out.txt

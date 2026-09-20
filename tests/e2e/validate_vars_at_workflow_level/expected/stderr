@@ -1,0 +1,1 @@
+qwe validate: w.yaml:2:11: vars belong to a job's target: use them in a job or step, or map them in a job's env: (${{ vars.region }})

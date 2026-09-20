@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - name: neither
+      - run: echo hi
+        uses: file.ensure

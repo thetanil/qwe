@@ -1,0 +1,2 @@
+qwe validate: w.yaml:6:17: become: "not a name!" is not a user name (use a name like runner, an integer uid, or true for root)
+qwe validate: w.yaml:8:17: become: a uid cannot be negative

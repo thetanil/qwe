@@ -127,6 +127,7 @@ static char **child_argv(void *arg, int result_fd)
 		lua_pop(L, 1);
 		send_result(L, lua_gettop(L), result_fd);
 		fflush(stdout);
+		qwe_lua_coverage_flush(L);
 		_exit(ok ? 0 : 1);
 	}
 	if (!lua_istable(L, -2)) {
@@ -153,6 +154,7 @@ static char **child_argv(void *arg, int result_fd)
 		return NULL;
 	}
 	send_status(L, result_fd, "exec", NULL);
+	qwe_lua_coverage_flush(L);
 	if (lua_type(L, -1) == LUA_TSTRING) {
 		size_t sl;
 		const char *s = lua_tolstring(L, -1, &sl);
@@ -171,6 +173,7 @@ fail:
 	if (is_plugin) {
 		send_status(L, result_fd, "failed", "plugin-error");
 		fflush(stdout);
+		qwe_lua_coverage_flush(L);
 		_exit(1);
 	}
 	return NULL;
