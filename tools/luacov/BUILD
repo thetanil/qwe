@@ -7,3 +7,9 @@ sh_binary(
     name = "html",
     srcs = ["html.sh"],
 )
+
+# Fails if coverage dropped below tools/luacov/floor.txt: bazel run //tools/luacov:check
+sh_binary(
+    name = "check",
+    srcs = ["check.sh"],
+)

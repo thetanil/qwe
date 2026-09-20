@@ -108,6 +108,14 @@ bazel run //tools/luacov:html            # writes coverage-html/index.html
 bazel run //tools/luacov:html -- my-dir  # or into another directory
 ```
 
+Before you send a change, check that coverage has not dropped:
+
+```
+bazel run //tools/luacov:check
+```
+
+(See "Keeping coverage from dropping" below.)
+
 Your plugin's page is under `plugins/builtin/<name>/`, with each line marked hit or missed. The
 same report covers the C; `docs/coverage.md` has the per-file numbers and how the Lua hook works.
 
@@ -118,3 +126,15 @@ same report covers the C; `docs/coverage.md` has the per-file numbers and how th
 `qwe-debug`, the same build with its symbols. The sanitizer (`--config=asan`, `ubsan`) and
 valgrind builds link dynamically, because a sanitizer runtime cannot be linked statically and
 valgrind cannot intercept `malloc` in a static binary; `qwe` keeps its symbols there.
+
+## Keeping coverage from dropping
+
+```
+bazel run //tools/luacov:check              # fails if a file has more uncovered lines than floor.txt allows
+bazel run //tools/luacov:check -- --update  # after improving coverage: ratchet floor.txt down
+```
+
+`tools/luacov/floor.txt` lists, per file under `src/` and `plugins/` (C and Lua), the most
+uncovered lines allowed. Untested new code raises a file's count and fails the check; a new file with misses
+must be listed (run `--update` once it is tested). It is a `bazel run`, not a `bazel test`,
+because a test cannot itself run `bazel coverage`; run it in CI. Commit `floor.txt` changes on purpose.

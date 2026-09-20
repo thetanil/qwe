@@ -25,6 +25,7 @@ cc_library(
         "-Wno-error",
         "-Wno-unused-parameter",
         "-Wno-sign-compare",
+        "-Wno-unused-value",  # emitter.c's PUT_BREAK/WRITE_BREAK macros: upstream, harmless
     ],
     includes = ["include"],
     visibility = ["//visibility:public"],
