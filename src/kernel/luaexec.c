@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "src/kernel/luaexec.h"
+#include "src/kernel/gcov.h"
 #include "src/kernel/preamble.h"
 
 #include <errno.h>
@@ -127,6 +128,7 @@ static int exec_run(lua_State *L)
 				dup2(nul, 2);
 			}
 		}
+		qwe_gcov_dump();
 		execvp(argv[0], argv);
 		_exit(127);
 	}

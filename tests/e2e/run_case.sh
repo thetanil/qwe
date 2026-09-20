@@ -22,6 +22,8 @@
 #                     is skipped (prints SKIP, passes) unless REMOTE_CONTAINERS is set
 #                     and `ssh -o BatchMode=yes 172.18.0.1 true` works
 #   setup.sh          optional: run in the work dir before qwe (chmod a key file, say)
+#   stdin             optional: qwe's standard input (a file; setup.sh may create or replace
+#                     it, and a directory there makes reading stdin fail with EISDIR)
 #   bin/              optional directory of commands put first on PATH (a shim)
 #   check.sh          optional extra assertions, run in the work dir after qwe;
 #                     sees $QWE_STDOUT (qwe's stdout) and must exit 0
@@ -80,6 +82,10 @@ fi
 # Replaces the calling shell with qwe, under the case's ulimit if it has one.
 # (bash: the /bin/sh here is dash, whose ulimit has no -u.)
 run_qwe() {
+	# stdin: <work>/stdin, if it exists once setup.sh has run (a directory makes read(2) fail)
+	if [ -e "$work/stdin" ]; then
+		exec <"$work/stdin"
+	fi
 	if [ -n "$limit" ]; then
 		exec bash -c 'ulimit $1 && shift && exec "$@"' bash "$limit" "$qwe" "$@"
 	fi

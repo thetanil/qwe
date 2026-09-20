@@ -50,10 +50,28 @@ TEST size_limit(void)
 	PASS();
 }
 
+/* A key longer than the position tracker's first buffer, at two levels: its path
+ * (the JSON Pointer used in error messages) outgrows the buffer more than once. */
+TEST long_keys_grow_the_path(void)
+{
+	uint8_t *buf;
+	size_t n;
+	char err[128], doc[1500];
+	char key[301];
+
+	memset(key, 'k', sizeof key - 1);
+	key[sizeof key - 1] = '\0';
+	snprintf(doc, sizeof doc, "%s:\n  %s:\n    %s: 1\n", key, key, key);
+	ASSERT_EQ(0, qwe_yaml_to_cbor(doc, strlen(doc), &buf, &n, NULL, err, sizeof err));
+	free(buf);
+	PASS();
+}
+
 SUITE(limits)
 {
 	RUN_TEST(depth_limit);
 	RUN_TEST(size_limit);
+	RUN_TEST(long_keys_grow_the_path);
 }
 
 GREATEST_MAIN_DEFS();

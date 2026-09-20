@@ -66,7 +66,7 @@ cc_test(
 cc_library(
     name = "proc",
     srcs = ["proc.c"],
-    hdrs = ["proc.h"],
+    hdrs = ["proc.h", "gcov.h"],
 )
 
 # Signals and process groups: its own test binary (spec, "Test strategy").
@@ -147,7 +147,7 @@ cc_library(
 cc_library(
     name = "luavm",
     srcs = ["luavm.c", "luafs.c", "luaexec.c", "luasecrets.c"],
-    hdrs = ["luavm.h", "luafs.h", "luaexec.h", "luasecrets.h"],
+    hdrs = ["gcov.h", "luavm.h", "luafs.h", "luaexec.h", "luasecrets.h"],
     # The Lua sources, so bazel coverage keeps their line coverage (see //tools/luacov:defs.bzl).
     data = [
         "//plugins/builtin:shipped",
@@ -518,6 +518,18 @@ cc_test(
         ":luavm",
         ":oom_shim",
         ":redact",
+        "//third_party/greatest",
+        "//third_party/luajit",
+    ],
+)
+
+# qwe.exec with bad arguments and a starved system (ticket quality/09).
+cc_test(
+    name = "luaexec_test",
+    size = "small",
+    srcs = ["luaexec_test.c"],
+    deps = [
+        ":luavm",
         "//third_party/greatest",
         "//third_party/luajit",
     ],

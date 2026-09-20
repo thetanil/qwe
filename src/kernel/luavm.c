@@ -1,4 +1,5 @@
 #include "src/kernel/luavm.h"
+#include "src/kernel/gcov.h"
 
 #include "src/kernel/lua/embedded.h"
 #include "src/kernel/luacbor.h"
@@ -51,6 +52,7 @@ void qwe_lua_coverage_flush(lua_State *L)
 {
 	if (!getenv("QWE_LUA_COVERAGE"))
 		return;
+	qwe_gcov_dump();
 	lua_getglobal(L, "require");
 	lua_pushliteral(L, "qwe.luacov");
 	if (lua_pcall(L, 1, 1, 0) != 0) {

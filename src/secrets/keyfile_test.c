@@ -2,8 +2,10 @@
 #include "greatest.h"
 #include "src/secrets/keyfile.h"
 
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -58,9 +60,76 @@ TEST mode_check_matches_socket_dir_check(void)
 	PASS();
 }
 
+/* Another owner is refused whoever runs the test: the stat is edited, not the file. */
+TEST private_check_refuses_another_owner(void)
+{
+	struct stat st;
+	char err[256];
+
+	memset(&st, 0, sizeof st);
+	st.st_mode = 0600;
+	st.st_uid = geteuid() + 1;
+	ASSERT_EQ(-1, qwe_private_check(&st, "the key file", "k", err, sizeof err));
+	ASSERT(strstr(err, "is owned by uid") != NULL && strstr(err, "not by you") != NULL);
+	PASS();
+}
+
+/* qwe_key_generate: a directory that cannot be made, a file that cannot be created,
+ * a key that cannot be written; each says so, and none leaves a key file behind. */
+TEST generate_failures_are_reported(void)
+{
+	char root[] = "/tmp/qwe-keygen-XXXXXX", path[512], blocker[256], ro[256], err[512];
+	struct rlimit lim, old;
+	struct sigaction ign, oldact;
+	FILE *f;
+
+	ASSERT(mkdtemp(root) != NULL);
+
+	/* the parent "directory" is a file */
+	snprintf(blocker, sizeof blocker, "%s/blocker", root);
+	f = fopen(blocker, "w");
+	ASSERT(f != NULL);
+	fclose(f);
+	snprintf(path, sizeof path, "%s/blocker/sub/secret", root);
+	ASSERT_EQ(-1, qwe_key_generate(path, err, sizeof err));
+	ASSERT(strstr(err, "cannot create ") != NULL);
+
+	/* the directory exists but cannot be written to (skipped as root, who can) */
+	snprintf(ro, sizeof ro, "%s/ro", root);
+	ASSERT_EQ(0, mkdir(ro, 0500));
+	snprintf(path, sizeof path, "%s/secret", ro);
+	if (geteuid() != 0) {
+		ASSERT_EQ(-1, qwe_key_generate(path, err, sizeof err));
+		ASSERT(strstr(err, "cannot create the key file ") != NULL);
+	}
+
+	/* the write fails (the file size limit is zero): the half-made file is removed */
+	snprintf(path, sizeof path, "%s/secret", root);
+	memset(&ign, 0, sizeof ign);
+	ign.sa_handler = SIG_IGN;
+	sigaction(SIGXFSZ, &ign, &oldact);
+	getrlimit(RLIMIT_FSIZE, &old);
+	lim = old;
+	lim.rlim_cur = 0;
+	setrlimit(RLIMIT_FSIZE, &lim);
+	ASSERT_EQ(-1, qwe_key_generate(path, err, sizeof err));
+	setrlimit(RLIMIT_FSIZE, &old);
+	sigaction(SIGXFSZ, &oldact, NULL);
+	ASSERT(strstr(err, "cannot write ") != NULL);
+	ASSERT_EQ(-1, access(path, F_OK));
+
+	chmod(ro, 0700);
+	rmdir(ro);
+	unlink(blocker);
+	rmdir(root);
+	PASS();
+}
+
 SUITE(keyfile)
 {
 	RUN_TEST(mode_check_matches_socket_dir_check);
+	RUN_TEST(private_check_refuses_another_owner);
+	RUN_TEST(generate_failures_are_reported);
 }
 
 GREATEST_MAIN_DEFS();

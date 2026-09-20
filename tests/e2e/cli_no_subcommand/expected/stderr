@@ -1,0 +1,6 @@
+usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]...
+       qwe validate <workflow.yaml> [-i <inventory.yaml>]
+       qwe encrypt
+       qwe keygen
+       qwe serve
+       qwe --version

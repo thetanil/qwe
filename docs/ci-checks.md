@@ -77,8 +77,6 @@ never build them.
 ## Not in CI yet
 
 - `--config=valgrind` needs `valgrind` installed (3.22 was measured).
-- Ticket `quality/09` (remaining C coverage gaps) is open; it adds tests to the suites
-  above rather than a new command.
 
 ## Allocation checks
 

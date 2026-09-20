@@ -4,6 +4,7 @@
 #include "src/kernel/luavm.h"
 
 #include <dirent.h>
+#include <errno.h>
 #include <lauxlib.h>
 #include <lua.h>
 #include <signal.h>
@@ -11,6 +12,7 @@
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -261,6 +263,88 @@ TEST subreaper_reaps_orphans(void)
 	PASS();
 }
 
+/* A spawn that cannot get its pipes says which pipe call failed, with errno,
+ * and leaks no descriptor. The limit is set to leave room for 0, 1 or 2 new fds. */
+static int spawn_with_fd_room(int room, struct qwe_proc *p, int *open_before, int *open_after)
+{
+	struct rlimit lim, old;
+	int first = dup(0), rc, again;
+
+	close(first);
+	getrlimit(RLIMIT_NOFILE, &old);
+	lim = old;
+	lim.rlim_cur = (rlim_t)(first + room);
+	setrlimit(RLIMIT_NOFILE, &lim);
+	*open_before = dup(0);
+	close(*open_before);
+	rc = qwe_proc_spawn(p, argv_true, NULL);
+	again = dup(0);
+	close(again);
+	*open_after = again;
+	setrlimit(RLIMIT_NOFILE, &old);
+	return rc;
+}
+
+TEST spawn_reports_a_pipe_failure(void)
+{
+	struct qwe_proc p;
+	int before, after;
+
+	/* room for one fd: the first pipe fails */
+	ASSERT_EQ(-1, spawn_with_fd_room(1, &p, &before, &after));
+	ASSERT_EQ(EMFILE, errno);
+	ASSERT_STR_EQ("pipe", p.fail_op);
+	ASSERT_EQ(before, after);
+	/* room for two: the first pipe is made, the close-on-exec one is not */
+	ASSERT_EQ(-1, spawn_with_fd_room(2, &p, &before, &after));
+	ASSERT_EQ(EMFILE, errno);
+	ASSERT_STR_EQ("pipe", p.fail_op);
+	ASSERT_EQ(before, after);
+	PASS();
+}
+
+static char **argv_none(void *arg, int result_fd)
+{
+	(void)arg;
+	(void)result_fd;
+	return NULL;
+}
+
+static char **argv_missing(void *arg, int result_fd)
+{
+	static char *argv[] = {"/nonexistent/qwe-no-such-program", NULL};
+	(void)arg;
+	(void)result_fd;
+	return argv;
+}
+
+/* The child that cannot build its argv exits 126; one that cannot exec, 127. */
+TEST child_exit_codes_for_no_argv_and_no_program(void)
+{
+	struct qwe_proc p;
+	int status;
+	char buf[64];
+
+	ASSERT_EQ(0, qwe_proc_spawn(&p, argv_none, NULL));
+	while (read(p.out_fd, buf, sizeof buf) > 0)
+		;
+	ASSERT_EQ(p.pid, waitpid(p.pid, &status, 0));
+	ASSERT(WIFEXITED(status));
+	ASSERT_EQ(126, WEXITSTATUS(status));
+	close(p.out_fd);
+	close(p.res_fd);
+
+	ASSERT_EQ(0, qwe_proc_spawn(&p, argv_missing, NULL));
+	while (read(p.out_fd, buf, sizeof buf) > 0)
+		;
+	ASSERT_EQ(p.pid, waitpid(p.pid, &status, 0));
+	ASSERT(WIFEXITED(status));
+	ASSERT_EQ(127, WEXITSTATUS(status));
+	close(p.out_fd);
+	close(p.res_fd);
+	PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv)
@@ -270,5 +354,7 @@ int main(int argc, char **argv)
 	RUN_TEST(group_kill_no_orphans);
 	RUN_TEST(subreaper_reaps_orphans);
 	RUN_TEST(master_outside_step_groups);
+	RUN_TEST(spawn_reports_a_pipe_failure);
+	RUN_TEST(child_exit_codes_for_no_argv_and_no_program);
 	GREATEST_MAIN_END();
 }

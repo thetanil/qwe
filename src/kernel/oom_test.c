@@ -298,6 +298,8 @@ int main(int argc, char **argv)
 
 	snprintf(root, sizeof root, "%s", tmp ? tmp : "/tmp");
 	snprintf(childlog, sizeof childlog, "%s/child.log", root);
+	/* the coverage flush allocates, which would move the injection points it is counting */
+	unsetenv("QWE_LUA_COVERAGE");
 	GREATEST_MAIN_BEGIN();
 	RUN_TEST(injection_is_deterministic);
 	RUN_TEST(run_survives_every_injection);

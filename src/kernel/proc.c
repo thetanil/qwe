@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "src/kernel/proc.h"
+#include "src/kernel/gcov.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -59,6 +60,7 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 		close(fds[1]);
 		close(res[0]);
 		argv = fn(arg, res[1]);
+		qwe_gcov_dump();
 		if (!argv)
 			_exit(126);
 		execvp(argv[0], argv);

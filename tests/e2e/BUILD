@@ -298,3 +298,29 @@ filegroup(
     ]),
     visibility = ["//src/edge/yaml:__pkg__"],
 )
+
+e2e_test(name = "encrypt_ok")
+
+e2e_test(name = "encrypt_no_key")
+
+e2e_test(name = "encrypt_no_home")
+
+e2e_test(name = "encrypt_stdin_unreadable")
+
+e2e_test(name = "encrypt_too_long")
+
+e2e_test(name = "encrypt_key_garbage")
+
+e2e_test(name = "encrypt_key_empty")
+
+e2e_test(name = "encrypt_key_not_regular")
+
+e2e_test(name = "inventory_not_a_map")
+
+e2e_test(name = "run_dir_blocked")
+
+e2e_test(name = "keygen_rejects_argument")
+
+e2e_test(name = "keygen_no_home")
+
+e2e_test(name = "cli_no_subcommand")

@@ -223,9 +223,6 @@ static int encode_table(lua_State *L, int idx, CborEncoder *enc, int depth, cons
 {
 	CborEncoder inner;
 	enum kind k = classify(L, idx);
-
-	if (idx < 0)
-		idx = lua_gettop(L) + idx + 1;
 	int rc = CborNoError;
 
 	if (depth >= QWE_LUA_MAX_DEPTH) {
