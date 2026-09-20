@@ -1,3 +1,8 @@
+# Implemented with Claude using Matt Pocock Skills
+
+https://github.com/mattpocock/skills
+
+
 # For plugin authors
 
 A project plugin lives next to the workflow, in `.qwe/plugins/<name>/`, and a step

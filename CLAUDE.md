@@ -10,7 +10,7 @@ the old design with python: thetanil/qwe/docs/device-manager-spec.md
 the concept of the application we were building in thetanil/qwe/docs/device-manager-spec.md
 is still valid as the first plugins to implement in qwe, hower this project uses NO PYTHON
 
-There is never python used in this repo
+There is never python used in this repo, never run python commands
 
 we use bazel 8.7.0 which is already installed in the environment
 
