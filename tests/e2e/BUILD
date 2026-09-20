@@ -1,5 +1,4 @@
-load(":defs.bzl", "e2e_test")
-
+load(":defs.bzl", "e2e_test", "e2e_valgrind_test")
 exports_files(["run_case.sh", "invert.sh"])
 
 e2e_test(name = "cli_unknown_subcommand")
@@ -251,3 +250,28 @@ e2e_test(name = "inventory_target_disabled")
 e2e_test(name = "inventory_target_disabled_not_contacted")
 e2e_test(name = "validate_ignores_disabled")
 e2e_test(name = "inventory_disabled_must_be_a_reason")
+
+# The valgrind gate (quality/04): a chosen set of cases, chosen for the paths
+# the unit tests cannot reach. Not the ssh cases: they need a reachable host.
+#   bazel test //tests/e2e:valgrind_e2e
+[e2e_valgrind_test(name = c) for c in [
+    "run_outputs",  # a plain run, plugin-free
+    "file_ensure_idempotent",  # a run with a plugin
+    "secret_redacted_env",  # secrets and redaction
+    "operator_cancel",  # cancellation and teardown
+    "step_timeout_fails",  # a timeout
+    "needs_skip_chain",  # a needs: chain
+]]
+
+test_suite(
+    name = "valgrind_e2e",
+    tags = ["manual"],
+    tests = [
+        ":file_ensure_idempotent_valgrind_test",
+        ":needs_skip_chain_valgrind_test",
+        ":operator_cancel_valgrind_test",
+        ":run_outputs_valgrind_test",
+        ":secret_redacted_env_valgrind_test",
+        ":step_timeout_fails_valgrind_test",
+    ],
+)

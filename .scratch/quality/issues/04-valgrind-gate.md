@@ -1,6 +1,6 @@
 # 04: A valgrind gate over the unit tests and a chosen set of e2e cases
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 01
@@ -45,11 +45,23 @@ finding gets hidden.
 
 ## Acceptance criteria
 
-- [ ] `bazel test --config=valgrind //...` runs every `cc_test` under `valgrind --leak-check=full --error-exitcode=1` and passes.
-- [ ] A chosen set of e2e cases runs under valgrind through a separate target, and passes. `e2e: tests/e2e/needs_skip_chain/`, `tests/e2e/file_ensure_idempotent/`, `tests/e2e/secret_redacted_env/`, `tests/e2e/operator_cancel/`, `tests/e2e/step_timeout_fails/`, `tests/e2e/run_outputs/`
-- [ ] Step children are traced; the programs they exec into are not. `manual: confirm from a valgrind log that child_argv's Lua is covered and that sh and ssh are skipped`
-- [ ] The LuaJIT suppression file has an entry-by-entry comment saying what each one hides and why it is not a real finding.
-- [ ] A deliberately introduced uninitialised read is caught by the gate. `unit: src/kernel/valgrind_smoke_test.c` (tagged to run only under this config)
-- [ ] How long each piece takes is measured and written down, and the cadence for the e2e piece is chosen from that number rather than guessed.
+- [x] `bazel test --config=valgrind //...` runs every `cc_test` under `valgrind --leak-check=full --error-exitcode=1` and passes.
+- [x] A chosen set of e2e cases runs under valgrind through a separate target, and passes. `e2e: tests/e2e/needs_skip_chain/`, `tests/e2e/file_ensure_idempotent/`, `tests/e2e/secret_redacted_env/`, `tests/e2e/operator_cancel/`, `tests/e2e/step_timeout_fails/`, `tests/e2e/run_outputs/`
+- [x] Step children are traced; the programs they exec into are not. `manual: confirm from a valgrind log that child_argv's Lua is covered and that sh and ssh are skipped`
+- [x] The LuaJIT suppression file has an entry-by-entry comment saying what each one hides and why it is not a real finding.
+- [x] A deliberately introduced uninitialised read is caught by the gate. `unit: src/kernel/valgrind_smoke_test.c` (tagged to run only under this config)
+- [x] How long each piece takes is measured and written down, and the cadence for the e2e piece is chosen from that number rather than guessed.
 
 ## Comments
+
+### Resolved
+
+Write-up (commands, tracing rules, suppressions, timing, cadence) is `docs/valgrind.md`. `bazel test //...` and `bazel test --config=valgrind //...` pass; `bazel test //tests/e2e:valgrind_e2e` passes.
+
+- `--config=valgrind` sets `--run_under=//tools/valgrind:run_under`, which wraps compiled tests in `valgrind --leak-check=full --error-exitcode=1` and passes shell tests through untouched (valgrind on a shell would trace the shell).
+- Six e2e cases run as `<case>_valgrind_test` (tag `manual`, suite `//tests/e2e:valgrind_e2e`). `valgrind_case.sh` fails on any non-empty valgrind log, not just the exit code, because a signalled or exec'd step child never returns `--error-exitcode`.
+- **Children:** confirmed by hand on `run_outputs`: three traced processes (qwe and its two step children, whose Lua runs under valgrind before the exec), no `sh`. Skip patterns are `/bin/*,/usr/*,/sbin/*,/lib/*`.
+- **Suppressions: none needed.** The suite is clean under valgrind 3.22 with LuaJIT unsuppressed, so `luajit.supp` has only its rule at the top. The "entry-by-entry" criterion is met vacuously; a future entry must carry a comment.
+- **Liveness:** `valgrind_smoke_test` (only a test under this config) passes only if valgrind fails a child that branches on uninitialised memory. Verified it fails when run without valgrind.
+- **Timing:** plain tests ~3 s; the valgrind cc_test gate ~130 s, of which `load_oom_test` is 128.8 s (0.5 s plain; it starts a LuaJIT VM per injected failure); without it ~6 s; the six e2e cases ~6 s together. From those numbers, both pieces are cheap enough per change; if 130 s is too long, run `load_oom_test` nightly only.
+- No findings in our code: the gate was green on first run.

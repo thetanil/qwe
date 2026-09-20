@@ -384,3 +384,18 @@ cc_test(
         "//third_party/greatest",
     ],
 )
+
+# Proves the valgrind gate catches an uninitialised read: the child's read must
+# make valgrind fail it. Incompatible (skipped by //...) unless built with
+# --config=valgrind.
+cc_test(
+    name = "valgrind_smoke_test",
+    size = "small",
+    srcs = ["valgrind_smoke_test.c"],
+    # the uninitialised read is the point; the compiler would otherwise refuse it
+    copts = ["-Wno-maybe-uninitialized"],
+    target_compatible_with = select({
+        "//tools/valgrind:valgrind": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)

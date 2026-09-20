@@ -27,3 +27,10 @@ build:asan --copt=-fsanitize=address --copt=-fno-sanitize-recover=all
 build:asan --copt=-fno-omit-frame-pointer --copt=-g --strip=never
 build:asan --linkopt=-fsanitize=address
 test:asan --test_env=ASAN_OPTIONS=detect_leaks=1:abort_on_error=0
+
+# Valgrind gate (quality/04). Runs the shipping build, no rebuild with
+# instrumentation: every cc_test goes through tools/valgrind/run_under.sh.
+build:valgrind --define=qwe_valgrind=1
+build:valgrind --copt=-g --strip=never
+test:valgrind --run_under=//tools/valgrind:run_under
+test:valgrind --test_timeout=300

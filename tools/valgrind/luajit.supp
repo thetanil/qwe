@@ -1,0 +1,3 @@
+# Suppressions for valgrind runs (quality/04). Each entry says what it hides and
+# why that is not a real finding. An unexplained suppression is how a real
+# finding gets hidden; add none without a comment.

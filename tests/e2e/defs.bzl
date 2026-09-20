@@ -30,3 +30,32 @@ def e2e_test(name, expect_mismatch = False, tags = [], data = []):
             data = ["//src/cli:qwe"] + case_files + data,
             tags = tags,
         )
+
+def e2e_valgrind_test(name):
+    """Runs tests/e2e/<name>/ as <name>_valgrind_test, with qwe and the step children it forks under valgrind.
+
+    Tagged manual: //... does not build it. The valgrind_e2e test_suite names the set.
+
+    Args:
+      name: case directory name (the case is shared with the plain <name>_test).
+    """
+    case_files = native.glob([name + "/**"], allow_empty = False)
+    sh_test(
+        name = name + "_valgrind_test",
+        size = "large",
+        srcs = ["valgrind_case.sh"],
+        args = [
+            "$(location :run_case.sh)",
+            "$(location //tools/valgrind:qwe_under_valgrind.sh)",
+            "$(location //src/cli:qwe)",
+            "$(location //tools/valgrind:luajit.supp)",
+            native.package_name() + "/" + name,
+        ],
+        data = [
+            ":run_case.sh",
+            "//src/cli:qwe",
+            "//tools/valgrind:qwe_under_valgrind.sh",
+            "//tools/valgrind:luajit.supp",
+        ] + case_files,
+        tags = ["manual", "valgrind"],
+    )
