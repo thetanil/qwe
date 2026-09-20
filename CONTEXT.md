@@ -137,7 +137,6 @@ The workflow directory and the inventory are **trusted input**, in the way a `Ma
 
 What `qwe validate` does with a project plugin: it reads the source, runs luacheck over it, checks that it compiles, and checks its `schema.json`, whose `kind` (`check-apply` or `argv`) declares what the module will export. **It runs no plugin code**: not the top level, not `check`, not `apply`. The plugin's top level runs, under strict globals, only when a step uses it (in that step's forked child during `qwe run`), and there the module is checked against its declared kind, failing the step with `plugin-error` if it does not export what it said. Pinned by `tests/e2e/validate_runs_no_plugin_code`. Running a workflow directory you did not write still runs its plugins as you.
 _Avoid_: Sandbox, isolation, untrusted plugin
-_Avoid_: Sandbox, isolation, untrusted plugin
 
 **Secret**:
 A value that must never appear in logs. It comes from an inline-encrypted value in authored YAML or from a step output declared secret, and anything built from a secret is itself secret. Once qwe knows a secret's plaintext, that plaintext is masked in all output for the rest of the workflow run.
