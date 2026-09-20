@@ -37,7 +37,8 @@ static int fs_list(lua_State *L)
 		names[n++] = strdup(e->d_name);
 	}
 	closedir(d);
-	qsort(names, n, sizeof *names, cmp_name);
+	if (n > 1) /* qsort of a null array is undefined, even for zero elements */
+		qsort(names, n, sizeof *names, cmp_name);
 	lua_createtable(L, (int)n, 0);
 	for (i = 0; i < n; i++) {
 		lua_pushstring(L, names[i]);

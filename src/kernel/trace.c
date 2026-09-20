@@ -70,10 +70,46 @@ void qwe_trace_install_abort_hook(struct qwe_trace *t)
 	qwe_lc_set_abort_hook(abort_hook, t);
 }
 
+/* strerrorname_np is a GNU extension from glibc 2.32. Without it (musl, older
+ * glibc) the names of the errnos a step can fail to start with come from a
+ * table; any other errno is "E<number>", as it always was for an unknown one. */
+#if defined(__GLIBC__) && defined(__GLIBC_PREREQ)
+#if __GLIBC_PREREQ(2, 32) && !defined(QWE_NO_STRERRORNAME_NP)
+#define HAVE_STRERRORNAME_NP 1
+#endif
+#endif
+
+#ifndef HAVE_STRERRORNAME_NP
+#define ERRNO_NAME(e) {e, #e}
+static const struct {
+	int err;
+	const char *name;
+} errno_names[] = {
+	ERRNO_NAME(EPERM),  ERRNO_NAME(ENOENT), ERRNO_NAME(ESRCH),  ERRNO_NAME(EINTR),
+	ERRNO_NAME(EIO),    ERRNO_NAME(E2BIG),  ERRNO_NAME(ENOEXEC), ERRNO_NAME(EBADF),
+	ERRNO_NAME(ECHILD), ERRNO_NAME(EAGAIN), ERRNO_NAME(ENOMEM), ERRNO_NAME(EACCES),
+	ERRNO_NAME(EFAULT), ERRNO_NAME(EBUSY),  ERRNO_NAME(EEXIST), ERRNO_NAME(ENOTDIR),
+	ERRNO_NAME(EISDIR), ERRNO_NAME(EINVAL), ERRNO_NAME(ENFILE), ERRNO_NAME(EMFILE),
+	ERRNO_NAME(ENOSPC), ERRNO_NAME(EPIPE),  ERRNO_NAME(ENAMETOOLONG),
+};
+
+static const char *errno_name_np(int err)
+{
+	size_t i;
+
+	for (i = 0; i < sizeof errno_names / sizeof *errno_names; i++)
+		if (errno_names[i].err == err)
+			return errno_names[i].name;
+	return NULL;
+}
+#else
+#define errno_name_np strerrorname_np
+#endif
+
 const char *qwe_errno_name(int err)
 {
 	static char buf[24];
-	const char *name = strerrorname_np(err);
+	const char *name = errno_name_np(err);
 
 	if (name)
 		return name;

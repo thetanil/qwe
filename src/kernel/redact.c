@@ -111,8 +111,10 @@ int qwe_redact_feed(struct qwe_redactor *r, const void *in, size_t n, struct qwe
 	buf = malloc(total ? total : 1);
 	if (!buf)
 		return -1;
-	memcpy(buf, r->held, r->held_len);
-	memcpy(buf + r->held_len, in, n);
+	if (r->held_len) /* held is NULL until something is held; memcpy from NULL is undefined */
+		memcpy(buf, r->held, r->held_len);
+	if (n)
+		memcpy(buf + r->held_len, in, n);
 	r->held_len = 0;
 	while (i < total) {
 		size_t m = match_at(buf + i, total - i);

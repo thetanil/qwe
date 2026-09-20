@@ -285,3 +285,48 @@ cc_test(
         "//third_party/luajit",
     ],
 )
+
+# Each sanitizer config must be shown live: the child faults on purpose and
+# the test passes only if the sanitizer stops it. Incompatible (skipped by
+# //...) unless built with --config=ubsan or --config=asan.
+cc_test(
+    name = "sanitizer_smoke_ubsan_test",
+    size = "small",
+    srcs = ["sanitizer_smoke_test.c"],
+    local_defines = ["QWE_SMOKE_UBSAN"],
+    target_compatible_with = select({
+        "//tools/sanitizers:ubsan": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)
+
+cc_test(
+    name = "sanitizer_smoke_asan_test",
+    size = "small",
+    srcs = ["sanitizer_smoke_test.c"],
+    local_defines = ["QWE_SMOKE_ASAN"],
+    target_compatible_with = select({
+        "//tools/sanitizers:asan": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)
+
+# trace.c as a libc without strerrorname_np builds it (musl, glibc < 2.32): the
+# rename makes any call to the GNU function a compile error.
+cc_test(
+    name = "errno_name_test",
+    size = "small",
+    srcs = [
+        "errno_name_test.c",
+        "trace.c",
+        "trace.h",
+    ],
+    local_defines = [
+        "QWE_NO_STRERRORNAME_NP",
+        "strerrorname_np=qwe_strerrorname_np_must_not_be_called",
+    ],
+    deps = [
+        ":lifecycle",
+        "//third_party/greatest",
+    ],
+)

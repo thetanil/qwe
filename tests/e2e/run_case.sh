@@ -17,6 +17,7 @@
 #                     or "file <SIGNAME> <path>...": once every path has appeared in
 #                     the work dir (the step creates it, so no delay guesses when it
 #                     is running). Waiting gives up after 30 s and fails the case.
+#   asan-options      optional: extra ASAN_OPTIONS, appended under --config=asan
 #   needs-ssh         optional marker: the case needs the devcontainer's ssh target. It
 #                     is skipped (prints SKIP, passes) unless REMOTE_CONTAINERS is set
 #                     and `ssh -o BatchMode=yes 172.18.0.1 true` works
@@ -53,7 +54,7 @@ work=$(mktemp -d) || exit 3
 trap 'rm -rf "$work"' EXIT
 cp -R "$case_dir"/. "$work"/ || exit 3
 rm -rf "$work/expected" "$work/args"
-rm -f "$work/check.sh" "$work/env" "$work/signal" "$work/ulimit" "$work/needs-ssh" "$work/setup.sh"
+rm -f "$work/check.sh" "$work/env" "$work/signal" "$work/ulimit" "$work/needs-ssh" "$work/setup.sh" "$work/asan-options"
 [ -d "$work/bin" ] && PATH="$work/bin:$PATH"
 
 [ -f "$case_dir/setup.sh" ] && { (cd "$work" && sh "$case_dir/setup.sh") || exit 3; }
@@ -86,6 +87,19 @@ run_qwe() {
 }
 # a case never inherits the runner's XDG_RUNTIME_DIR: its owner and mode differ per machine
 unset XDG_RUNTIME_DIR
+# Under --config=asan, a report from qwe or any step child would land on the
+# stderr/stdout the goldens compare. Send reports to per-pid files instead, in
+# the test's undeclared outputs (kept by bazel), never the scratch dir.
+if [ -n "$ASAN_OPTIONS" ]; then
+	report_dir=${TEST_UNDECLARED_OUTPUTS_DIR:-${TMPDIR:-/tmp}}
+	ASAN_OPTIONS="$ASAN_OPTIONS:log_path=$report_dir/asan-$(basename "$case_dir")"
+	# extra options for a case that needs them (a deliberate SIGSEGV, say)
+	[ -f "$case_dir/asan-options" ] && ASAN_OPTIONS="$ASAN_OPTIONS:$(cat "$case_dir/asan-options")"
+	# A process limit starves LeakSanitizer of the thread it needs; it dies with a
+	# fatal error of its own, so the ulimit cases run without leak detection.
+	[ -n "$limit" ] && ASAN_OPTIONS="$ASAN_OPTIONS:detect_leaks=0"
+	export ASAN_OPTIONS
+fi
 if [ -f "$case_dir/env" ]; then
 	while IFS= read -r line; do [ -n "$line" ] && export "$line"; done < "$case_dir/env"
 fi

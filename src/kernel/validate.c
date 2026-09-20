@@ -244,7 +244,8 @@ static void print_problems(struct problems *ps, const char *cmd, const char *pat
 {
 	size_t i;
 
-	qsort(ps->v, ps->n, sizeof *ps->v, cmp_problem);
+	if (ps->n > 1) /* qsort of a null array is undefined, even for zero elements */
+		qsort(ps->v, ps->n, sizeof *ps->v, cmp_problem);
 	for (i = 0; i < ps->n; i++) {
 		fprintf(stderr, "%s: %s:%u:%u: %s\n", cmd, path, ps->v[i].pos.line, ps->v[i].pos.col, ps->v[i].message);
 		free(ps->v[i].message);
