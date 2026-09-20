@@ -3,7 +3,7 @@ env: {GREETING: hello}
 jobs:
   build:
     target: local
-    timeout-minutes: 5
+    timeout-seconds: 300
     env: {STAGE: build}
     steps:
       - id: greet

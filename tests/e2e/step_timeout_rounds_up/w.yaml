@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: slow
+        run: sleep 30
+        timeout-seconds: 0.0004

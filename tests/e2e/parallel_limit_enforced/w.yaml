@@ -3,7 +3,7 @@ jobs:
   a:
     target: local
     steps:
-      - timeout-minutes: 0.02
+      - timeout-seconds: 1.2
         run: |
           touch a.mark
           i=0; while [ ! -e b.mark ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done
@@ -11,7 +11,7 @@ jobs:
   b:
     target: local
     steps:
-      - timeout-minutes: 0.02
+      - timeout-seconds: 1.2
         run: |
           touch b.mark
           i=0; while [ ! -e a.mark ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done

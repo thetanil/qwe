@@ -255,3 +255,13 @@ cc_test(
         "//third_party/greatest",
     ],
 )
+
+cc_test(
+    name = "jobs_test",
+    srcs = ["jobs_test.c"],
+    deps = [
+        ":kernel",
+        "//third_party/greatest",
+        "//third_party/luajit",
+    ],
+)

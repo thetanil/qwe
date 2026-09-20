@@ -1,6 +1,6 @@
 # 02: Rename `timeout-minutes` to `timeout-seconds`, and make the conversion total
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: none
@@ -94,15 +94,15 @@ below anything that troubles a `long`, and small enough that a typo like
 
 ## Acceptance criteria
 
-- [ ] `timeout-seconds` works on a job and on a step, and `0.3` kills a step after ~300 ms. `e2e: tests/e2e/step_timeout_fails/`, `tests/e2e/job_timeout_cancels/` (converted from the old unit)
-- [ ] `timeout-minutes` is rejected, and the error names `timeout-seconds` and the equivalent value rather than saying only "unknown key". `e2e: tests/e2e/validate_timeout_minutes_renamed/`
-- [ ] `timeout-seconds: 604801` is a validation error naming the maximum, at the value's position; `qwe run` exits 2 and creates no run directory. `e2e: tests/e2e/validate_timeout_too_large/`
-- [ ] No `double`-to-`long` conversion in `qwe_timeout_ms_at` can be reached with an out-of-range value: everything that reaches it has passed the schema's maximum. `unit: src/kernel/jobs_test.c::timeout_conversion_is_total`
-- [ ] A positive `timeout-seconds` below one millisecond arms a 1 ms timer rather than none: a step that sleeps is killed and is `failed` with reason `timeout`. `e2e: tests/e2e/step_timeout_rounds_up/`
-- [ ] The boundary values convert exactly: `1` is 1000 ms, `0.3` is 300 ms, and the maximum converts without overflow. `unit: src/kernel/jobs_test.c::timeout_conversion_is_total`
-- [ ] An absent `timeout-seconds` still means no limit. `e2e: tests/e2e/steps_in_order/` (existing, must stay green)
-- [ ] All eight existing fixtures are converted and still assert the same behaviour: `0.005 → 0.3`, `0.02 → 1.2`, `0.03 → 1.8`, `5 → 300`. `e2e: tests/e2e/grace_then_sigkill/`, `job_timeout_cancels/`, `parallel_limit_enforced/`, `plugin_block_timeout/`, `ssh_timeout_kills_remote/`, `step_timeout_continue/`, `step_timeout_fails/`, `validate_ok/`
-- [ ] The unit, the maximum and the rounding rule are stated in design §14.
+- [x] `timeout-seconds` works on a job and on a step, and `0.3` kills a step after ~300 ms. `e2e: tests/e2e/step_timeout_fails/`, `tests/e2e/job_timeout_cancels/` (converted from the old unit)
+- [x] `timeout-minutes` is rejected, and the error names `timeout-seconds` and the equivalent value rather than saying only "unknown key". `e2e: tests/e2e/validate_timeout_minutes_renamed/`
+- [x] `timeout-seconds: 604801` is a validation error naming the maximum, at the value's position; `qwe run` exits 2 and creates no run directory. `e2e: tests/e2e/validate_timeout_too_large/`
+- [x] No `double`-to-`long` conversion in `qwe_timeout_ms_at` can be reached with an out-of-range value: everything that reaches it has passed the schema's maximum. `unit: src/kernel/jobs_test.c::timeout_conversion_is_total`
+- [x] A positive `timeout-seconds` below one millisecond arms a 1 ms timer rather than none: a step that sleeps is killed and is `failed` with reason `timeout`. `e2e: tests/e2e/step_timeout_rounds_up/`
+- [x] The boundary values convert exactly: `1` is 1000 ms, `0.3` is 300 ms, and the maximum converts without overflow. `unit: src/kernel/jobs_test.c::timeout_conversion_is_total`
+- [x] An absent `timeout-seconds` still means no limit. `e2e: tests/e2e/steps_in_order/` (existing, must stay green)
+- [x] All eight existing fixtures are converted and still assert the same behaviour: `0.005 → 0.3`, `0.02 → 1.2`, `0.03 → 1.8`, `5 → 300`. `e2e: tests/e2e/grace_then_sigkill/`, `job_timeout_cancels/`, `parallel_limit_enforced/`, `plugin_block_timeout/`, `ssh_timeout_kills_remote/`, `step_timeout_continue/`, `step_timeout_fails/`, `validate_ok/`
+- [x] The unit, the maximum and the rounding rule are stated in design §14.
 
 ## Comments
 
@@ -118,3 +118,5 @@ design §14 — splitting them would mean converting the fixtures twice.
 `m1-review/06` sets the guarantee this field makes: a timeout fires within
 100 ms of its deadline. Nothing here depends on that ticket, and it does not
 depend on this one; they can land in either order.
+
+Resolved 2026-09-20. Schema key renamed with `maximum: 604800`; `qwe_timeout_ms_at` clamps before the cast and rounds positive values up to 1 ms (`jobs_test.c::timeout_conversion_is_total`). The validator's `describe()` turns `timeout-minutes` into `write timeout-seconds: <minutes*60>` and the maximum into a positioned error. Nine fixtures were converted (the ticket said eight; `parallel_limit_enforced` has two timeouts). `step_timeout_rounds_up` asserts via `check.sh` that the result has reason `timeout`.

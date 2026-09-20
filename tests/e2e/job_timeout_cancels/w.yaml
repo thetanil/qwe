@@ -1,7 +1,7 @@
 jobs:
   j:
     target: local
-    timeout-minutes: 0.02
+    timeout-seconds: 1.2
     steps:
       - id: one
         run: echo one

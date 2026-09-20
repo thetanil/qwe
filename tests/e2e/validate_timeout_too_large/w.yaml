@@ -1,0 +1,6 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - run: echo hi
+        timeout-seconds: 604801

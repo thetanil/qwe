@@ -4,6 +4,6 @@ jobs:
     steps:
       - id: slow
         run: echo start; sleep 30
-        timeout-minutes: 0.005
+        timeout-seconds: 0.3
       - id: after
         run: echo NEVER

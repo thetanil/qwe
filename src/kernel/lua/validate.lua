@@ -80,7 +80,19 @@ end
 local function describe(doc, err, plugin_list)
   local kw = err.keywordLocation
   local ptr = err.instanceLocation
-  if ends_with(kw, "/additionalProperties") then
+  if ends_with(kw, "/additionalProperties") and last_token(ptr) == "timeout-minutes" then
+    local minutes = resolve(doc, ptr)
+    local hint = "timeout-seconds"
+    if type(minutes) == "number" then
+      hint = string.format("timeout-seconds: %.10g", minutes * 60)
+    end
+    return {
+      pointer = ptr, kind = "key",
+      message = 'unknown key "timeout-minutes": the unit is seconds now, write ' .. hint,
+    }
+  elseif ends_with(kw, "/properties/timeout-seconds/maximum") then
+    return { pointer = ptr, kind = "value", message = "timeout-seconds: at most 604800 (seven days)" }
+  elseif ends_with(kw, "/additionalProperties") then
     return { pointer = ptr, kind = "key", message = 'unknown key "' .. last_token(ptr) .. '"' }
   elseif ends_with(kw, "/properties/uses/enum") then
     local builtin, project = {}, {}

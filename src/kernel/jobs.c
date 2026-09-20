@@ -11,11 +11,21 @@ long qwe_timeout_ms_at(lua_State *L, int idx)
 {
 	long ms = 0;
 
-	lua_getfield(L, idx, "timeout-minutes");
-	if (lua_isnumber(L, -1))
-		ms = (long)(lua_tonumber(L, -1) * 60000.0);
+	lua_getfield(L, idx, "timeout-seconds");
+	if (lua_isnumber(L, -1)) {
+		double s = lua_tonumber(L, -1);
+
+		/* Clamped before the cast, so it is always in range; 0 stays "none". */
+		if (s > QWE_TIMEOUT_MAX_SECONDS)
+			s = QWE_TIMEOUT_MAX_SECONDS;
+		if (s > 0) {
+			ms = (long)(s * 1000.0);
+			if (ms < 1)
+				ms = 1;
+		}
+	}
 	lua_pop(L, 1);
-	return ms > 0 ? ms : 0;
+	return ms;
 }
 
 static int cmp_job(const void *a, const void *b)

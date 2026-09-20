@@ -4,5 +4,5 @@ jobs:
     steps:
       - id: stuck
         uses: stuck
-        timeout-minutes: 0.005
+        timeout-seconds: 0.3
       - run: echo NEVER

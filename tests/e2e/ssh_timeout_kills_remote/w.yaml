@@ -3,4 +3,4 @@ jobs:
     target: self
     steps:
       - run: sleep 27182
-        timeout-minutes: 0.03
+        timeout-seconds: 1.8

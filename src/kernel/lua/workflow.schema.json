@@ -30,7 +30,7 @@
         "target": {"type": "string", "minLength": 1},
         "needs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
         "env": {"$ref": "#/definitions/env"},
-        "timeout-minutes": {"type": "number", "exclusiveMinimum": 0},
+        "timeout-seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 604800},
         "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/step"}}
       }
     },
@@ -46,7 +46,7 @@
         "env": {"$ref": "#/definitions/env"},
         "on": {"const": "local"},
         "become": {"type": ["boolean", "string", "integer"]},
-        "timeout-minutes": {"type": "number", "exclusiveMinimum": 0},
+        "timeout-seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 604800},
         "continue-on-error": {"type": "boolean"},
         "secret-outputs": {"type": "array", "items": {"type": "string", "minLength": 1}}
       },

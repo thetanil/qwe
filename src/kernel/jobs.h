@@ -67,7 +67,12 @@ struct job {
 	size_t *needs_idx;
 };
 
-/* Milliseconds for the timeout-minutes of the table at idx; 0 (no limit) if it is absent. */
+/* The largest timeout-seconds the schema admits (seven days). */
+#define QWE_TIMEOUT_MAX_SECONDS 604800.0
+
+/* Milliseconds for the timeout-seconds of the table at idx; 0 (no limit) if it is absent.
+ * A positive value is at least 1 ms, and one above the maximum is clamped to it, so the
+ * conversion never overflows and never turns a real limit into "none". */
 long qwe_timeout_ms_at(lua_State *L, int idx);
 
 /* Reads the jobs out of the decoded workflow (on top of L's stack) into a

@@ -4,4 +4,4 @@ jobs:
     steps:
       - id: stubborn
         run: trap '' TERM; echo $$ > shell.pid; echo armed; while :; do sleep 1; done
-        timeout-minutes: 0.005
+        timeout-seconds: 0.3
