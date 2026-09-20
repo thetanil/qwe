@@ -125,10 +125,13 @@ TEST rules_hold_in_every_cell(void)
 		/* leader-exit-fail records the event's reason, unchanged, wherever
 		 * the leader's own status decides the step (not after a timeout,
 		 * when the step failed by timeout whatever the leader said), and
-		 * nothing else takes the event's reason. */
+		 * skip records the one it is given; nothing else takes the event's
+		 * reason. */
 		if (e == QWE_LC_EV_LEADER_EXIT_FAIL && (s == QWE_LC_STEP_RUNNING || s == QWE_LC_STEP_RUNNING_COE))
 			ASSERT_EQm(where, QWE_LC_REASON_FROM_EVENT, c->reason);
-		if (e != QWE_LC_EV_LEADER_EXIT_FAIL)
+		if (e == QWE_LC_EV_SKIP)
+			ASSERT_EQm(where, QWE_LC_REASON_FROM_EVENT, c->reason);
+		if (e != QWE_LC_EV_LEADER_EXIT_FAIL && e != QWE_LC_EV_SKIP)
 			ASSERT(c->reason != QWE_LC_REASON_FROM_EVENT);
 	}
 	PASS();
@@ -320,6 +323,65 @@ SCENARIO(cancel_in_pending_skips, QWE_LC_PENDING, QWE_LC_SKIPPED, GO(CANCEL, SKI
 
 SCENARIO(cancel_in_ready_skips, QWE_LC_READY, QWE_LC_SKIPPED, GO(CANCEL, SKIPPED, "cancel-requested"))
 
+SCENARIO(skip_in_pending, QWE_LC_PENDING, QWE_LC_SKIPPED, {QWE_LC_EV_SKIP, FAILS("target-disabled"), QWE_LC_SKIPPED, "target-disabled", QWE_LC_TRANSITION})
+
+SCENARIO(skip_in_ready, QWE_LC_READY, QWE_LC_SKIPPED, {QWE_LC_EV_SKIP, FAILS("if: false"), QWE_LC_SKIPPED, "if: false", QWE_LC_TRANSITION})
+
+/* The reason is the payload's, whatever it is: a future if: reuses the event unchanged. */
+TEST skip_reason_comes_from_the_payload(void)
+{
+	struct qwe_lc_payload a = {0, "target-disabled", NULL}, b = {0, "anything else", NULL};
+	struct qwe_lc_result r = qwe_lc_lookup(QWE_LC_PENDING, QWE_LC_EV_SKIP, &a);
+
+	ASSERT_EQ(QWE_LC_SKIPPED, r.next);
+	ASSERT_STR_EQ("target-disabled", r.reason);
+	ASSERT_EQ(QWE_LC_ACT_RECORD_JOB, r.actions[0]);
+	ASSERT_EQ(QWE_LC_ACT_END_JOB, r.actions[1]);
+	r = qwe_lc_lookup(QWE_LC_READY, QWE_LC_EV_SKIP, &b);
+	ASSERT_STR_EQ("anything else", r.reason);
+	PASS();
+}
+
+/* The whole column: two transitions and nineteen impossible cells, none left unset. */
+TEST skip_column_is_complete(void)
+{
+	int s, transitions = 0, impossible = 0;
+
+	for (s = 0; s < QWE_LC_NSTATES; s++) {
+		const struct qwe_lc_cell *c = qwe_lc_cell(s, QWE_LC_EV_SKIP);
+
+		ASSERT(c->kind != QWE_LC_UNSET);
+		transitions += c->kind == QWE_LC_TRANSITION;
+		impossible += c->kind == QWE_LC_IMPOSSIBLE;
+	}
+	ASSERT_EQ(2, transitions);
+	ASSERT_EQ(19, impossible);
+	PASS();
+}
+
+/* A job that has started, or ended, cannot be skipped: the lookup aborts. */
+TEST skip_after_start_is_impossible(void)
+{
+	enum qwe_lc_state started[] = {QWE_LC_BETWEEN_STEPS, QWE_LC_STEP_RUNNING, QWE_LC_SETTLING_FAIL_TERM,
+				       QWE_LC_SUCCESS, QWE_LC_SKIPPED};
+	size_t i;
+
+	for (i = 0; i < sizeof started / sizeof *started; i++) {
+		pid_t pid = fork();
+		int st;
+
+		ASSERT(pid >= 0);
+		if (pid == 0) {
+			close(2);
+			qwe_lc_lookup(started[i], QWE_LC_EV_SKIP, NULL);
+			_exit(0); /* not reached */
+		}
+		ASSERT_EQ(pid, waitpid(pid, &st, 0));
+		ASSERT(WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT);
+	}
+	PASS();
+}
+
 TEST scenario_actions_of_a_step_timeout(void)
 {
 	struct qwe_lc_result r = qwe_lc_lookup(QWE_LC_STEP_RUNNING, QWE_LC_EV_STEP_TIMEOUT, NULL);
@@ -413,6 +475,11 @@ int main(int argc, char **argv)
 	RUN_TEST(scenario_needs_failed_skips);
 	RUN_TEST(scenario_cancel_in_pending_skips);
 	RUN_TEST(scenario_cancel_in_ready_skips);
+	RUN_TEST(scenario_skip_in_pending);
+	RUN_TEST(scenario_skip_in_ready);
+	RUN_TEST(skip_reason_comes_from_the_payload);
+	RUN_TEST(skip_column_is_complete);
+	RUN_TEST(skip_after_start_is_impossible);
 	RUN_TEST(scenario_actions_of_a_step_timeout);
 	RUN_TEST(stale_step_event_filtered);
 	RUN_TEST(impossible_cell_aborts);

@@ -181,7 +181,7 @@ The kernel assembles the overall contract from the kernel's own workflow structu
 
 > **Superseded in part by ADR-0010.** The job lifecycle is one flat table (with the step phase part of the job state). Where this section differs from ADR-0010, the ADR wins. In particular, `terminating` becomes the `settling-cancel-*` states.
 
-The kernel's real job is managing state transitions at two levels: jobs in the graph, and steps inside a running job. Every finished job and step has an **outcome** (`success | failed | skipped | cancelled`) and a **reason** recorded next to it. There are no other terminal states, and "why" is always carried by the reason (for example `timeout`, `cancel-requested`, `dependency-failed`, `exit-code`, `not-converged`, `unreachable`, `connection-lost`, `become-denied`, `plugin-error`).
+The kernel's real job is managing state transitions at two levels: jobs in the graph, and steps inside a running job. Every finished job and step has an **outcome** (`success | failed | skipped | cancelled`) and a **reason** recorded next to it. There are no other terminal states, and "why" is always carried by the reason (for example `timeout`, `cancel-requested`, `dependency-failed`, `exit-code`, `not-converged`, `unreachable`, `connection-lost`, `become-denied`, `plugin-error`, `target-disabled`).
 
 ### 7.1 Job states
 
@@ -374,6 +374,7 @@ The **inventory** describes the world a workflow acts on. It's a separate file f
 - typed backend fields: `backend: ssh` with `host:`, plus an optional `max-sessions`,
 - its own `vars:` (non-secret, host-specific),
 - its own `secrets:`.
+- an optional **`disabled: "<reason>"`**, a non-empty string that takes the target out of service (hardware in for repair, a host being reimaged). Its jobs never start and are never contacted: each ends **`skipped`** with reason **`target-disabled`** and the string as its `detail` in `result.json`, their dependents skip with `dependency-failed`, and unrelated jobs run. That is a declared state, not a fault, so the run exits 0 if nothing else failed; it prints one line at the end naming how many jobs were skipped and for which targets, so a run that did part of the work does not look like a full one. `qwe validate` says nothing about it. (An *unreachable* target is the opposite: `failed`, reason `unreachable`, non-zero exit.)
 
 A job reads its target's values as `${{ vars.X }}` and `${{ secrets.X }}`, the way GitHub Actions reads a deployment environment's values. Controllers with their network, switches and devices come in later milestones, as target entries with more fields. The `local` target always exists implicitly. The inventory reader is a service plugin, and the kernel only resolves each job's `target:` to a backend.
 

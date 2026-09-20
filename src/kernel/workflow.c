@@ -1331,6 +1331,51 @@ static long target_max_sessions(lua_State *L, const char *target)
 	return cap;
 }
 
+/* The disabled: note of an inventory target, as a new string; NULL if it is in service. */
+static char *target_disabled_note(lua_State *L, const char *target)
+{
+	int top = lua_gettop(L);
+	char *note = NULL;
+
+	if (strcmp(target, "local") == 0)
+		return NULL;
+	lua_getglobal(L, "require");
+	lua_pushstring(L, "qwe.inventory");
+	lua_call(L, 1, 1);
+	lua_getfield(L, -1, "disabled");
+	lua_pushstring(L, target);
+	lua_call(L, 1, 1);
+	if (lua_isstring(L, -1))
+		note = strdup(lua_tostring(L, -1));
+	lua_settop(L, top);
+	return note;
+}
+
+/* Records, on each job whose target the operator has marked out of service, that
+ * target's note. Done before pre-connect, which must not contact such a target. */
+static void note_disabled(struct run_ctx *ctx)
+{
+	size_t i;
+
+	for (i = 0; i < ctx->njobs; i++)
+		ctx->jobs[i].detail = target_disabled_note(ctx->L, ctx->jobs[i].target);
+}
+
+/* A job on such a target never starts: it is skipped, before anything is
+ * scheduled, with the reason target-disabled. Its dependents then skip the way
+ * they do behind any job that did not succeed. */
+static void skip_disabled(struct run_ctx *ctx)
+{
+	size_t i;
+
+	for (i = 0; i < ctx->njobs; i++) {
+		struct qwe_lc_payload pl = {0, "target-disabled", NULL};
+
+		if (ctx->jobs[i].detail)
+			job_send(ctx, &ctx->jobs[i], QWE_LC_EV_SKIP, pl, -1);
+	}
+}
+
 /* Whether any step of the job runs on the job's target (a step with `on: local` does not). */
 static int job_uses_target(lua_State *L, const struct job *job)
 {
@@ -1365,7 +1410,7 @@ static void preconnect(struct run_ctx *ctx)
 		int top = lua_gettop(L);
 		const char *host;
 
-		if (strcmp(target, "local") == 0 || !job_uses_target(L, &ctx->jobs[i]))
+		if (strcmp(target, "local") == 0 || ctx->jobs[i].detail || !job_uses_target(L, &ctx->jobs[i]))
 			continue;
 		for (k = 0; k < i; k++)
 			if (strcmp(ctx->jobs[k].target, target) == 0 && job_uses_target(L, &ctx->jobs[k]))
@@ -1459,6 +1504,8 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 			sj[i].group = g + 1;
 		}
 	}
+
+	skip_disabled(ctx);
 
 	for (;;) {
 		size_t running = 0, final = 0, got_n;
@@ -1563,6 +1610,42 @@ static int select_jobs(struct job *jobs, long *n, const struct qwe_run_options *
 	return 0;
 }
 
+/* One line at the end of a run that skipped jobs for disabled targets: how many
+ * jobs, and which targets with their notes. A green run that did part of the work
+ * must not look like one that did all of it. */
+static void report_disabled(const struct job *jobs, size_t n)
+{
+	size_t i, k, skipped = 0, targets = 0;
+	const struct job **seen = calloc(n ? n : 1, sizeof *seen);
+	char *line = NULL;
+	size_t len = 0;
+
+	for (i = 0; i < n; i++) {
+		if (!jobs[i].detail || !jobs[i].reason || strcmp(jobs[i].reason, "target-disabled") != 0)
+			continue;
+		skipped++;
+		for (k = 0; k < targets; k++)
+			if (strcmp(seen[k]->target, jobs[i].target) == 0)
+				break;
+		if (k == targets)
+			seen[targets++] = &jobs[i];
+	}
+	if (skipped) {
+		FILE *mem = open_memstream(&line, &len);
+
+		if (mem) {
+			fprintf(mem, "qwe run: %lu job%s skipped, target%s disabled:", (unsigned long)skipped,
+				skipped == 1 ? "" : "s", targets == 1 ? "" : "s");
+			for (k = 0; k < targets; k++)
+				fprintf(mem, "%s %s (%s)", k ? "," : "", seen[k]->target, seen[k]->detail);
+			fclose(mem);
+			fprintf(stderr, "%s\n", line);
+			free(line);
+		}
+	}
+	free(seen);
+}
+
 int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 {
 	char run_id[64], *dir, *run_dir, *trace_path;
@@ -1638,6 +1721,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	lua_getfield(L, -1, "max-parallel");
 	max_parallel = lua_isnumber(L, -1) ? (long)lua_tonumber(L, -1) : 0;
 	lua_pop(L, 1);
+	note_disabled(&ctx);
 	preconnect(&ctx);
 	if (run_all(&ctx, max_parallel) < 0)
 		rc = QWE_EXIT_FAILED;
@@ -1649,6 +1733,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 		results[i].id = jobs[i].id;
 		results[i].outcome = qwe_lc_state_name(jobs[i].state);
 		results[i].reason = jobs[i].reason;
+		results[i].detail = jobs[i].detail;
 		results[i].started = jobs[i].started;
 		results[i].ended = jobs[i].ended;
 		results[i].dropped_bytes = jobs[i].dropped;
@@ -1670,8 +1755,11 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 		fprintf(stderr, "qwe run: cannot write %s: %s\n", run_dir, strerror(errno));
 		rc = QWE_EXIT_FAILED;
 	}
+	report_disabled(jobs, (size_t)n);
 	qwe_lc_set_abort_hook(NULL, NULL);
 	qwe_trace_close(&ctx.trace);
+	for (i = 0; i < (size_t)n; i++)
+		free(jobs[i].detail);
 	free(ctx.run_dir_abs);
 	lua_close(L);
 	free(results);

@@ -63,6 +63,7 @@ struct job {
 	time_t started, ended;
 	unsigned long dropped;
 	long timeout_ms; /* the job's own limit, 0 for none */
+	char *detail; /* the disabled: note of the job's target, when it is skipped for it */
 	lua_State *L;
 	struct job_run run;
 	size_t *needs_idx;

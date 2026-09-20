@@ -59,6 +59,12 @@ function M.max_sessions(target, inv)
   return t and t["max-sessions"] or M.DEFAULT_MAX_SESSIONS
 end
 
+-- Why a target is out of service (its disabled: note), or nil when it is in.
+function M.disabled(target, inv)
+  local t = ((inv or current).targets or {})[target]
+  return t and t.disabled
+end
+
 -- The host: of a target, or nil.
 function M.host(target, inv)
   local t = ((inv or current).targets or {})[target]
@@ -157,6 +163,9 @@ function M.validate(inv)
   for _, e in ipairs(errors) do flagged[e.pointer] = true end
   local schema_tbl = plugins.decode_schema(require("inventory_schema"))
   for _, e in ipairs(validate.check(schema_tbl, inv)) do
+    if e.pointer:match("^/targets/[^/]+/disabled$") then
+      e.message = 'disabled: must be a non-empty string saying why the target is out of service (for example "in for repair")'
+    end
     if e.pointer:match("^/targets/[^/]+/backend$") then
       e.message = 'unknown backend "' .. tostring(inv.targets[e.pointer:match("^/targets/([^/]+)/")].backend) .. '" (supported: ssh)'
     end

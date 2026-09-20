@@ -46,6 +46,7 @@ enum qwe_lc_event {
 	QWE_LC_EV_CANCEL,
 	QWE_LC_EV_GRACE_EXPIRED,
 	QWE_LC_EV_GROUP_EMPTY,
+	QWE_LC_EV_SKIP, /* payload: the reason. A job that has not started is not to run at all. */
 	QWE_LC_NEVENTS
 };
 
@@ -93,7 +94,7 @@ struct qwe_lc_cell {
 /* What an event carries. */
 struct qwe_lc_payload {
 	int coe; /* next-step: the step's continue-on-error */
-	const char *reason; /* leader-exit-fail: the step's reason */
+	const char *reason; /* leader-exit-fail: the step's reason; skip: why the job is skipped */
 	const char *carried; /* the reason recorded earlier, for CARRIED cells */
 };
 

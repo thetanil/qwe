@@ -24,6 +24,7 @@
         "backend": {"enum": ["ssh"]},
         "host": {"type": "string", "minLength": 1},
         "max-sessions": {"type": "integer", "minimum": 1},
+        "disabled": {"type": "string", "minLength": 1},
         "become-password": {"type": "string"},
         "vars": {"$ref": "#/definitions/vars"},
         "secrets": {"type": "object"}

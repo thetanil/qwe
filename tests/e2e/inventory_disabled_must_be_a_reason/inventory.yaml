@@ -1,0 +1,5 @@
+targets:
+  pi03:
+    backend: ssh
+    host: pi03
+    disabled: true

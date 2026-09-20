@@ -1,0 +1,5 @@
+jobs:
+  flash:
+    target: pi03
+    steps:
+      - run: hostname

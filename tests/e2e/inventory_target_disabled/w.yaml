@@ -1,0 +1,14 @@
+jobs:
+  flash:
+    target: pi03
+    steps:
+      - run: echo NEVER-flash
+  verify:
+    needs: [flash]
+    target: local
+    steps:
+      - run: echo NEVER-verify
+  other:
+    target: local
+    steps:
+      - run: echo other-ran

@@ -1,0 +1,4 @@
+#!/bin/sh
+echo "$*" >> ssh.calls
+PATH=${PATH#*:}
+exec ssh "$@"

@@ -71,9 +71,9 @@ unsigned qwe_lcm_events(enum qwe_lc_state s)
 
 	switch (s) {
 	case QWE_LC_PENDING:
-		return EV(NEEDS_MET) | EV(NEEDS_FAILED) | EV(CANCEL);
+		return EV(NEEDS_MET) | EV(NEEDS_FAILED) | EV(CANCEL) | EV(SKIP);
 	case QWE_LC_READY:
-		return EV(SLOT_GRANTED) | EV(CANCEL);
+		return EV(SLOT_GRANTED) | EV(CANCEL) | EV(SKIP);
 	case QWE_LC_BETWEEN_STEPS:
 		/* the shell holds the cursor: it says what comes next, or that
 		 * the job could not be started */

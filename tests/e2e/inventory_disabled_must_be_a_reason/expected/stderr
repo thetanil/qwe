@@ -1,0 +1,1 @@
+qwe validate: inventory.yaml:5:15: disabled: must be a non-empty string saying why the target is out of service (for example "in for repair")

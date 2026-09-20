@@ -18,6 +18,7 @@ struct qwe_job_result {
 	const char *id;
 	const char *outcome;
 	const char *reason; /* may be NULL */
+	const char *detail; /* what the reason came with (a disabled target's note), or NULL: then not written */
 	time_t started, ended; /* 0 if it never started */
 	unsigned long dropped_bytes;
 	const struct qwe_step_result *steps;

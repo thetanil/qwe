@@ -7,7 +7,7 @@
  *
  *   needs-met needs-failed slot-granted next-step no-more-steps start-failed
  *   leader-exit-ok leader-exit-fail step-timeout job-timeout cancel
- *   grace-expired group-empty
+ *   grace-expired group-empty skip
  *
  * Every cell is written out: T is a transition, I an ignore (with its
  * justification), X an impossible cell. A cell left out would be QWE_LC_UNSET,
@@ -51,16 +51,16 @@ static const struct qwe_lc_cell table[QWE_LC_NSTATES][QWE_LC_NEVENTS] = {
 	/* pending: waiting for its needs */
 	[S(PENDING)] = {
 		T(READY, R_NONE, NO), T(SKIPPED, R_DEP, REC_JOB, END), X, X, X, X, X, X, X, X,
-		T(SKIPPED, R_CANCEL, REC_JOB, END), X, X},
+		T(SKIPPED, R_CANCEL, REC_JOB, END), X, X, T(SKIPPED, R_EVENT, REC_JOB, END)},
 	/* ready: waiting for a max-parallel slot */
 	[S(READY)] = {
 		X, X, T(BETWEEN_STEPS, R_NONE, START), X, X, X, X, X, X, X,
-		T(SKIPPED, R_CANCEL, REC_JOB, END), X, X},
+		T(SKIPPED, R_CANCEL, REC_JOB, END), X, X, T(SKIPPED, R_EVENT, REC_JOB, END)},
 	/* between-steps: the job is started and no step is live */
 	[S(BETWEEN_STEPS)] = {
 		X, X, X, TC(STEP_RUNNING, R_NONE, SPAWN), T(SUCCESS, R_NONE, REC_JOB, END),
 		T(FAILED, R_ENGINE, REC_JOB, END), X, X, X,
-		T(CANCELLED, R_TIMEOUT, REC_JOB, END), T(CANCELLED, R_CANCEL, REC_JOB, END), X, X},
+		T(CANCELLED, R_TIMEOUT, REC_JOB, END), T(CANCELLED, R_CANCEL, REC_JOB, END), X, X, X},
 	/* step-running: the leader is alive, nothing is being torn down. A failed
 	 * spawn is start-failed here: the step's state is entered before the
 	 * spawn action runs. continue-on-error does not rescue it. */
@@ -70,14 +70,14 @@ static const struct qwe_lc_cell table[QWE_LC_NSTATES][QWE_LC_NEVENTS] = {
 		T(SETTLING_FAIL_TERM, R_EVENT, TERM, GRACE, REC_STEP),
 		T(STEP_STOPPING, R_TIMEOUT, TERM, GRACE),
 		T(SETTLING_CANCEL_TIMEOUT_TERM, R_TIMEOUT, TERM, GRACE, REC_STEP),
-		T(SETTLING_CANCEL_REQUESTED_TERM, R_CANCEL, TERM, GRACE, REC_STEP), X, X},
+		T(SETTLING_CANCEL_REQUESTED_TERM, R_CANCEL, TERM, GRACE, REC_STEP), X, X, X},
 	[S(STEP_RUNNING_COE)] = {
 		X, X, X, X, X, T(FAILED, R_ENGINE, REC_STEP, REC_JOB, END),
 		T(SETTLING_CONTINUE_TERM, R_NONE, TERM, GRACE, REC_STEP),
 		T(SETTLING_CONTINUE_TERM, R_EVENT, TERM, GRACE, REC_STEP),
 		T(STEP_STOPPING_COE, R_TIMEOUT, TERM, GRACE),
 		T(SETTLING_CANCEL_TIMEOUT_TERM, R_TIMEOUT, TERM, GRACE, REC_STEP),
-		T(SETTLING_CANCEL_REQUESTED_TERM, R_CANCEL, TERM, GRACE, REC_STEP), X, X},
+		T(SETTLING_CANCEL_REQUESTED_TERM, R_CANCEL, TERM, GRACE, REC_STEP), X, X, X},
 	/* step-stopping: the step timed out; TERM is sent and grace is running. A
 	 * timed-out step failed whatever its leader's status was. */
 	[S(STEP_STOPPING)] = {
@@ -86,27 +86,27 @@ static const struct qwe_lc_cell table[QWE_LC_NSTATES][QWE_LC_NEVENTS] = {
 		T(SETTLING_FAIL_TERM, R_TIMEOUT, REC_STEP), X,
 		T(SETTLING_CANCEL_TIMEOUT_TERM, R_TIMEOUT, REC_STEP),
 		T(SETTLING_CANCEL_REQUESTED_TERM, R_CANCEL, REC_STEP),
-		T(STEP_KILLING, R_NONE, KILL), X},
+		T(STEP_KILLING, R_NONE, KILL), X, X},
 	[S(STEP_STOPPING_COE)] = {
 		X, X, X, X, X, X,
 		T(SETTLING_CONTINUE_TERM, R_TIMEOUT, REC_STEP),
 		T(SETTLING_CONTINUE_TERM, R_TIMEOUT, REC_STEP), X,
 		T(SETTLING_CANCEL_TIMEOUT_TERM, R_TIMEOUT, REC_STEP),
 		T(SETTLING_CANCEL_REQUESTED_TERM, R_CANCEL, REC_STEP),
-		T(STEP_KILLING_COE, R_NONE, KILL), X},
+		T(STEP_KILLING_COE, R_NONE, KILL), X, X},
 	/* step-killing: grace expired; KILL is sent. */
 	[S(STEP_KILLING)] = {
 		X, X, X, X, X, X,
 		T(SETTLING_FAIL_KILL, R_TIMEOUT, REC_STEP),
 		T(SETTLING_FAIL_KILL, R_TIMEOUT, REC_STEP), X,
 		T(SETTLING_CANCEL_TIMEOUT_KILL, R_TIMEOUT, REC_STEP),
-		T(SETTLING_CANCEL_REQUESTED_KILL, R_CANCEL, REC_STEP), X, X},
+		T(SETTLING_CANCEL_REQUESTED_KILL, R_CANCEL, REC_STEP), X, X, X},
 	[S(STEP_KILLING_COE)] = {
 		X, X, X, X, X, X,
 		T(SETTLING_CONTINUE_KILL, R_TIMEOUT, REC_STEP),
 		T(SETTLING_CONTINUE_KILL, R_TIMEOUT, REC_STEP), X,
 		T(SETTLING_CANCEL_TIMEOUT_KILL, R_TIMEOUT, REC_STEP),
-		T(SETTLING_CANCEL_REQUESTED_KILL, R_CANCEL, REC_STEP), X, X},
+		T(SETTLING_CANCEL_REQUESTED_KILL, R_CANCEL, REC_STEP), X, X, X},
 	/* settling-*: the outcome is decided; wait for the step's group to empty.
 	 * -term: SIGTERM sent, grace running. -kill: SIGKILL sent. */
 	[S(SETTLING_CONTINUE_TERM)] = {
@@ -116,14 +116,14 @@ static const struct qwe_lc_cell table[QWE_LC_NSTATES][QWE_LC_NEVENTS] = {
 		T(SETTLING_CANCEL_TIMEOUT_TERM, R_TIMEOUT, NO),
 		T(SETTLING_CANCEL_REQUESTED_TERM, R_CANCEL, NO),
 		T(SETTLING_CONTINUE_KILL, R_NONE, KILL),
-		T(BETWEEN_STEPS, R_NONE, NO)},
+		T(BETWEEN_STEPS, R_NONE, NO), X},
 	[S(SETTLING_CONTINUE_KILL)] = {
 		X, X, X, X, X, X,
 		I(SETTLING_CONTINUE_KILL, STALE_LEADER), I(SETTLING_CONTINUE_KILL, STALE_LEADER),
 		I(SETTLING_CONTINUE_KILL, STALE_STEP_TIMER),
 		T(SETTLING_CANCEL_TIMEOUT_KILL, R_TIMEOUT, NO),
 		T(SETTLING_CANCEL_REQUESTED_KILL, R_CANCEL, NO), X,
-		T(BETWEEN_STEPS, R_NONE, NO)},
+		T(BETWEEN_STEPS, R_NONE, NO), X},
 	[S(SETTLING_FAIL_TERM)] = {
 		X, X, X, X, X, X,
 		I(SETTLING_FAIL_TERM, STALE_LEADER), I(SETTLING_FAIL_TERM, STALE_LEADER),
@@ -131,14 +131,14 @@ static const struct qwe_lc_cell table[QWE_LC_NSTATES][QWE_LC_NEVENTS] = {
 		T(SETTLING_CANCEL_TIMEOUT_TERM, R_TIMEOUT, NO),
 		T(SETTLING_CANCEL_REQUESTED_TERM, R_CANCEL, NO),
 		T(SETTLING_FAIL_KILL, R_NONE, KILL),
-		T(FAILED, R_CARRIED, REC_JOB, END)},
+		T(FAILED, R_CARRIED, REC_JOB, END), X},
 	[S(SETTLING_FAIL_KILL)] = {
 		X, X, X, X, X, X,
 		I(SETTLING_FAIL_KILL, STALE_LEADER), I(SETTLING_FAIL_KILL, STALE_LEADER),
 		I(SETTLING_FAIL_KILL, STALE_STEP_TIMER),
 		T(SETTLING_CANCEL_TIMEOUT_KILL, R_TIMEOUT, NO),
 		T(SETTLING_CANCEL_REQUESTED_KILL, R_CANCEL, NO), X,
-		T(FAILED, R_CARRIED, REC_JOB, END)},
+		T(FAILED, R_CARRIED, REC_JOB, END), X},
 	/* A job timeout fires once, so it cannot arrive again here. A cancel
 	 * outranks it: the job's reason becomes cancel-requested. */
 	[S(SETTLING_CANCEL_TIMEOUT_TERM)] = {
@@ -147,13 +147,13 @@ static const struct qwe_lc_cell table[QWE_LC_NSTATES][QWE_LC_NEVENTS] = {
 		I(SETTLING_CANCEL_TIMEOUT_TERM, STALE_STEP_TIMER), X,
 		T(SETTLING_CANCEL_REQUESTED_TERM, R_CANCEL, NO),
 		T(SETTLING_CANCEL_TIMEOUT_KILL, R_NONE, KILL),
-		T(CANCELLED, R_TIMEOUT, REC_JOB, END)},
+		T(CANCELLED, R_TIMEOUT, REC_JOB, END), X},
 	[S(SETTLING_CANCEL_TIMEOUT_KILL)] = {
 		X, X, X, X, X, X,
 		I(SETTLING_CANCEL_TIMEOUT_KILL, STALE_LEADER), I(SETTLING_CANCEL_TIMEOUT_KILL, STALE_LEADER),
 		I(SETTLING_CANCEL_TIMEOUT_KILL, STALE_STEP_TIMER), X,
 		T(SETTLING_CANCEL_REQUESTED_KILL, R_CANCEL, NO), X,
-		T(CANCELLED, R_TIMEOUT, REC_JOB, END)},
+		T(CANCELLED, R_TIMEOUT, REC_JOB, END), X},
 	/* A cancel wins: neither a job timeout nor a second cancel changes it. */
 	[S(SETTLING_CANCEL_REQUESTED_TERM)] = {
 		X, X, X, X, X, X,
@@ -162,20 +162,20 @@ static const struct qwe_lc_cell table[QWE_LC_NSTATES][QWE_LC_NEVENTS] = {
 		I(SETTLING_CANCEL_REQUESTED_TERM, "a cancel outranks a job timeout"),
 		I(SETTLING_CANCEL_REQUESTED_TERM, "the job is already being cancelled"),
 		T(SETTLING_CANCEL_REQUESTED_KILL, R_NONE, KILL),
-		T(CANCELLED, R_CANCEL, REC_JOB, END)},
+		T(CANCELLED, R_CANCEL, REC_JOB, END), X},
 	[S(SETTLING_CANCEL_REQUESTED_KILL)] = {
 		X, X, X, X, X, X,
 		I(SETTLING_CANCEL_REQUESTED_KILL, STALE_LEADER), I(SETTLING_CANCEL_REQUESTED_KILL, STALE_LEADER),
 		I(SETTLING_CANCEL_REQUESTED_KILL, STALE_STEP_TIMER),
 		I(SETTLING_CANCEL_REQUESTED_KILL, "a cancel outranks a job timeout"),
 		I(SETTLING_CANCEL_REQUESTED_KILL, "the job is already being cancelled"), X,
-		T(CANCELLED, R_CANCEL, REC_JOB, END)},
+		T(CANCELLED, R_CANCEL, REC_JOB, END), X},
 	/* Final states: nothing but the broadcast cancel can still reach them.
 	 * (Step-scoped events are dropped by index before the table.) */
-	[S(SUCCESS)] = {X, X, X, X, X, X, X, X, X, X, I(SUCCESS, FINISHED), X, X},
-	[S(FAILED)] = {X, X, X, X, X, X, X, X, X, X, I(FAILED, FINISHED), X, X},
-	[S(SKIPPED)] = {X, X, X, X, X, X, X, X, X, X, I(SKIPPED, FINISHED), X, X},
-	[S(CANCELLED)] = {X, X, X, X, X, X, X, X, X, X, I(CANCELLED, FINISHED), X, X},
+	[S(SUCCESS)] = {X, X, X, X, X, X, X, X, X, X, I(SUCCESS, FINISHED), X, X, X},
+	[S(FAILED)] = {X, X, X, X, X, X, X, X, X, X, I(FAILED, FINISHED), X, X, X},
+	[S(SKIPPED)] = {X, X, X, X, X, X, X, X, X, X, I(SKIPPED, FINISHED), X, X, X},
+	[S(CANCELLED)] = {X, X, X, X, X, X, X, X, X, X, I(CANCELLED, FINISHED), X, X, X},
 };
 
 static const char *const state_names[QWE_LC_NSTATES] = {
@@ -189,7 +189,7 @@ static const char *const state_names[QWE_LC_NSTATES] = {
 static const char *const event_names[QWE_LC_NEVENTS] = {
 	"needs-met", "needs-failed", "slot-granted", "next-step", "no-more-steps", "start-failed",
 	"leader-exit-ok", "leader-exit-fail", "step-timeout", "job-timeout", "cancel", "grace-expired",
-	"group-empty",
+	"group-empty", "skip",
 };
 
 static const char *const action_names[] = {

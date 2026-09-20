@@ -1,6 +1,6 @@
 # 10: Mark a target out of service in the inventory
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 06
@@ -98,18 +98,18 @@ means `if:` inherits it and pays nothing.
 
 ## Acceptance criteria
 
-- [ ] A job whose target is disabled is `skipped` with reason `target-disabled`, and its dependents skip with `dependency-failed`. `e2e: tests/e2e/inventory_target_disabled/`
-- [ ] A run whose only non-success jobs were skipped for a disabled target exits 0. `e2e: tests/e2e/inventory_target_disabled/`
-- [ ] That run prints one line naming how many jobs were skipped and which targets were disabled, so a nearly-empty green run is visibly different from a full one. `e2e: tests/e2e/inventory_target_disabled/`
-- [ ] Unrelated jobs in the same run still run and still succeed. `e2e: tests/e2e/inventory_target_disabled/`
-- [ ] The `disabled:` string appears as the job's reason detail in `result.json`, so the operator learns why without opening the inventory. `e2e: tests/e2e/inventory_target_disabled/`
-- [ ] No master is opened to a disabled target during pre-connect, and a disabled target that is also unreachable still reports `target-disabled`, not `unreachable`. `e2e: tests/e2e/inventory_target_disabled_not_contacted/`
-- [ ] `qwe validate` is silent about disabled targets: a workflow whose every job targets disabled hardware validates and exits 0. `e2e: tests/e2e/validate_ignores_disabled/`
-- [ ] `disabled:` must be a non-empty string; `disabled: true` is a validation error naming the expected shape, at the value's position. `e2e: tests/e2e/inventory_disabled_must_be_a_reason/`
-- [ ] The new `skip` event is a full column in the table: two transitions and nineteen `X` cells, with no `UNSET` left. `unit: src/kernel/lifecycle_test.c::every_cell_is_written` (existing, must stay green), `src/kernel/lifecycle_model.c`
-- [ ] A `skip` event is impossible once a job has started, and the table aborts if one arrives. `unit: src/kernel/lifecycle_test.c::skip_after_start_is_impossible`
-- [ ] The event carries its reason from the payload, so a future `if:` can reuse it without touching the table. `unit: src/kernel/lifecycle_test.c::skip_reason_comes_from_the_payload`
-- [ ] `disabled:` and the `target-disabled` reason are documented in the inventory section of design §13 and in the reason list in §7.
+- [x] A job whose target is disabled is `skipped` with reason `target-disabled`, and its dependents skip with `dependency-failed`. `e2e: tests/e2e/inventory_target_disabled/`
+- [x] A run whose only non-success jobs were skipped for a disabled target exits 0. `e2e: tests/e2e/inventory_target_disabled/`
+- [x] That run prints one line naming how many jobs were skipped and which targets were disabled, so a nearly-empty green run is visibly different from a full one. `e2e: tests/e2e/inventory_target_disabled/`
+- [x] Unrelated jobs in the same run still run and still succeed. `e2e: tests/e2e/inventory_target_disabled/`
+- [x] The `disabled:` string appears as the job's reason detail in `result.json`, so the operator learns why without opening the inventory. `e2e: tests/e2e/inventory_target_disabled/`
+- [x] No master is opened to a disabled target during pre-connect, and a disabled target that is also unreachable still reports `target-disabled`, not `unreachable`. `e2e: tests/e2e/inventory_target_disabled_not_contacted/`
+- [x] `qwe validate` is silent about disabled targets: a workflow whose every job targets disabled hardware validates and exits 0. `e2e: tests/e2e/validate_ignores_disabled/`
+- [x] `disabled:` must be a non-empty string; `disabled: true` is a validation error naming the expected shape, at the value's position. `e2e: tests/e2e/inventory_disabled_must_be_a_reason/`
+- [x] The new `skip` event is a full column in the table: two transitions and nineteen `X` cells, with no `UNSET` left. `unit: src/kernel/lifecycle_test.c::every_cell_is_written` (existing, must stay green), `src/kernel/lifecycle_model.c`
+- [x] A `skip` event is impossible once a job has started, and the table aborts if one arrives. `unit: src/kernel/lifecycle_test.c::skip_after_start_is_impossible`
+- [x] The event carries its reason from the payload, so a future `if:` can reuse it without touching the table. `unit: src/kernel/lifecycle_test.c::skip_reason_comes_from_the_payload`
+- [x] `disabled:` and the `target-disabled` reason are documented in the inventory section of design §13 and in the reason list in §7.
 
 ## Comments
 
@@ -181,3 +181,11 @@ section.
   still deferred (design §7, §17).
 - Disabling anything other than a target — a device, a pool, a single job.
 - Any change to how an *unreachable* target behaves; that is `m1-review/06`.
+
+Resolved 2026-09-20.
+
+- Lifecycle: one new event column `skip` (`QWE_LC_EV_SKIP`), `R_EVENT` cells in `pending` and `ready`, `X` in the other 19 states; the model lets it occur in those two states; three layer-4 tests (`skip_reason_comes_from_the_payload`, `skip_column_is_complete`, `skip_after_start_is_impossible`) plus two scenarios. The layer-2 rule "only leader-exit-fail takes the event's reason" now allows `skip`. ADR-0010 mentions the new event. In the test file the event is written `QWE_LC_EV_SKIP` in full because greatest.h defines `SKIP`.
+- `qwe.inventory.disabled(target)`; schema `disabled: {type: string, minLength: 1}`; `disabled: true` reports "disabled: must be a non-empty string saying why the target is out of service…" at the value.
+- Engine: `note_disabled` (before pre-connect, so it is not contacted) and `skip_disabled` (first thing in `run_all`, before any scheduling pass). `result.json` gains an optional `"detail"` on a job, written only when set, so every other golden is unchanged. The summary line counts jobs skipped for a disabled target (not their dependents) and lists `target (note)` for each, on stderr, after `result.json` is written.
+- The ticket's text says "`result.json` needs nothing extra" while its criteria ask for the note to appear as the reason detail there; the criteria won, hence `detail`.
+- `validate_ignores_disabled` needed no code: validation never looked at the field.

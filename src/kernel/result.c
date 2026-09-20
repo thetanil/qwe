@@ -70,6 +70,10 @@ int qwe_result_write(FILE *fp, const char *run_id, const struct qwe_job_result *
 		qwe_json_string(fp, j->outcome);
 		fputs(",\n      \"reason\": ", fp);
 		put_opt(fp, j->reason);
+		if (j->detail) {
+			fputs(",\n      \"detail\": ", fp);
+			qwe_json_string(fp, j->detail);
+		}
 		fputs(",\n      \"started\": ", fp);
 		put_time(fp, j->started);
 		fputs(",\n      \"ended\": ", fp);
