@@ -331,14 +331,34 @@ cc_library(
     hdrs = ["alloc.h"],
 )
 
+# The failing allocator (ticket quality/07). testonly: no shipping target can
+# depend on it, so no binary that ships contains it. The linkopts travel with
+# the library; a test using it must be linkstatic (--wrap only reaches objects
+# linked into the binary).
+cc_library(
+    name = "oom_shim",
+    testonly = True,
+    srcs = ["oom_shim.c"],
+    hdrs = ["oom_shim.h"],
+    linkopts = [
+        "-Wl,--wrap=malloc",
+        "-Wl,--wrap=calloc",
+        "-Wl,--wrap=realloc",
+        "-Wl,--wrap=strdup",
+        "-Wl,--wrap=strndup",
+    ],
+    visibility = ["//src:__subpackages__"],
+    alwayslink = True,
+)
+
 cc_test(
     name = "alloc_test",
     size = "small",
     srcs = ["alloc_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
-    linkopts = ["-Wl,--wrap=malloc"],
     deps = [
         ":alloc",
+        ":oom_shim",
         "//third_party/greatest",
     ],
 )
@@ -433,4 +453,17 @@ cc_test(
         "//tools/valgrind:valgrind": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
+)
+
+# Fails every allocation of a qwe run in turn, in the engine and in the step child (ticket quality/07).
+cc_test(
+    name = "oom_test",
+    size = "small",
+    srcs = ["oom_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    deps = [
+        ":kernel",
+        ":oom_shim",
+        "//third_party/greatest",
+    ],
 )

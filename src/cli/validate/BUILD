@@ -18,3 +18,17 @@ cc_test(
         "//third_party/greatest",
     ],
 )
+
+# Fails every allocation of a qwe validate run in turn (ticket quality/07).
+cc_test(
+    name = "oom_test",
+    size = "small",
+    srcs = ["oom_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    deps = [
+        ":validate",
+        "//src/kernel",
+        "//src/kernel:oom_shim",
+        "//third_party/greatest",
+    ],
+)

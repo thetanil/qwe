@@ -115,7 +115,16 @@ function M.load(dir)
     if p.uses then list[#list + 1] = p end
   end
   local root = join(dir, ".qwe/plugins")
-  local names = fs.isdir(root) and fs.list(root) or {}
+  local names = {}
+  if fs.isdir(root) then
+    local listed, err = fs.list(root)
+    -- an unreadable directory is a problem, not a project with no plugins
+    if not listed then
+      problems[#problems + 1] = { where = root, message = "cannot list: " .. tostring(err) }
+    else
+      names = listed
+    end
+  end
   for _, name in ipairs(names) do
     local path = root .. "/" .. name
     if fs.isdir(path) then

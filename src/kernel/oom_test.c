@@ -1,0 +1,242 @@
+/* qwe run under memory pressure: a two-job workflow, with the nth allocation
+ * failed for every n, first in the engine and then in each forked step child.
+ * Every run ends in one of two ways: it succeeds having done all of its work,
+ * or it fails cleanly, with a message and a non-zero exit. A fault, a hang, or
+ * a success with work missing fails the test. */
+#define _POSIX_C_SOURCE 200809L
+#include "greatest.h"
+#include "src/kernel/oom_shim.h"
+#include "src/kernel/qwe.h"
+
+#include <dirent.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+static char root[512], childlog[600];
+static int serial;
+
+static void write_file(const char *path, const char *body)
+{
+	FILE *fp = fopen(path, "w");
+
+	fputs(body, fp);
+	fclose(fp);
+}
+
+/* A fresh directory holding the workflow, whose steps leave a file each. */
+static void fresh_case(char *dir, size_t cap)
+{
+	char path[700], body[1600];
+
+	snprintf(dir, cap, "%s/case%d", root, ++serial);
+	mkdir(dir, 0700);
+	snprintf(body, sizeof body,
+	    "jobs:\n"
+	    "  build:\n    target: local\n    steps:\n      - run: echo built > %s/build.out\n"
+	    "  test:\n    target: local\n    needs: [build]\n"
+	    "    steps:\n      - run: test -f %s/build.out && echo tested > %s/test.out\n",
+	    dir, dir, dir);
+	snprintf(path, sizeof path, "%s/w.yaml", dir);
+	write_file(path, body);
+}
+
+static int run_case(void *arg)
+{
+	char path[700];
+	struct qwe_run_options opts = {0};
+
+	snprintf(path, sizeof path, "%s/w.yaml", (const char *)arg);
+	return qwe_run_workflow(path, &opts);
+}
+
+static int has_file(const char *dir, const char *name, const char *want)
+{
+	char path[700], got[64] = "";
+	FILE *fp;
+
+	snprintf(path, sizeof path, "%s/%s", dir, name);
+	fp = fopen(path, "r");
+	if (!fp)
+		return 0;
+	if (!fgets(got, sizeof got, fp))
+		got[0] = 0;
+	fclose(fp);
+	return strcmp(got, want) == 0;
+}
+
+static int all_work_done(const char *dir)
+{
+	return has_file(dir, "build.out", "built\n") && has_file(dir, "test.out", "tested\n");
+}
+
+/* The text of the case's one result.json, or "" if there is none. */
+static void read_result(const char *dir, char *out, size_t cap)
+{
+	char path[1200];
+	struct dirent *e;
+	DIR *d;
+	FILE *fp;
+	size_t got = 0;
+
+	out[0] = 0;
+	snprintf(path, sizeof path, "%s/.qwe/runs", dir);
+	d = opendir(path);
+	if (!d)
+		return;
+	while ((e = readdir(d)) && e->d_name[0] == '.')
+		;
+	if (e) {
+		snprintf(path, sizeof path, "%s/.qwe/runs/%s/result.json", dir, e->d_name);
+		fp = fopen(path, "r");
+		if (fp) {
+			got = fread(out, 1, cap - 1, fp);
+			fclose(fp);
+		}
+	}
+	closedir(d);
+	out[got] = 0;
+}
+
+/* Runs a fresh case with the given injection; leaves the case dir in dir. */
+static void inject(long n, long child_n, char *dir, size_t dircap, struct qwe_oom_outcome *o)
+{
+	fresh_case(dir, dircap);
+	unlink(childlog);
+	qwe_oom_child_log(childlog);
+	if (qwe_oom_probe(n, child_n, run_case, dir, o) != 0)
+		abort();
+}
+
+TEST injection_is_deterministic(void)
+{
+	struct qwe_oom_outcome a, b;
+	char dir[600];
+	long at;
+
+	/* The count for a fixed scenario is the same every time, not just once. */
+	inject(1L << 40, 0, dir, sizeof dir, &a);
+	ASSERT(a.exited);
+	ASSERT_EQ(0, a.code);
+	ASSERT(a.count > 50);
+	for (int i = 0; i < 3; i++) {
+		inject(1L << 40, 0, dir, sizeof dir, &b);
+		ASSERT_EQ_FMT(a.count, b.count, "%ld");
+	}
+
+	/* And so is the failing allocation: the same n ends the same way. */
+	for (at = a.count / 4; at < a.count; at += a.count / 4) {
+		struct qwe_oom_outcome x, y;
+		char dx[600], dy[600];
+
+		inject(at, 0, dx, sizeof dx, &x);
+		inject(at, 0, dy, sizeof dy, &y);
+		ASSERT_EQ_FMT(x.exited, y.exited, "%d");
+		ASSERT_EQ_FMT(x.code, y.code, "%d");
+		ASSERT_EQ_FMT(x.signal, y.signal, "%d");
+		ASSERT_EQ_FMT(x.fired, y.fired, "%d");
+		ASSERT_EQ_FMT(x.count, y.count, "%ld");
+		ASSERT_EQ_FMT(all_work_done(dx), all_work_done(dy), "%d");
+	}
+
+	/* Same for the step child's allocations. */
+	inject(0, 1L << 40, dir, sizeof dir, &a);
+	ASSERT_EQ(0, a.code);
+	for (long m = 1; m <= 3; m++) {
+		char dx[600], dy[600];
+
+		inject(0, m, dx, sizeof dx, &a);
+		ASSERT_EQ_FMT(access(childlog, F_OK) == 0, 1, "%d");
+		inject(0, m, dy, sizeof dy, &b);
+		ASSERT_EQ_FMT(a.code, b.code, "%d");
+		ASSERT_EQ_FMT(all_work_done(dx), all_work_done(dy), "%d");
+	}
+	PASS();
+}
+
+TEST run_survives_every_injection(void)
+{
+	struct qwe_oom_outcome base, o;
+	char dir[600], result[8192];
+	long at, m;
+	int fired_children = 0;
+
+	inject(0, 0, dir, sizeof dir, &base);
+	ASSERT(base.exited);
+	ASSERT_EQ_FMT(0, base.code, "%d");
+	ASSERT(all_work_done(dir));
+
+	/* Engine side: fail allocation 1, 2, 3 ... up to the last the run makes. */
+	inject(1L << 40, 0, dir, sizeof dir, &o);
+	ASSERT(o.count > 50);
+	for (at = 1; at <= o.count; at++) {
+		struct qwe_oom_outcome r;
+
+		inject(at, 0, dir, sizeof dir, &r);
+		if (!r.fired && r.exited) { /* an abort leaves no report, and had to fire to abort */
+			fprintf(stderr, "allocation %ld of %ld: never reached: exited %d code %d signal %d count %ld\n%s\n", at, o.count, r.exited, r.code, r.signal, r.count, r.err);
+			FAIL();
+		}
+		if (r.exited && r.code == 0) {
+			/* a success despite the failure has done all of its work */
+			read_result(dir, result, sizeof result);
+			if (!all_work_done(dir) || strstr(result, "failed") || strstr(result, "skipped")) {
+				fprintf(stderr, "allocation %ld: exit 0 with work missing:\n%s\n%s\n", at, r.err, result);
+				FAIL();
+			}
+		} else if (r.exited && (r.code == QWE_EXIT_FAILED || r.code == QWE_EXIT_USAGE)) {
+			if (!r.err[0]) {
+				fprintf(stderr, "allocation %ld: exit %d with no message\n", at, r.code);
+				FAIL();
+			}
+		} else if (!r.exited && r.signal == SIGABRT && strstr(r.err, "out of memory")) {
+			; /* allocation policy rule 2: nowhere to report, so name it and stop */
+		} else {
+			fprintf(stderr, "allocation %ld of %ld: exited %d code %d signal %d\n%s\n",
+			    at, o.count, r.exited, r.code, r.signal, r.err);
+			FAIL();
+		}
+	}
+
+	/* Step side: fail the child's 1st, 2nd ... allocation until none fails. */
+	for (m = 1; m < 200; m++) {
+		char res[8192];
+
+		inject(0, m, dir, sizeof dir, &o);
+		if (access(childlog, F_OK) != 0) {
+			ASSERT_EQ_FMT(0, o.code, "%d");
+			ASSERT(all_work_done(dir));
+			break;
+		}
+		fired_children++;
+		read_result(dir, res, sizeof res);
+		/* the step failed, with a reason of the engine's (engine-error from the child, plugin-error from the
+		 * backend that forked it) and not a bare exit code, and nothing hung */
+		if (!o.exited || o.code != QWE_EXIT_FAILED || !(strstr(res, "\"reason\": \"engine-error\"") || strstr(res, "\"reason\": \"plugin-error\"")) ||
+		    strstr(res, "\"reason\": \"exit-code\"")) {
+			fprintf(stderr, "child allocation %ld: exited %d code %d signal %d\n%s\n%s\n",
+			    m, o.exited, o.code, o.signal, o.err, res);
+			FAIL();
+		}
+	}
+	ASSERT(m < 200);
+	ASSERT(fired_children > 0);
+	PASS();
+}
+
+GREATEST_MAIN_DEFS();
+
+int main(int argc, char **argv)
+{
+	const char *tmp = getenv("TEST_TMPDIR");
+
+	snprintf(root, sizeof root, "%s", tmp ? tmp : "/tmp");
+	snprintf(childlog, sizeof childlog, "%s/child.log", root);
+	GREATEST_MAIN_BEGIN();
+	RUN_TEST(injection_is_deterministic);
+	RUN_TEST(run_survives_every_injection);
+	GREATEST_MAIN_END();
+}

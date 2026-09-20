@@ -56,7 +56,7 @@ static int step_uses_plugin(lua_State *L, int idx)
 
 /* Writes the CBOR encoding of the Lua value at idx to the result pipe: the
  * step's result, apart from its stdout and stderr (ADR-0005). */
-static void send_result(lua_State *L, int idx, int fd)
+static int send_result(lua_State *L, int idx, int fd)
 {
 	uint8_t *buf;
 	size_t len, off = 0;
@@ -64,7 +64,7 @@ static void send_result(lua_State *L, int idx, int fd)
 
 	if (qwe_lua_to_cbor(L, idx, &buf, &len, err, sizeof err) < 0) {
 		fprintf(stderr, "qwe: cannot encode the step result: %s\n", err);
-		return;
+		return -1;
 	}
 	while (off < len) {
 		ssize_t n = write(fd, buf + off, len - off);
@@ -76,11 +76,14 @@ static void send_result(lua_State *L, int idx, int fd)
 		off += (size_t)n;
 	}
 	free(buf);
+	return off == len ? 0 : -1;
 }
 
 /* Sends { status = status [, reason = reason] } over the result pipe. */
-static void send_status(lua_State *L, int fd, const char *status, const char *reason)
+static int send_status(lua_State *L, int fd, const char *status, const char *reason)
 {
+	int rc;
+
 	lua_newtable(L);
 	lua_pushstring(L, status);
 	lua_setfield(L, -2, "status");
@@ -88,8 +91,9 @@ static void send_status(lua_State *L, int fd, const char *status, const char *re
 		lua_pushstring(L, reason);
 		lua_setfield(L, -2, "reason");
 	}
-	send_result(L, lua_gettop(L), fd);
+	rc = send_result(L, lua_gettop(L), fd);
 	lua_pop(L, 1);
+	return rc;
 }
 
 /* Runs in the child: hands the step to its plugin (qwe.plugins.run_step). A
@@ -125,7 +129,11 @@ static char **child_argv(void *arg, int result_fd)
 		lua_getfield(L, -1, "status");
 		ok = lua_isstring(L, -1) && strcmp(lua_tostring(L, -1), "ok") == 0;
 		lua_pop(L, 1);
-		send_result(L, lua_gettop(L), result_fd);
+		/* a result that could not be sent is a step that failed, not one that succeeded */
+		if (send_result(L, lua_gettop(L), result_fd) < 0) {
+			send_status(L, result_fd, "failed", "engine-error");
+			ok = 0;
+		}
 		fflush(stdout);
 		qwe_lua_coverage_flush(L);
 		_exit(ok ? 0 : 1);
@@ -153,7 +161,11 @@ static char **child_argv(void *arg, int result_fd)
 		send_status(L, result_fd, "failed", "engine-error");
 		return NULL;
 	}
-	send_status(L, result_fd, "exec", NULL);
+	/* The parent starts the step's clock on "exec"; without it, the step has not started. */
+	if (send_status(L, result_fd, "exec", NULL) < 0) {
+		send_status(L, result_fd, "failed", "engine-error");
+		return NULL;
+	}
 	qwe_lua_coverage_flush(L);
 	if (lua_type(L, -1) == LUA_TSTRING) {
 		size_t sl;

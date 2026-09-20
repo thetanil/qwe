@@ -1,20 +1,13 @@
+#define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
 #include "src/kernel/alloc.h"
+#include "src/kernel/oom_shim.h"
 
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
-/* malloc fails on demand; every other allocation passes through. */
-void *__real_malloc(size_t n);
-static int fail_malloc;
-
-void *__wrap_malloc(size_t n)
-{
-	return fail_malloc ? NULL : __real_malloc(n);
-}
 
 /* Runs body in a child with allocation failing, and returns what it wrote to
  * stderr and how it ended. */
@@ -29,7 +22,7 @@ static int run_failing(void (*body)(void), char *err, size_t errcap, int *status
 	if (pid == 0) {
 		dup2(fd[1], 2);
 		close(fd[0]);
-		fail_malloc = 1;
+		qwe_oom_arm(1);
 		body();
 		_exit(0);
 	}
@@ -73,6 +66,40 @@ TEST helper_returns_the_block_when_memory_is_available(void)
 	PASS();
 }
 
+TEST shim_fails_the_nth_call(void)
+{
+	void *p;
+	int i;
+
+	/* transparent until armed */
+	p = malloc(8);
+	ASSERT(p);
+	free(p);
+
+	/* the 3rd allocation fails, in whichever call it is, and only that one */
+	qwe_oom_arm(3);
+	for (i = 1; i <= 5; i++) {
+		switch (i % 4) {
+		case 0: p = strdup("x"); break;
+		case 1: p = calloc(1, 8); break;
+		case 2: p = malloc(8); break;
+		default: p = realloc(NULL, 8); break;
+		}
+		ASSERT_EQ_FMT(i != 3, p != NULL, "%d");
+		free(p);
+	}
+	ASSERT_EQ(5, qwe_oom_count());
+	ASSERT(qwe_oom_fired());
+
+	/* disarmed, everything passes again */
+	qwe_oom_arm(0);
+	p = malloc(8);
+	ASSERT(p);
+	ASSERT(!qwe_oom_fired());
+	free(p);
+	PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv)
@@ -80,5 +107,6 @@ int main(int argc, char **argv)
 	GREATEST_MAIN_BEGIN();
 	RUN_TEST(helper_aborts_and_names_the_site);
 	RUN_TEST(helper_returns_the_block_when_memory_is_available);
+	RUN_TEST(shim_fails_the_nth_call);
 	GREATEST_MAIN_END();
 }
