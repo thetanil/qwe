@@ -18,6 +18,7 @@ cc_library(
 
 cc_test(
     name = "envelope_test",
+    size = "small",
     srcs = ["envelope_test.c"],
     deps = [
         ":secrets",
@@ -28,6 +29,7 @@ cc_test(
 
 cc_test(
     name = "keyfile_test",
+    size = "small",
     srcs = ["keyfile_test.c"],
     deps = [
         ":secrets",

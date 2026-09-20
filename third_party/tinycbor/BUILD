@@ -34,6 +34,7 @@ cc_library(
 
 cc_test(
     name = "roundtrip_test",
+    size = "small",
     srcs = ["roundtrip_test.c"],
     deps = [
         ":tinycbor",

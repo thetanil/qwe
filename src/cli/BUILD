@@ -23,6 +23,7 @@ cc_binary(
 
 cc_test(
     name = "dispatch_test",
+    size = "small",
     srcs = ["dispatch_test.c"],
     deps = [
         ":dispatch",

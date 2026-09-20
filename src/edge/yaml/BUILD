@@ -21,6 +21,7 @@ cc_library(
 
 [cc_test(
     name = name + "_test",
+    size = "small",
     srcs = [name + "_test.c"],
     deps = [
         ":yaml",
@@ -38,6 +39,7 @@ cc_library(
 # Wraps the allocator to fail one call at a time.
 cc_test(
     name = "alloc_test",
+    size = "small",
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     srcs = ["alloc_test.c"],
     linkopts = [

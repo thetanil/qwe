@@ -10,6 +10,7 @@ cc_library(
 
 cc_test(
     name = "run_test",
+    size = "small",
     srcs = ["run_test.c"],
     deps = [
         ":run",

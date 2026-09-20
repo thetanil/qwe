@@ -137,6 +137,7 @@ cc_library(
 
 sh_test(
     name = "template_test",
+    size = "small",
     srcs = ["//tests:run_lua_test.sh"],
     args = [
         "$(location //src/kernel:luarun)",
@@ -151,6 +152,7 @@ sh_test(
 
 sh_test(
     name = "validate_test",
+    size = "small",
     srcs = ["//tests:run_lua_test.sh"],
     args = [
         "$(location //src/kernel:luarun)",
@@ -164,6 +166,7 @@ sh_test(
 
 sh_test(
     name = "pluginshape_test",
+    size = "small",
     srcs = ["//tests:run_lua_test.sh"],
     args = [
         "$(location //src/kernel:luarun)",

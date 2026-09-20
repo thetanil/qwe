@@ -5,6 +5,7 @@ exports_files(["strict-metaschema.json"], visibility = ["//src:__subpackages__"]
 [
     sh_test(
         name = name,
+        size = "small",
         srcs = ["//tests:run_lua_test.sh"],
         args = [
             "$(location //src/kernel:luarun)",

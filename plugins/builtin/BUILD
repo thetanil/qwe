@@ -18,6 +18,7 @@ filegroup(
 # Every built-in plugin passes the metaschema, contract and luacheck checks.
 sh_test(
     name = "lint_test",
+    size = "small",
     srcs = ["//tests:run_lua_test.sh"],
     args = [
         "$(location //src/kernel:luarun)",
@@ -41,6 +42,7 @@ filegroup(
 [
     sh_test(
         name = name + "_plugin_test",
+        size = "small",
         srcs = ["//tests:run_lua_test.sh"],
         args = [
             "$(location //src/kernel:luarun)",

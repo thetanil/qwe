@@ -15,6 +15,7 @@ def e2e_test(name, expect_mismatch = False, tags = [], data = []):
     if expect_mismatch:
         sh_test(
             name = name + "_test",
+            size = "small",
             srcs = ["invert.sh"],
             args = ["$(location :run_case.sh)", "$(location //src/cli:qwe)", native.package_name() + "/" + name],
             data = [":run_case.sh", "//src/cli:qwe"] + case_files + data,
@@ -23,6 +24,7 @@ def e2e_test(name, expect_mismatch = False, tags = [], data = []):
     else:
         sh_test(
             name = name + "_test",
+            size = "small",
             srcs = ["run_case.sh"],
             args = ["$(location //src/cli:qwe)", native.package_name() + "/" + name],
             data = ["//src/cli:qwe"] + case_files + data,

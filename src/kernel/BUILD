@@ -38,6 +38,7 @@ cc_library(
 
 cc_test(
     name = "api_test",
+    size = "small",
     srcs = ["api_test.c"],
     deps = [
         ":kernel",
@@ -53,6 +54,7 @@ cc_library(
 
 cc_test(
     name = "ring_test",
+    size = "small",
     srcs = ["ring_test.c"],
     deps = [
         ":ring",
@@ -69,6 +71,7 @@ cc_library(
 # Signals and process groups: its own test binary (spec, "Test strategy").
 cc_test(
     name = "proc_test",
+    size = "small",
     srcs = ["proc_test.c"],
     deps = [
         ":proc",
@@ -87,6 +90,7 @@ cc_library(
 
 cc_test(
     name = "redact_test",
+    size = "small",
     srcs = ["redact_test.c"],
     deps = [
         ":redact",
@@ -141,6 +145,7 @@ cc_library(
 
 cc_test(
     name = "dag_test",
+    size = "small",
     srcs = ["dag_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     linkopts = ["-Wl,--wrap=calloc"],
@@ -163,6 +168,7 @@ cc_binary(
 
 cc_test(
     name = "lua_cbor_test",
+    size = "small",
     srcs = ["lua_cbor_test.c"],
     deps = [
         ":luacbor",
@@ -174,6 +180,7 @@ cc_test(
 
 sh_test(
     name = "luarun_test",
+    size = "small",
     srcs = ["luarun_test.sh"],
     args = ["$(location :luarun)"],
     data = [":luarun"],
@@ -188,6 +195,7 @@ cc_library(
 # Uses real timerfds and sleeps briefly, so it is its own test binary.
 cc_test(
     name = "timer_test",
+    size = "small",
     srcs = ["timer_test.c"],
     deps = [
         ":timer",
@@ -204,6 +212,7 @@ cc_library(
 
 cc_test(
     name = "sched_test",
+    size = "small",
     srcs = ["sched_test.c"],
     deps = [
         ":lifecycle",
@@ -222,6 +231,7 @@ cc_library(
 # The event model is written apart from the table and only the test links it.
 cc_test(
     name = "lifecycle_test",
+    size = "small",
     srcs = [
         "lifecycle_model.c",
         "lifecycle_model.h",
@@ -251,6 +261,7 @@ cc_library(
 
 cc_test(
     name = "preamble_test",
+    size = "small",
     srcs = ["preamble_test.c"],
     deps = [
         ":preamble",
@@ -260,6 +271,7 @@ cc_test(
 
 cc_test(
     name = "jobs_test",
+    size = "small",
     srcs = ["jobs_test.c"],
     deps = [
         ":kernel",

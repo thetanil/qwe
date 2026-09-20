@@ -10,6 +10,7 @@ filegroup(
 # The upstream draft-07 suite, minus the keywords in the script's excluded set.
 sh_test(
     name = "json_schema_test_suite",
+    size = "small",
     srcs = ["//tests:run_lua_test.sh"],
     args = [
         "$(location //src/kernel:luarun)",
