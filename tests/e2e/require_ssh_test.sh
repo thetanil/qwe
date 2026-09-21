@@ -11,7 +11,7 @@ chmod +x "$t/bin/ssh"
 qwe=/bin/true
 
 # without the switch: SKIP, pass
-if ! out=$(PATH="$t/bin:$PATH" REMOTE_CONTAINERS=1 "$run_case" "$qwe" "$t/case" 2>&1); then
+if ! out=$(env -u QWE_E2E_REQUIRE_SSH PATH="$t/bin:$PATH" REMOTE_CONTAINERS=1 "$run_case" "$qwe" "$t/case" 2>&1); then
 	echo "unreachable case must still skip: $out" >&2; exit 1
 fi
 case $out in *"SKIP: case"*) ;; *) echo "no SKIP line: $out" >&2; exit 1 ;; esac
