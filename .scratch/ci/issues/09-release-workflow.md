@@ -60,3 +60,6 @@ feature finishes.
 - [ ] The release badge renders. `manual: view README on github.com`
 
 ## Comments
+
+- Design change (user, after tickets 01-06): a release is no longer a pushed tag that reruns the gates. `release.yml` is `workflow_dispatch` with a `version`, takes the commit of the last green `nightly.yml` run on main, builds and checks the version there (`tools/release/check_version.sh`, tested by `//tools/release:check_version_test`), and creates the release with `--target <sha>`, so the tag is made at a tested commit. The commit is in the title, the notes, and the tag. The gates are `nightly.yml`'s job (ticket 12). Provenance (`attest-build-provenance`) is not included; add it if wanted.
+- Not done from the original text: `unit: workflows_test.sh::release_calls_every_gate` became `nightly_calls_every_gate`; the pushed-tag manual criteria no longer apply. The remaining manual criteria (run it; `sha256sum -c`; `file qwe`; the mismatch failing before publishing) need a real run.

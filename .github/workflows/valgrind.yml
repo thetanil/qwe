@@ -5,7 +5,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: valgrind-${{ github.ref }}
+  group: ${{ github.workflow }}-valgrind-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 jobs:
   unit:

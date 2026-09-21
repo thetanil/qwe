@@ -1,0 +1,66 @@
+name: release
+# Publishes a release of the commit the last green nightly run tested. Start it by hand
+# with the version; the tag v<version> is created at that commit, so the release is
+# always something that passed the full gate, and its notes name the commit.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the v, e.g. 0.1.0 or 0.2.0-rc1. Must equal QWE_VERSION in src/kernel/qwe.h at that commit."
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Find the last green nightly run
+        id: nightly
+        run: |
+          set -eu
+          row=$(gh run list -R "$GITHUB_REPOSITORY" --workflow nightly.yml --branch main --status success \
+            --limit 1 --json headSha,url -q '.[0] | "\(.headSha) \(.url)"')
+          [ -n "$row" ] && [ "$row" != "null null" ] || { echo "no green nightly run on main: run the nightly workflow first" >&2; exit 1; }
+          echo "sha=${row%% *}" >> "$GITHUB_OUTPUT"
+          echo "url=${row#* }" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.nightly.outputs.sha }}
+      - name: The tag is free
+        run: |
+          if gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION already exists" >&2; exit 1
+          fi
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: release
+      - name: Build
+        run: bazel build //src/cli:qwe //src/cli:qwe-debug
+      - name: The version matches
+        run: tools/release/check_version.sh "v$VERSION" bazel-bin/src/cli/qwe
+      - name: Package
+        run: |
+          set -eu
+          mkdir dist
+          cp bazel-bin/src/cli/qwe "dist/qwe-$VERSION-linux-x86_64"
+          cp bazel-bin/src/cli/qwe-debug "dist/qwe-debug-$VERSION-linux-x86_64"
+          file dist/*
+          (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+      - name: Publish
+        env:
+          SHA: ${{ steps.nightly.outputs.sha }}
+          NIGHTLY: ${{ steps.nightly.outputs.url }}
+        run: |
+          set -eu
+          short=$(echo "$SHA" | cut -c1-7)
+          pre=
+          case $VERSION in *-*) pre=--prerelease ;; esac
+          gh release create "v$VERSION" dist/* -R "$GITHUB_REPOSITORY" \
+            --target "$SHA" --title "v$VERSION ($short)" $pre --generate-notes \
+            --notes "Built from commit \`$SHA\`, which passed the full gate in $NIGHTLY."

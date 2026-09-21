@@ -1,0 +1,40 @@
+name: nightly
+# A full run at night: every gate, valgrind included, from caches rebuilt from scratch.
+# release.yml releases the commit of the last green run of this workflow.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+jobs:
+  refresh-caches:
+    # A cache key never changes once saved, so the gates' caches go stale. Drop them all;
+    # the gates below run cold and save fresh ones, which pushes to main then restore.
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" --key setup-bazel- --limit 100 --json id -q '.[].id' |
+            xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
+  tests:
+    needs: refresh-caches
+    uses: ./.github/workflows/tests.yml
+  asan:
+    needs: refresh-caches
+    uses: ./.github/workflows/asan.yml
+  ubsan:
+    needs: refresh-caches
+    uses: ./.github/workflows/ubsan.yml
+  valgrind:
+    needs: refresh-caches
+    uses: ./.github/workflows/valgrind.yml
+  coverage:
+    needs: refresh-caches
+    uses: ./.github/workflows/coverage.yml

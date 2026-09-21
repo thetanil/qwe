@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: asan-${{ github.ref }}
+  group: ${{ github.workflow }}-asan-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 jobs:
   asan:
