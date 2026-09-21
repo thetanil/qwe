@@ -152,3 +152,37 @@ bazel run //tools/coverage:check -- --update  # after improving coverage: ratche
 uncovered lines allowed. Untested new code raises a file's count and fails the check; a new file with misses
 must be listed (run `--update` once it is tested). It is a `bazel run`, not a `bazel test`,
 because a test cannot itself run `bazel coverage`; run it in CI. Commit `floor.txt` changes on purpose.
+
+## CI
+
+GitHub Actions runs the quality checks. Each check is its own workflow in `.github/workflows/`, which is
+why the Status row has one badge per check. `docs/ci-checks.md` has the exact commands, costs and
+what each one fails on.
+
+| Workflow | Runs | When |
+|---|---|---|
+| `tests` | `bazel test //...` | every push to `main` |
+| `asan` | the suite under AddressSanitizer and LeakSanitizer | every push to `main` |
+| `ubsan` | the suite under UBSan | every push to `main` |
+| `coverage` | the coverage floor, and the HTML report as an artifact | every push to `main` |
+| `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes) | by hand, nightly, and in a release |
+| `nightly` | all five of the above, from fresh caches | 02:17 UTC, and by hand |
+| `release` | all five again, then builds and publishes | a pushed tag `v*` |
+
+- **Runner and setup.** `ubuntu-24.04`, Bazel from `.bazelversion`, the caches through
+  `bazel-contrib/setup-bazel`. The shared steps are in `.github/actions/setup`. The ssh e2e cases run
+  against an sshd the setup starts on `172.18.0.1`, and `QWE_E2E_REQUIRE_SSH=1` makes one that cannot
+  connect a failure instead of a skip.
+- **Caches.** A saved cache key never changes, so a cache slowly goes stale. The nightly deletes the
+  `setup-bazel-*` caches and rebuilds them, and pushes to `main` restore the result.
+- **Fuzzing** is never part of a push, the nightly or a release. It is a manual run (`tools/fuzz/nightly.sh`,
+  see `docs/fuzzing.md`).
+- **Releasing.** Bump `QWE_VERSION` in `src/kernel/qwe.h`, push, then write the release in the GitHub web
+  UI with its tag `v<version>` (or just push the tag). All five gates run at that commit, the binaries
+  and `SHA256SUMS` are attached, and the commit hash is added to your notes. If anything fails, the
+  release goes back to a draft.
+- **Drift.** `//tools/ci:workflows_test` (part of `bazel test //...`) fails if a workflow has no badge, a
+  command in `docs/ci-checks.md` is in no workflow, or the nightly or release stops calling a gate.
+
+To check a change before pushing, run the same commands locally (`docs/ci-checks.md`); the workflows run
+nothing else.
