@@ -49,8 +49,8 @@ not, so local runs without the host still skip.
 
 - [x] With `QWE_E2E_REQUIRE_SSH=1` and no reachable target, a `needs-ssh` case fails with a message naming the case and the host. `unit: tests/e2e/require_ssh_test.sh`
 - [x] Without it, the same case still prints SKIP and passes, which is today's behaviour. `unit: tests/e2e/require_ssh_test.sh` (second invocation in the case's `check.sh`, or a sibling case)
-- [ ] In the `tests.yml` run, all 19 `needs-ssh` cases run, and none prints SKIP. `manual: push; grep the run's test logs for "SKIP:"; expect none`
-- [ ] Every ssh case passes on the runner. `manual: the same run is green`
+- [x] In the `tests.yml` run, all 19 `needs-ssh` cases run, and none prints SKIP. `manual: push; grep the run's test logs for "SKIP:"; expect none`
+- [x] Every ssh case passes on the runner. `manual: the same run is green`
 - [ ] The devcontainer is unaffected: `bazel test //...` there is still green with the cases running against the real host. `manual: run locally before committing`
 
 ## Comments

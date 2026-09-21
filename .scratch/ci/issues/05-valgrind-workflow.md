@@ -35,10 +35,10 @@ Add the valgrind badge.
 ## Acceptance criteria
 
 - [x] `workflows_test` passes with `valgrind.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
-- [ ] A push to `main` runs both jobs green, and `valgrind_smoke_test` ran in `unit`. `manual: push; read both job logs`
+- [x] A push to `main` runs both jobs green, and `valgrind_smoke_test` ran in `unit`. `manual: push; read both job logs`
 - [ ] The run's timing is recorded in `docs/valgrind.md`'s timing table as a "GitHub runner" row. `manual: copy from the run`
 - [ ] A deliberate uninitialised read turns `unit` red, and the artifact holds the valgrind report. `manual: throwaway branch, as in ticket 03`
-- [ ] The valgrind badge renders. `manual: view README on github.com`
+- [x] The valgrind badge renders. `manual: view README on github.com`
 
 ## Comments
 

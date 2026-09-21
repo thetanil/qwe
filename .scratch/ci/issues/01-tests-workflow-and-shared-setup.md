@@ -64,10 +64,10 @@ ticket 02.
 - [x] It fails when an "Every change" command in `docs/ci-checks.md` appears in no workflow. `unit: tools/ci/workflows_test.sh::command_unwired`
 - [x] It fails when a gate workflow lacks the push-to-main trigger or `workflow_call`. `unit: tools/ci/workflows_test.sh::trigger_missing`
 - [x] It passes on the repo as committed. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
-- [ ] A push to `main` runs `tests.yml`, it is green, and it shows `bazel test //...` with the ssh cases printing SKIP. `manual: push; open Actions → tests; read the log`
+- [x] A push to `main` runs `tests.yml`, it is green, and it shows `bazel test //...` with the ssh cases printing SKIP. `manual: push; open Actions → tests; read the log`
 - [ ] A second push with no source change finishes faster from the disk cache, and the log shows cache hits. `manual: push an empty commit; compare durations; grep the log for "disk cache hit"`
 - [ ] A deliberately failing test turns the run red and uploads the test logs artifact. `manual: on a throwaway branch with the trigger temporarily widened, break an assertion, push, download the artifact, then delete the branch`
-- [ ] The README's tests badge renders and links to the runs page. `manual: view README on github.com`
+- [x] The README's tests badge renders and links to the runs page. `manual: view README on github.com`
 
 ## Comments
 

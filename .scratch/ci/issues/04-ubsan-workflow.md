@@ -21,9 +21,9 @@ Add the ubsan badge.
 ## Acceptance criteria
 
 - [x] `workflows_test` passes with `ubsan.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
-- [ ] A push to `main` runs `ubsan.yml`, it is green, and `sanitizer_smoke_*` ran and passed. `manual: push; read the run log`
+- [x] A push to `main` runs `ubsan.yml`, it is green, and `sanitizer_smoke_*` ran and passed. `manual: push; read the run log`
 - [ ] A deliberate signed overflow in a tested path turns the run red, and the artifact holds the report. `manual: throwaway branch, as in ticket 03`
-- [ ] The ubsan badge renders. `manual: view README on github.com`
+- [x] The ubsan badge renders. `manual: view README on github.com`
 
 ## Comments
 

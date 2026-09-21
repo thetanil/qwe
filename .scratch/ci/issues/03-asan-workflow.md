@@ -22,9 +22,9 @@ Blocked by: 02
 ## Acceptance criteria
 
 - [x] `workflows_test` passes with `asan.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
-- [ ] A push to `main` runs `asan.yml`, it is green, and `sanitizer_smoke_*` ran and passed. `manual: push; read the run log`
+- [x] A push to `main` runs `asan.yml`, it is green, and `sanitizer_smoke_*` ran and passed. `manual: push; read the run log`
 - [ ] A deliberate leak turns the run red, and the uploaded artifact contains the LSan report naming the leaking line. `manual: on a throwaway branch, drop a free in a tested path, push with the trigger temporarily widened, read the artifact, delete the branch`
-- [ ] The asan badge renders. `manual: view README on github.com`
+- [x] The asan badge renders. `manual: view README on github.com`
 
 ## Comments
 
