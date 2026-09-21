@@ -1,6 +1,6 @@
 # 05: The valgrind workflow
 
-Status: ready-for-agent
+Status: in-progress (manual criteria await a push)
 Category: enhancement
 Type: task
 Blocked by: 02
@@ -34,10 +34,12 @@ Add the valgrind badge.
 
 ## Acceptance criteria
 
-- [ ] `workflows_test` passes with `valgrind.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
+- [x] `workflows_test` passes with `valgrind.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
 - [ ] A push to `main` runs both jobs green, and `valgrind_smoke_test` ran in `unit`. `manual: push; read both job logs`
 - [ ] The run's timing is recorded in `docs/valgrind.md`'s timing table as a "GitHub runner" row. `manual: copy from the run`
 - [ ] A deliberate uninitialised read turns `unit` red, and the artifact holds the valgrind report. `manual: throwaway branch, as in ticket 03`
 - [ ] The valgrind badge renders. `manual: view README on github.com`
 
 ## Comments
+
+- valgrind.yml added with badge: jobs unit and e2e in parallel, each printing valgrind --version. Timing row for docs/valgrind.md and the runner's version are to be copied from the first run. valgrind_smoke_test is an ordinary cc_test, so it runs in unit.

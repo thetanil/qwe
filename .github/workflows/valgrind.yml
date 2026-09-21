@@ -1,0 +1,42 @@
+name: valgrind
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: valgrind-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          apt: valgrind
+          cache-key: valgrind
+          ssh-target: "true"
+      - run: valgrind --version
+      - run: bazel test --config=valgrind //...
+      - if: failure()
+        uses: ./.github/actions/collect-logs
+        with:
+          name: valgrind-unit-logs
+  e2e:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          apt: valgrind
+          cache-key: valgrind
+          ssh-target: "true"
+      - run: valgrind --version
+      - run: bazel test //tests/e2e:valgrind_e2e
+      - if: failure()
+        uses: ./.github/actions/collect-logs
+        with:
+          name: valgrind-e2e-logs
