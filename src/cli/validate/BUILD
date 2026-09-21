@@ -23,6 +23,7 @@ cc_test(
 cc_test(
     name = "oom_test",
     size = "small",
+    timeout = "eternal",  # minutes under valgrind: see .bazelrc, docs/valgrind.md
     srcs = ["oom_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [

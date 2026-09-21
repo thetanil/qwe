@@ -1,3 +1,20 @@
 # Suppressions for valgrind runs (quality/04). Each entry says what it hides and
 # why that is not a real finding. An unexplained suppression is how a real
 # finding gets hidden; add none without a comment.
+
+# LuaJIT registers the unwind info of every machine-code area it allocates with
+# libgcc (lj_err_register_mcode -> __register_frame). libgcc mallocs a 48-byte
+# object per registration and keeps it in its own registry, so valgrind cannot
+# see a pointer to it and reports it definitely lost. libgcc frees the
+# object when the area is deregistered. Seen in corpus_test, whose replay runs hot
+# enough for LuaJIT to compile traces (35 s under valgrind). Only this path is hidden; a leak in our code, or elsewhere in
+# LuaJIT, still fails.
+{
+   luajit-mcode-unwind-registration
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:__register_frame
+   fun:lj_err_register_mcode
+   ...
+}

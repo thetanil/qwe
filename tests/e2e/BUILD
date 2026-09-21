@@ -257,7 +257,7 @@ e2e_test(name = "inventory_disabled_must_be_a_reason")
 
 # The valgrind gate (quality/04): a chosen set of cases, chosen for the paths
 # the unit tests cannot reach. Not the ssh cases: they need a reachable host.
-#   bazel test //tests/e2e:valgrind_e2e
+#   bazel test --config=valgrind //tests/e2e:valgrind_e2e
 [e2e_valgrind_test(name = c) for c in [
     "run_outputs",  # a plain run, plugin-free
     "file_ensure_idempotent",  # a run with a plugin

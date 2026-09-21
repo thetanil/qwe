@@ -6,8 +6,12 @@ model, chiefly branches and syscalls that depend on uninitialised memory.
 
 ```
 bazel test --config=valgrind //...           # every cc_test under valgrind
-bazel test //tests/e2e:valgrind_e2e          # six e2e cases, qwe and its step children traced
+bazel test --config=valgrind //tests/e2e:valgrind_e2e   # six e2e cases, qwe and its step children traced
 ```
+
+The e2e command needs `--config=valgrind` too: it selects the dynamic `qwe` build. The shipping
+build is static, and valgrind cannot intercept malloc there, so every run reports noise from
+glibc's startup (`set_robust_list`, uninitialised jumps in `malloc`) and fails.
 
 ## The two pieces
 
@@ -52,11 +56,11 @@ children, all showing `Command: .../qwe run w.yaml`), none of `sh`.
 
 ## Suppressions
 
-`tools/valgrind/luajit.supp` has **no entries**. LuaJIT was expected to need some
-(its allocator and stack handling), but the whole suite is clean under valgrind 3.22
-without any. The file is kept, with its rule stated at the top, so that a needed
-suppression has a place: comment each entry with what it hides and why that is not
-a real finding.
+`tools/valgrind/luajit.supp` has one entry, for LuaJIT's registration of the unwind info of its
+machine-code areas (`__register_frame`), which valgrind reports as definitely lost once a run
+compiles traces (`corpus_test`). The gate was built with the file empty and the suite clean.
+The rule at the top of the file stands: comment each entry with what it hides and why that
+is not a real finding.
 
 ## Liveness
 
@@ -72,8 +76,11 @@ Measured on the 16-core devcontainer, valgrind 3.22:
 | piece | wall clock | note |
 |---|---|---|
 | plain `bazel test //src/...` (tests only, built) | about 3 s | baseline |
-| `--config=valgrind`, every `cc_test` | about 130 s | 128.8 s of it is `load_oom_test`; the rest each take under 5 s |
+| `--config=valgrind`, every `cc_test` | about 8 min | the three oom sweeps dominate, in parallel: `src/kernel:oom_test` 486 s, `src/cli/validate:oom_test` 382 s, `load_oom_test` 133 s (they grew after this table was first measured at 130 s); the rest under 40 s (`corpus_test`) or 5 s |
 | `valgrind_e2e`, six cases in parallel | about 6 s | about 5.5 s each |
+
+The three oom sweeps are `timeout = "eternal"`, and `.bazelrc` gives `--config=valgrind` 300 s for every
+other size and 3600 s for eternal: a runner with fewer cores takes longer than the devcontainer.
 
 `load_oom_test` fails every allocation on the load path in turn and starts a
 LuaJIT VM for each, which is 0.5 s plain and a hundred times that traced. It is the

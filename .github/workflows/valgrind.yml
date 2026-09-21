@@ -35,7 +35,7 @@ jobs:
           cache-key: valgrind
           ssh-target: "true"
       - run: valgrind --version
-      - run: bazel test //tests/e2e:valgrind_e2e
+      - run: bazel test --config=valgrind //tests/e2e:valgrind_e2e
       - if: failure()
         uses: ./.github/actions/collect-logs
         with:

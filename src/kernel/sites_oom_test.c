@@ -18,11 +18,17 @@ static int redact_case(void *arg)
 {
 	struct qwe_redactor r = {0};
 	struct qwe_redact_buf out = {0};
+	int res;
 
 	(void)arg;
 	if (qwe_redact_feed(&r, "aa hunter2 bb hunt", 18, &out) < 0 || qwe_redact_flush(&r, &out) < 0)
-		return 0;
-	return out.len == 14 && memcmp(out.data, "aa *** bb hunt", 14) == 0 ? 1 : 2;
+		res = 0;
+	else
+		res = out.len == 14 && memcmp(out.data, "aa *** bb hunt", 14) == 0 ? 1 : 2;
+	/* the probe child exits next, but valgrind reports what it still owns as lost */
+	qwe_redact_buf_free(&out);
+	qwe_redactor_free(&r);
+	return res;
 }
 
 /* Runs a chunk that returns "ok", or fails with a message that says memory. */

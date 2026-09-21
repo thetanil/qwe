@@ -34,7 +34,8 @@ test:asan --test_env=ASAN_OPTIONS=detect_leaks=1:abort_on_error=0
 build:valgrind --define=qwe_valgrind=1
 build:valgrind --copt=-g --strip=never
 test:valgrind --run_under=//tools/valgrind:run_under
-test:valgrind --test_timeout=300
+# short, moderate, long, eternal: only the oom sweeps (timeout = "eternal") need more than 300 s
+test:valgrind --test_timeout=300,300,300,3600
 
 # Lua coverage (quality/10): the qwe binary and luarun write lcov for the Lua they run into
 # $COVERAGE_DIR, which bazel merges into the combined report with the C.
