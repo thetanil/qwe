@@ -17,7 +17,7 @@ skipped one a failure).
 | Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | nightly, release and manual | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
 | Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | nightly, release and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
 | Coverage floor | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/coverage/floor.txt` |
-| Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | manual | hours; four processes in parallel | any crash artifact exists |
+| Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | nightly (3600 s) and manual | hours; four processes in parallel | any crash artifact exists |
 
 Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
 `docs/coverage.md` and `docs/fuzzing.md`. What follows is only what CI needs.
@@ -51,7 +51,7 @@ from `nightly.yml` and `release.yml` (by `workflow_call`), never on a push. `wor
 `nightly.yml` runs at 02:17 UTC and on demand. It first deletes every `setup-bazel-*` cache (a saved
 cache key is never rewritten, so the gates' caches go stale), then calls all five gate workflows:
 tests, asan, ubsan, valgrind and coverage. They run cold and save fresh caches, which pushes to main
-then restore. It does not run the fuzzer. `workflows_test` fails if it stops calling one of the five.
+then restore. It also calls `fuzz.yml` for 3600 seconds (release does not). `workflows_test` fails if it stops calling one of the five gates or the fuzzer.
 
 `release.yml` runs on a pushed tag `v*`. Write the release in the GitHub web UI (its notes, and the tag it
 creates on publish), or push the tag yourself. All five gates run again at the tagged commit (not the

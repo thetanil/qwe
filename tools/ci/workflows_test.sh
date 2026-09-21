@@ -10,7 +10,7 @@
 #  2. every command in the "Every push" and "On demand" code blocks of docs/ci-checks.md
 #     appears in some workflow file
 #  4. nightly.yml and release.yml call all five gate workflows (tests asan ubsan valgrind coverage)
-#  5. fuzz.yml starts only on workflow_dispatch: no push, schedule or workflow_call
+#  5. fuzz.yml never starts on a push or a schedule of its own; nightly.yml calls it and release.yml does not
 #  3. every workflow but fuzz.yml, release.yml and nightly.yml runs on workflow_call, and on push to main
 #     (valgrind.yml is on demand and must not run on push)
 here=$(cd "$(dirname "$0")/../.." && pwd)
@@ -33,8 +33,8 @@ check_repo() {
 			bad=1
 		fi
 	done
-	if [ -f .github/workflows/fuzz.yml ] && grep -Eq "^  (push|schedule|workflow_call):" .github/workflows/fuzz.yml; then
-		echo "rule 5: fuzz.yml must start only on workflow_dispatch" >&2
+	if [ -f .github/workflows/fuzz.yml ] && grep -Eq "^  (push|schedule):" .github/workflows/fuzz.yml; then
+		echo "rule 5: fuzz.yml must not start on push or schedule" >&2
 		bad=1
 	fi
 	for caller in nightly release; do
@@ -45,6 +45,8 @@ check_repo() {
 			fi
 		done
 	done
+	grep -q "uses: ./.github/workflows/fuzz.yml" .github/workflows/nightly.yml 2>/dev/null || { echo "rule 5: nightly.yml does not call fuzz.yml" >&2; bad=1; }
+	! grep -q "uses: ./.github/workflows/fuzz.yml" .github/workflows/release.yml 2>/dev/null || { echo "rule 5: release.yml must not call fuzz.yml" >&2; bad=1; }
 	for w in $(grep -o 'actions/workflows/[A-Za-z0-9_.-]*\.yml/badge.svg' README.md | sed -e 's|actions/workflows/||' -e 's|/badge.svg||'); do
 		if [ ! -f ".github/workflows/$w" ]; then
 			echo "rule 1: README badge names $w, which does not exist" >&2
@@ -110,7 +112,8 @@ case_non_workflow_badge() { expect_pass non_workflow_badge 'echo "[![c](https://
 case_fuzz_manual_only() {
 	expect_fail fuzz_push 'sed -i "s/^  workflow_dispatch:/  push:\n    branches: [main]\n  workflow_dispatch:/" .github/workflows/fuzz.yml' &&
 		expect_fail fuzz_schedule 'sed -i "s/^  workflow_dispatch:/  schedule:\n    - cron: \"0 3 * * *\"\n  workflow_dispatch:/" .github/workflows/fuzz.yml' &&
-		expect_fail fuzz_call 'sed -i "s/^  workflow_dispatch:/  workflow_call:\n  workflow_dispatch:/" .github/workflows/fuzz.yml'
+		expect_fail nightly_drops_fuzz 'sed -i "/fuzz.yml/d" .github/workflows/nightly.yml' &&
+		expect_fail release_calls_fuzz 'printf "  fuzz:\n    uses: ./.github/workflows/fuzz.yml\n" >> .github/workflows/release.yml'
 }
 case_repo_is_consistent() { (check_repo "$here"); }
 

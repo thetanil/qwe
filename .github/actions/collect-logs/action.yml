@@ -15,7 +15,7 @@ runs:
         cd "$(bazel info bazel-testlogs 2>/dev/null)" || exit 0
         find . \( -name test.log -o -name outputs.zip -o -name test.outputs \) -print0 |
           xargs -0 -r cp -r --parents -t "$dest"
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.name }}
         path: ${{ runner.temp }}/testlogs

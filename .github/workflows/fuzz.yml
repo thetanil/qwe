@@ -6,10 +6,15 @@ on:
         description: Seconds each of the four fuzz processes runs (at most 19800)
         default: "3600"
         required: true
+  workflow_call:
+    inputs:
+      seconds:
+        type: string
+        default: "3600"
 permissions:
   contents: read
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-fuzz-${{ github.ref }}
   cancel-in-progress: false
 env:
   QWE_FUZZ_DIR: ${{ github.workspace }}/.fuzz
@@ -68,7 +73,7 @@ jobs:
             ${{ env.QWE_FUZZ_DIR }}
             !${{ env.QWE_FUZZ_DIR }}/*-crashes
           key: fuzz-corpus-${{ github.run_id }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: fuzz-findings

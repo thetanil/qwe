@@ -26,7 +26,7 @@ scheduled run should point `QWE_FUZZ_DIR` at a persistent volume.
 `src/edge/yaml/corpus/`. `//src/edge/yaml:corpus_test` replays that directory and
 every e2e workflow through both entry points in the normal suite.
 
-**Home:** manual dispatch of `fuzz.yml` (never a push, tag or schedule; the release
+**Home:** `fuzz.yml`: the nightly calls it for 3600 s, or start it by hand (never a push or tag; the release
 does not call it):
 
 ```

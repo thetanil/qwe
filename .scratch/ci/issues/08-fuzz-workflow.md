@@ -57,3 +57,5 @@ go. `nightly.sh` keeps its name, because renaming it is not worth the churn.
 - A step checks that clang links libFuzzer (`-fsanitize=fuzzer,address`) and prints `nproc`, so a runner image without either fails fast.
 - The summary reads `stat::number_of_executed_units` and the last `#N DONE cov: … corp: …` line of each log; the format is unconfirmed until a real run.
 - `workflows_test` rule 5 covers the push, schedule and workflow_call cases (`fuzz_manual_only`).
+- Changed by the user after this ticket: `fuzz.yml` also has `workflow_call` (input `seconds`, default 3600) and `nightly.yml` calls it with `seconds: "3600"`. The release still does not. `workflows_test` rule 5 now allows `workflow_call`, still forbids `push` and `schedule`, requires the nightly to call `fuzz.yml` and the release not to.
+- `actions/upload-artifact` moved from v4 to v7 (workflows and `collect-logs`).

@@ -168,8 +168,8 @@ what each one fails on.
 | `ubsan` | the suite under UBSan | every push to `main` |
 | `coverage` | the coverage floor, and the HTML report as an artifact | every push to `main` |
 | `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes) | by hand, nightly, and in a release |
-| `nightly` | all five of the above, from fresh caches | 02:17 UTC, and by hand |
-| `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | by hand only |
+| `nightly` | all five of the above, from fresh caches, and `fuzz` | 02:17 UTC, and by hand |
+| `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | nightly (one hour), and by hand |
 | `release` | all five again, then builds and publishes | a pushed tag `v*` |
 
 - **Runner and setup.** `ubuntu-24.04`, Bazel from `.bazelversion`, the caches through
@@ -179,7 +179,7 @@ what each one fails on.
 - **Caches.** A saved cache key never changes, so a cache slowly goes stale. The nightly deletes the
   `setup-bazel-*` caches and rebuilds them, and pushes to `main` restore the result.
 - **Coverage report.** A green push to `main` publishes the HTML report and a line-coverage percentage badge (`coverage.json`) to GitHub Pages, from the last job of `coverage.yml`.
-- **Fuzzing** is never part of a push, the nightly or a release. Start it by hand and read the result:
+- **Fuzzing** runs for 3600 s in the nightly, never on a push or in a release. Start it by hand and read the result:
   ```
   gh workflow run fuzz.yml -f seconds=3600     # seconds: at most 19800; 300 is a quick trial
   gh run list --workflow=fuzz.yml --limit 3    # find the run

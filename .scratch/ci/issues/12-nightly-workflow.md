@@ -21,3 +21,5 @@ with `github.workflow`, so a nightly run and a push do not cancel one another.
 - [ ] The nightly badge renders. `manual: view README on github.com`
 
 ## Comments
+
+- The nightly also calls `fuzz.yml` for 3600 s (see ticket 08). Not yet seen running.
