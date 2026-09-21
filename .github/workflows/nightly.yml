@@ -1,6 +1,6 @@
 name: nightly
 # A full run at night: every gate, valgrind included, from caches rebuilt from scratch.
-# release.yml releases the commit of the last green run of this workflow.
+# (release.yml runs the same gates again at a tag; this run keeps the caches fresh.)
 on:
   schedule:
     - cron: "17 2 * * *"

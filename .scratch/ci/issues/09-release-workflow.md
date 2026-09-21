@@ -1,6 +1,6 @@
 # 09: The release workflow
 
-Status: ready-for-agent
+Status: in-progress (manual criteria await a tag)
 Category: enhancement
 Type: task
 Blocked by: 06
@@ -48,11 +48,11 @@ feature finishes.
 
 ## Acceptance criteria
 
-- [ ] `check_version.sh` passes when the tag and `qwe --version` match `QWE_VERSION`. `unit: tools/release/check_version_test.sh::match`
-- [ ] It fails, naming both values, when the tag differs from `QWE_VERSION`. `unit: tools/release/check_version_test.sh::tag_mismatch`
-- [ ] It fails when the binary's `--version` differs, using a stub binary. `unit: tools/release/check_version_test.sh::binary_mismatch`
-- [ ] It accepts a matching pre-release suffix and refuses a tag without the `v`. `unit: tools/release/check_version_test.sh::prerelease_and_prefix`
-- [ ] `workflows_test` accepts `release.yml` without a push-to-main trigger, and checks that it calls all five gate workflows. `unit: tools/ci/workflows_test.sh::release_calls_every_gate`
+- [x] `check_version.sh` passes when the tag and `qwe --version` match `QWE_VERSION`. `unit: tools/release/check_version_test.sh::match`
+- [x] It fails, naming both values, when the tag differs from `QWE_VERSION`. `unit: tools/release/check_version_test.sh::tag_mismatch`
+- [x] It fails when the binary's `--version` differs, using a stub binary. `unit: tools/release/check_version_test.sh::binary_mismatch`
+- [x] It accepts a matching pre-release suffix and refuses a tag without the `v`. `unit: tools/release/check_version_test.sh::prerelease_and_prefix`
+- [x] `workflows_test` accepts `release.yml` without a push-to-main trigger, and checks that it calls all five gate workflows. `unit: tools/ci/workflows_test.sh::release_calls_every_gate`
 - [ ] Pushing `v0.1.0` runs all five gates, then builds and publishes a release with `qwe`, `qwe-debug` and `SHA256SUMS`, and the downloaded `qwe --version` prints `qwe 0.1.0`. `manual: git tag v0.1.0 && push the tag; download; sha256sum -c SHA256SUMS; ./qwe --version`
 - [ ] The downloaded `qwe` is static, and `qwe validate` runs on a workflow from `tests/e2e/` on a machine without the repo. `manual: file qwe; ./qwe validate <copied case>`
 - [ ] A tag that does not match `QWE_VERSION` fails before publishing, and no release is created. `manual: push v9.9.9-rc0 on a throwaway commit; confirm red and no release; delete the tag`
@@ -61,5 +61,4 @@ feature finishes.
 
 ## Comments
 
-- Design change (user, after tickets 01-06): a release is no longer a pushed tag that reruns the gates. `release.yml` is `workflow_dispatch` with a `version`, takes the commit of the last green `nightly.yml` run on main, builds and checks the version there (`tools/release/check_version.sh`, tested by `//tools/release:check_version_test`), and creates the release with `--target <sha>`, so the tag is made at a tested commit. The commit is in the title, the notes, and the tag. The gates are `nightly.yml`'s job (ticket 12). Provenance (`attest-build-provenance`) is not included; add it if wanted.
-- Not done from the original text: `unit: workflows_test.sh::release_calls_every_gate` became `nightly_calls_every_gate`; the pushed-tag manual criteria no longer apply. The remaining manual criteria (run it; `sha256sum -c`; `file qwe`; the mismatch failing before publishing) need a real run.
+- Implemented as specified, with one change (user): the release is normally written in the web UI, so `release.yml` also accepts a release that already exists for the tag: binaries are uploaded to it, the commit hash is appended to its notes, and if a gate or the version check fails it is turned back into a draft. Provenance (`attest-build-provenance`) is not included; add it if wanted. `workflows_test` checks `release_calls_every_gate`; `//tools/release:check_version_test` covers the version script. The manual criteria need a real tag.

@@ -14,8 +14,8 @@ skipped one a failure).
 | Tests | `tests.yml` | `bazel test //...` | every push to main | seconds, warm cache | any test fails |
 | ASan + LSan | `asan.yml` | `bazel test --config=asan //...` | every push to main | about the plain suite | a memory error or leak |
 | UBSan | `ubsan.yml` | `bazel test --config=ubsan //...` | every push to main | about the plain suite | undefined behaviour |
-| Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | nightly, and manual | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
-| Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | nightly, and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
+| Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | nightly, release and manual | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
+| Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | nightly, release and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
 | Coverage floor | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/coverage/floor.txt` |
 | Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | manual | hours; four processes in parallel | any crash artifact exists |
 
@@ -42,7 +42,7 @@ an artifact.
 ## On demand
 
 Valgrind takes 23 minutes on a runner, so `valgrind.yml` runs only from `workflow_dispatch` and
-from `nightly.yml` (by `workflow_call`), never on a push. `workflows_test` checks these commands too.
+from `nightly.yml` and `release.yml` (by `workflow_call`), never on a push. `workflows_test` checks these commands too.
 
 ```
 
@@ -53,13 +53,14 @@ cache key is never rewritten, so the gates' caches go stale), then calls all fiv
 tests, asan, ubsan, valgrind and coverage. They run cold and save fresh caches, which pushes to main
 then restore. It does not run the fuzzer. `workflows_test` fails if it stops calling one of the five.
 
-`release.yml` is started by hand with a version (`0.1.0`, or `0.2.0-rc1` for a pre-release). It takes the
-commit of the **last green nightly run on main**, builds `qwe` and `qwe-debug` there, checks with
-`tools/release/check_version.sh` that the tag `v<version>`, `QWE_VERSION` in `src/kernel/qwe.h` and
-`qwe --version` all agree, and creates the release with `--target <that commit>`, which also creates
-the tag. The release is titled `v<version> (<short sha>)`, its notes name the full commit and the nightly
-run, and it carries the two binaries and `SHA256SUMS`. It does not rerun the gates: the nightly did.
-Bump `QWE_VERSION`, push, wait for a green nightly, then run the release.
+`release.yml` runs on a pushed tag `v*`. Write the release in the GitHub web UI (its notes, and the tag it
+creates on publish), or push the tag yourself. All five gates run again at the tagged commit (not the
+fuzzer); then `qwe` and `qwe-debug` are built, `tools/release/check_version.sh` checks that the tag,
+`QWE_VERSION` in `src/kernel/qwe.h` and `qwe --version` agree, and the two binaries and `SHA256SUMS` are
+attached to the release. The full commit hash is appended to the release notes (a release created by the
+workflow is titled `<tag> (<short sha>)`). A release made in the web UI is public while the gates run; if a
+gate or the version check fails, the workflow turns it back into a draft. A pre-release tag
+(`v0.2.0-rc1`) is published as a pre-release. Bump `QWE_VERSION` first, or the version check fails.
 bazel test --config=valgrind //...
 bazel test --config=valgrind //tests/e2e:valgrind_e2e
 ```

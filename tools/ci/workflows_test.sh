@@ -1,7 +1,7 @@
 #!/bin/bash
 # usage: workflows_test.sh [case...]     (no argument: every case)
 #
-# Cases: badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate repo_is_consistent.
+# Cases: badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate repo_is_consistent.
 # The first four build a copy of the repo's CI files, break one thing, and expect
 # check_repo to fail; repo_is_consistent runs check_repo on the files as committed.
 #
@@ -9,7 +9,7 @@
 #  1. every .github/workflows/<w>.yml has a badge in README.md, and every badge names a workflow file
 #  2. every command in the "Every push" and "On demand" code blocks of docs/ci-checks.md
 #     appears in some workflow file
-#  4. nightly.yml calls all five gate workflows (tests asan ubsan valgrind coverage)
+#  4. nightly.yml and release.yml call all five gate workflows (tests asan ubsan valgrind coverage)
 #  3. every workflow but fuzz.yml, release.yml and nightly.yml runs on workflow_call, and on push to main
 #     (valgrind.yml is on demand and must not run on push)
 here=$(cd "$(dirname "$0")/../.." && pwd)
@@ -32,11 +32,13 @@ check_repo() {
 			bad=1
 		fi
 	done
-	for g in tests asan ubsan valgrind coverage; do
-		if ! grep -q "uses: ./.github/workflows/$g.yml" .github/workflows/nightly.yml 2>/dev/null; then
-			echo "rule 4: nightly.yml does not call $g.yml" >&2
-			bad=1
-		fi
+	for caller in nightly release; do
+		for g in tests asan ubsan valgrind coverage; do
+			if ! grep -q "uses: ./.github/workflows/$g.yml" ".github/workflows/$caller.yml" 2>/dev/null; then
+				echo "rule 4: $caller.yml does not call $g.yml" >&2
+				bad=1
+			fi
+		done
 	done
 	for w in $(grep -o 'actions/workflows/[A-Za-z0-9_.-]*\.yml/badge.svg' README.md | sed -e 's|actions/workflows/||' -e 's|/badge.svg||'); do
 		if [ ! -f ".github/workflows/$w" ]; then
@@ -86,9 +88,10 @@ case_badge_dangling() { expect_fail badge_dangling 'echo "[![x](https://github.c
 case_command_unwired() { expect_fail command_unwired 'sed -i "s|bazel test //\.\.\.|bazel test //nothing|" .github/workflows/tests.yml'; }
 case_trigger_missing() { expect_fail trigger_missing 'sed -i "/workflow_call:/d" .github/workflows/tests.yml'; }
 case_nightly_calls_every_gate() { expect_fail nightly_calls_every_gate 'sed -i "/valgrind.yml/d" .github/workflows/nightly.yml'; }
+case_release_calls_every_gate() { expect_fail release_calls_every_gate 'sed -i "/coverage.yml/d" .github/workflows/release.yml'; }
 case_repo_is_consistent() { (check_repo "$here"); }
 
-cases=${*:-badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate repo_is_consistent}
+cases=${*:-badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate repo_is_consistent}
 rc=0
 for c in $cases; do
 	if "case_$c"; then echo "PASS: $c"; else echo "FAIL: $c" >&2; rc=1; fi

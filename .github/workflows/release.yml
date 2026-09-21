@@ -1,66 +1,83 @@
 name: release
-# Publishes a release of the commit the last green nightly run tested. Start it by hand
-# with the version; the tag v<version> is created at that commit, so the release is
-# always something that passed the full gate, and its notes name the commit.
+# A release is a pushed tag v<version>. Write the release in the GitHub web UI (notes, and the tag
+# it creates on publish), or push a tag. Every gate runs again at that commit; then the binaries
+# and checksums are attached to the release (created here if the tag has none). If any gate or
+# the version check fails, an existing release is turned back into a draft, so nothing broken
+# stays public. Fuzzing is not part of this.
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version without the v, e.g. 0.1.0 or 0.2.0-rc1. Must equal QWE_VERSION in src/kernel/qwe.h at that commit."
-        required: true
+  push:
+    tags: ["v*"]
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  release:
+  tests:
+    uses: ./.github/workflows/tests.yml
+  asan:
+    uses: ./.github/workflows/asan.yml
+  ubsan:
+    uses: ./.github/workflows/ubsan.yml
+  valgrind:
+    uses: ./.github/workflows/valgrind.yml
+  coverage:
+    uses: ./.github/workflows/coverage.yml
+  publish:
+    needs: [tests, asan, ubsan, valgrind, coverage]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      VERSION: ${{ inputs.version }}
+      TAG: ${{ github.ref_name }}
     steps:
-      - name: Find the last green nightly run
-        id: nightly
-        run: |
-          set -eu
-          row=$(gh run list -R "$GITHUB_REPOSITORY" --workflow nightly.yml --branch main --status success \
-            --limit 1 --json headSha,url -q '.[0] | "\(.headSha) \(.url)"')
-          [ -n "$row" ] && [ "$row" != "null null" ] || { echo "no green nightly run on main: run the nightly workflow first" >&2; exit 1; }
-          echo "sha=${row%% *}" >> "$GITHUB_OUTPUT"
-          echo "url=${row#* }" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.nightly.outputs.sha }}
-      - name: The tag is free
-        run: |
-          if gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "v$VERSION" >/dev/null 2>&1; then
-            echo "v$VERSION already exists" >&2; exit 1
-          fi
       - uses: ./.github/actions/setup
         with:
           cache-key: release
       - name: Build
         run: bazel build //src/cli:qwe //src/cli:qwe-debug
-      - name: The version matches
-        run: tools/release/check_version.sh "v$VERSION" bazel-bin/src/cli/qwe
+      - name: The version matches the tag
+        run: tools/release/check_version.sh "$TAG" bazel-bin/src/cli/qwe
       - name: Package
         run: |
           set -eu
+          v=${TAG#v}
           mkdir dist
-          cp bazel-bin/src/cli/qwe "dist/qwe-$VERSION-linux-x86_64"
-          cp bazel-bin/src/cli/qwe-debug "dist/qwe-debug-$VERSION-linux-x86_64"
+          cp bazel-bin/src/cli/qwe "dist/qwe-$v-linux-x86_64"
+          cp bazel-bin/src/cli/qwe-debug "dist/qwe-debug-$v-linux-x86_64"
           file dist/*
           (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
-      - name: Publish
-        env:
-          SHA: ${{ steps.nightly.outputs.sha }}
-          NIGHTLY: ${{ steps.nightly.outputs.url }}
+      - name: Attach to the release
         run: |
           set -eu
-          short=$(echo "$SHA" | cut -c1-7)
+          sha=$(git rev-parse HEAD)
+          note="Built from commit \`$sha\`, after all gates passed on it."
           pre=
-          case $VERSION in *-*) pre=--prerelease ;; esac
-          gh release create "v$VERSION" dist/* -R "$GITHUB_REPOSITORY" \
-            --target "$SHA" --title "v$VERSION ($short)" $pre --generate-notes \
-            --notes "Built from commit \`$SHA\`, which passed the full gate in $NIGHTLY."
+          case $TAG in *-*) pre=--prerelease ;; esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            body=$(gh release view "$TAG" --json body -q .body)
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --notes "$body
+
+          $note"
+          else
+            gh release create "$TAG" dist/* --verify-tag --title "$TAG ($(echo "$sha" | cut -c1-7))" $pre --generate-notes --notes "$note"
+          fi
+  draft-on-failure:
+    # A release published in the web UI is already public when the gates start.
+    needs: [tests, asan, ubsan, valgrind, coverage, publish]
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft
+            echo "$TAG turned back into a draft: a gate or the version check failed" >&2
+          fi

@@ -10,7 +10,7 @@ Blocked by: 06
 `nightly.yml`, on a schedule (02:17 UTC) and `workflow_dispatch`. It deletes every `setup-bazel-*`
 Actions cache (a saved key is never rewritten, so the gates' caches go stale), then calls the five gate
 workflows (tests, asan, ubsan, valgrind, coverage) with `uses:`. They run cold and save fresh caches.
-`release.yml` releases the commit of its last green run. The called gates' concurrency groups now start
+The called gates' concurrency groups now start
 with `github.workflow`, so a nightly run and a push do not cancel one another.
 
 ## Acceptance criteria
