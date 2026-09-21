@@ -43,3 +43,7 @@ Add the valgrind badge.
 ## Comments
 
 - valgrind.yml added with badge: jobs unit and e2e in parallel, each printing valgrind --version. Timing row for docs/valgrind.md and the runner's version are to be copied from the first run. valgrind_smoke_test is an ordinary cc_test, so it runs in unit.
+
+- First run (19fb71c, run 35623889413), both jobs red, not fixed here because each needs a decision:
+  - `e2e`: all six `*_valgrind_test` report `Syscall param set_robust_list(head) points to uninitialised byte(s)` (address in the brk data segment) in the static `qwe`. Runner has valgrind 3.22.0 and glibc 2.39. Cause unverified; a suppression would change the gate.
+  - `unit`: `//src/cli/validate:oom_test` hit the 300 s `--test_timeout` (the runner is slower than the 16-core devcontainer), and `//src/kernel:sites_oom_test` reported `4 bytes ... definitely lost` via realloc. Not yet looked at.
