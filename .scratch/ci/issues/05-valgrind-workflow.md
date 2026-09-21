@@ -54,3 +54,5 @@ Add the valgrind badge.
   - `unit`, timeouts: `src/kernel:oom_test` takes 486 s, `src/cli/validate:oom_test` 382 s and `load_oom_test` 133 s in the devcontainer (16 cores), so they exceed the 300 s limit. Not excluded: the three are `timeout = "eternal"` and `.bazelrc` gives eternal 3600 s under `--config=valgrind`. `bazel test --config=valgrind //...` is green locally in 8 min. The runner has fewer cores: its timing is the next thing to record.
 
 - Runner timing recorded in docs/valgrind.md (run 35643065173): unit 23 min, e2e 2 min, valgrind-3.22.0 as in the devcontainer. load_oom_test took 288 s on the runner, so the eternal timeout was needed.
+
+- valgrind.yml now runs only on `workflow_dispatch` and `workflow_call` (release), not on push: it takes 23 min on a runner. `workflows_test` rule 3 requires that (no push trigger), and rule 2 reads the new "On demand" block of docs/ci-checks.md as well as "Every push".

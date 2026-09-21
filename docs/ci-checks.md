@@ -14,8 +14,8 @@ skipped one a failure).
 | Tests | `tests.yml` | `bazel test //...` | every push to main | seconds, warm cache | any test fails |
 | ASan + LSan | `asan.yml` | `bazel test --config=asan //...` | every push to main | about the plain suite | a memory error or leak |
 | UBSan | `ubsan.yml` | `bazel test --config=ubsan //...` | every push to main | about the plain suite | undefined behaviour |
-| Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | every push to main | about 8 min locally (the three oom sweeps: `oom_test` 486 s) | any error, leak or unsuppressed report |
-| Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | every push to main | about 6 s | the same, in qwe and its step children |
+| Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | manual, and in every release | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
+| Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | manual, and in every release | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
 | Coverage floor | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/coverage/floor.txt` |
 | Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | manual | hours; four processes in parallel | any crash artifact exists |
 
@@ -28,8 +28,6 @@ Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
 bazel test //...
 bazel test --config=asan //...
 bazel test --config=ubsan //...
-bazel test --config=valgrind //...
-bazel test --config=valgrind //tests/e2e:valgrind_e2e
 bazel run //tools/coverage:check
 ```
 
@@ -40,6 +38,16 @@ tests raises a count and fails; deleting code cannot fail. After adding tests,
 is committed on purpose. For a browsable report, `bazel run //tools/coverage:html`
 (needs `genhtml`, from the `lcov` package) writes `coverage-html/`; the coverage workflow uploads it as
 an artifact.
+
+## On demand
+
+Valgrind takes 23 minutes on a runner, so `valgrind.yml` runs only from `workflow_dispatch` (and
+from `release.yml`, by `workflow_call`), never on a push. `workflows_test` checks these commands too.
+
+```
+bazel test --config=valgrind //...
+bazel test --config=valgrind //tests/e2e:valgrind_e2e
+```
 
 MSan is not supported (`docs/sanitizers.md` says why); do not add a job for it.
 The `sanitizer_smoke_*` tests each config builds fault on purpose and pass only

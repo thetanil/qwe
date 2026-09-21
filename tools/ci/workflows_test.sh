@@ -7,9 +7,10 @@
 #
 # check_repo <root> rules:
 #  1. every .github/workflows/<w>.yml has a badge in README.md, and every badge names a workflow file
-#  2. every command in the "Every push" (formerly "Every change") code block of docs/ci-checks.md
+#  2. every command in the "Every push" and "On demand" code blocks of docs/ci-checks.md
 #     appears in some workflow file
-#  3. every workflow but fuzz.yml and release.yml runs on push to main and on workflow_call
+#  3. every workflow but fuzz.yml and release.yml runs on workflow_call, and on push to main
+#     (valgrind.yml is on demand and must not run on push)
 here=$(cd "$(dirname "$0")/../.." && pwd)
 
 check_repo() {
@@ -23,8 +24,10 @@ check_repo() {
 			bad=1
 		fi
 		case $w in fuzz.yml | release.yml) continue ;; esac
-		if ! grep -q 'workflow_call:' "$f" || ! grep -q 'branches: \[main\]' "$f"; then
-			echo "rule 3: $w lacks push to main or workflow_call" >&2
+		push=$(grep -c 'branches: \[main\]' "$f")
+		if [ "$w" = valgrind.yml ]; then want=0; else want=1; fi # valgrind: on demand only
+		if ! grep -q 'workflow_call:' "$f" || [ "$push" -ne "$want" ]; then
+			echo "rule 3: $w must have workflow_call, and push to main only if it runs on every push" >&2
 			bad=1
 		fi
 	done
@@ -34,7 +37,7 @@ check_repo() {
 			bad=1
 		fi
 	done
-	cmds=$(awk '/^## Every (change|push)$/ {s=1; next} s && /^```/ {n++; if (n==2) exit; next} s && n==1 {print}' docs/ci-checks.md)
+	cmds=$(awk '/^## / {s = ($0 ~ /^## (Every push|On demand)$/); n = 0; next} s && /^```/ {n++; next} s && n==1 {print}' docs/ci-checks.md)
 	if [ -z "$cmds" ]; then
 		echo "rule 2: no code block under '## Every push' in docs/ci-checks.md" >&2
 		bad=1
