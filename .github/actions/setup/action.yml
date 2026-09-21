@@ -64,7 +64,6 @@ runs:
         if ssh -o BatchMode=yes 172.18.0.1 sudo -n true 2>/dev/null; then
           echo "the ssh user still has passwordless sudo" >&2; exit 1
         fi
-        {
-          echo "test --test_env=REMOTE_CONTAINERS=1"
-          echo "test --test_env=QWE_E2E_REQUIRE_SSH=1"
-        } >> ~/.bazelrc
+        # the repo .bazelrc passes both through to the tests (setup-bazel owns ~/.bazelrc, so no test_env there)
+        echo "REMOTE_CONTAINERS=1" >> "$GITHUB_ENV"
+        echo "QWE_E2E_REQUIRE_SSH=1" >> "$GITHUB_ENV"

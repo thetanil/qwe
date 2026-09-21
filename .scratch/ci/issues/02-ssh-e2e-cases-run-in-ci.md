@@ -58,4 +58,4 @@ not, so local runs without the host still skip.
 - Implemented as `//tests/e2e:require_ssh_test` (an sh_test with a fake failing `ssh`), not an e2e case dir: a case runs under the real environment, where the target may be reachable.
 - Approach used: the preferred one, `172.18.0.1/32` added to `lo`, `known_hosts` pre-seeded by ssh-keyscan; no case files changed. Whether it works on a runner is checked by the first run.
 - The `ssh_become_*` assumption: only `ssh_become_denied` uses sudo, and it expects no passwordless sudo for the ssh user (zeta's). The runner user has it, so the setup action deletes `/etc/sudoers.d/runner` last and checks `sudo -n true` fails over ssh.
-- `.bazelrc` passes `QWE_E2E_REQUIRE_SSH` through; the action's `~/.bazelrc` sets it and `REMOTE_CONTAINERS=1` to 1.
+- `.bazelrc` passes `QWE_E2E_REQUIRE_SSH` and `REMOTE_CONTAINERS` through; the setup action exports both as 1 through `$GITHUB_ENV` (a `~/.bazelrc` append did not survive setup-bazel).
