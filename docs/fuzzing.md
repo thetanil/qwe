@@ -26,7 +26,19 @@ scheduled run should point `QWE_FUZZ_DIR` at a persistent volume.
 `src/edge/yaml/corpus/`. `//src/edge/yaml:corpus_test` replays that directory and
 every e2e workflow through both entry points in the normal suite.
 
-**Scheduled home:** CI. `tools/fuzz/nightly.sh` runs both targets under `asan` and
-`ubsan` in parallel (one hour each by default) against the persistent corpus and
-exits non-zero if any crash artifact exists. The CI job is not written yet; it
-must persist `$QWE_FUZZ_DIR` between runs.
+**Home:** manual dispatch of `fuzz.yml` (never a push, tag or schedule; the release
+does not call it):
+
+```
+gh workflow run fuzz.yml -f seconds=3600
+```
+
+`seconds` is at most 19800. The job runs `tools/fuzz/nightly.sh` (kept under that
+name), which fuzzes both targets under `asan` and `ubsan` in parallel against the
+persistent corpus and exits non-zero if any crash artifact exists. The corpus
+(`$QWE_FUZZ_DIR`, `.fuzz/` in the workspace) is restored from and saved to the
+Actions cache under `fuzz-corpus-<run id>`, crashes excluded. Crashes and the
+`.log` files are uploaded as the `fuzz-findings` artifact; the job summary lists
+each process's executions, corpus size and coverage.
+
+Numbers from a first one-hour run: not recorded yet.

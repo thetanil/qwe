@@ -1,6 +1,6 @@
 # 08: The fuzz workflow, started by hand
 
-Status: ready-for-agent
+Status: in-progress (manual criteria await a dispatch)
 Category: enhancement
 Type: task
 Blocked by: 01
@@ -42,8 +42,8 @@ go. `nightly.sh` keeps its name, because renaming it is not worth the churn.
 
 ## Acceptance criteria
 
-- [ ] `workflows_test` accepts `fuzz.yml` without a push trigger, and fails if `fuzz.yml` gains one (push, schedule or `workflow_call`). `unit: tools/ci/workflows_test.sh::fuzz_manual_only`
-- [ ] `workflows_test` passes with `fuzz.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
+- [x] `workflows_test` accepts `fuzz.yml` without a push trigger, and fails if `fuzz.yml` gains one (push, schedule or `workflow_call`). `unit: tools/ci/workflows_test.sh::fuzz_manual_only`
+- [x] `workflows_test` passes with `fuzz.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
 - [ ] A push to `main` does not start `fuzz.yml`. `manual: push; check the Actions list`
 - [ ] A dispatch with `seconds=300` builds, fuzzes, saves the corpus cache and finishes green, and the summary shows the four processes' numbers. `manual: gh workflow run fuzz.yml -f seconds=300`
 - [ ] A second dispatch restores the first run's corpus, and its log shows the larger starting corpus. `manual: dispatch again; compare the "INITED" lines`
@@ -52,3 +52,8 @@ go. `nightly.sh` keeps its name, because renaming it is not worth the churn.
 - [ ] The fuzz badge renders. `manual: view README on github.com`
 
 ## Comments
+
+- `timeout-minutes` is a constant 350: workflow expressions have no arithmetic, so it cannot be derived from `seconds`. The first step caps `seconds` at 19800, which keeps the run inside it.
+- A step checks that clang links libFuzzer (`-fsanitize=fuzzer,address`) and prints `nproc`, so a runner image without either fails fast.
+- The summary reads `stat::number_of_executed_units` and the last `#N DONE cov: … corp: …` line of each log; the format is unconfirmed until a real run.
+- `workflows_test` rule 5 covers the push, schedule and workflow_call cases (`fuzz_manual_only`).

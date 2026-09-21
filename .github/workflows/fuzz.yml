@@ -1,0 +1,78 @@
+name: fuzz
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds each of the four fuzz processes runs (at most 19800)
+        default: "3600"
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  QWE_FUZZ_DIR: ${{ github.workspace }}/.fuzz
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    # Expressions have no arithmetic, so this cannot follow `seconds`; the first step
+    # caps `seconds` at 19800 (5.5 h), which leaves room to build and upload.
+    timeout-minutes: 350
+    steps:
+      - name: Reject a run that would not fit in the job
+        env:
+          SECONDS_IN: ${{ inputs.seconds }}
+        run: |
+          case $SECONDS_IN in '' | *[!0-9]*) echo "seconds must be a whole number" >&2; exit 1 ;; esac
+          [ "$SECONDS_IN" -ge 1 ] && [ "$SECONDS_IN" -le 19800 ] || { echo "seconds must be 1..19800" >&2; exit 1; }
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          apt: clang
+          cache-key: fuzz
+      - name: clang has libFuzzer
+        run: |
+          clang --version
+          nproc
+          echo 'int LLVMFuzzerTestOneInput(const unsigned char *d, unsigned long n) { return 0; }' |
+            clang -x c -fsanitize=fuzzer,address -o /dev/null -
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.QWE_FUZZ_DIR }}
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+      - name: Fuzz
+        run: tools/fuzz/nightly.sh ${{ inputs.seconds }}
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "| process | executions | corpus | coverage |"
+            echo "|---|---|---|---|"
+            for l in "$QWE_FUZZ_DIR"/*.log; do
+              [ -f "$l" ] || continue
+              execs=$(sed -n 's/^stat::number_of_executed_units: *//p' "$l" | tail -1)
+              done_line=$(grep -E '^#[0-9]+[[:space:]]+DONE' "$l" | tail -1)
+              cov=$(echo "$done_line" | sed -n 's/.* cov: \([0-9]*\).*/\1/p')
+              corp=$(echo "$done_line" | sed -n 's/.* corp: \([0-9]*\/[0-9A-Za-z]*\).*/\1/p')
+              echo "| $(basename "$l" .log) | ${execs:-?} | ${corp:-?} | ${cov:-?} |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+      # Caches are immutable per key, hence one key per run. Crashes stay out: they are
+      # reported once as an artifact, then belong in src/edge/yaml/corpus/.
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            ${{ env.QWE_FUZZ_DIR }}
+            !${{ env.QWE_FUZZ_DIR }}/*-crashes
+          key: fuzz-corpus-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fuzz-findings
+          path: |
+            ${{ env.QWE_FUZZ_DIR }}/*-crashes/
+            ${{ env.QWE_FUZZ_DIR }}/*.log
+          if-no-files-found: warn
