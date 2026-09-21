@@ -1,6 +1,6 @@
 # 04: The ubsan workflow
 
-Status: ready-for-agent
+Status: in-progress (manual criteria await a push)
 Category: enhancement
 Type: task
 Blocked by: 02
@@ -20,9 +20,11 @@ Add the ubsan badge.
 
 ## Acceptance criteria
 
-- [ ] `workflows_test` passes with `ubsan.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
+- [x] `workflows_test` passes with `ubsan.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
 - [ ] A push to `main` runs `ubsan.yml`, it is green, and `sanitizer_smoke_*` ran and passed. `manual: push; read the run log`
 - [ ] A deliberate signed overflow in a tested path turns the run red, and the artifact holds the report. `manual: throwaway branch, as in ticket 03`
 - [ ] The ubsan badge renders. `manual: view README on github.com`
 
 ## Comments
+
+- ubsan.yml added with badge; docs/ci-checks.md 'Every change' lists it. Whether the runner's gcc accepts -fsanitize=float-cast-overflow is checked by the first run; nothing was dropped.
