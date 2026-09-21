@@ -1,5 +1,9 @@
 # Implemented with Claude using Matt Pocock Skills
 
+## Status
+
+[![tests](https://github.com/thetanil/qwe/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/tests.yml)
+
 https://github.com/mattpocock/skills
 
 # up next

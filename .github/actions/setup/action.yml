@@ -1,0 +1,76 @@
+name: setup
+description: Bazel at .bazelversion, apt packages, a per-config Bazel disk cache, and optionally an ssh target for the e2e cases.
+inputs:
+  apt:
+    description: Space-separated apt packages to install (empty for none).
+    default: ""
+  cache-key:
+    description: Names the config the disk cache belongs to (tests, asan, ...).
+    required: true
+  ssh-target:
+    description: "true: start sshd on 172.18.0.1 for the needs-ssh e2e cases and require them to run."
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Bazel is the pinned version
+      shell: bash
+      run: |
+        want=$(cat .bazelversion)
+        got=$(bazel --version)
+        echo "$got"
+        [ "$got" = "bazel $want" ] || { echo "want bazel $want" >&2; exit 1; }
+    - name: Install apt packages
+      if: inputs.apt != ''
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends ${{ inputs.apt }}
+    - name: Bazel disk cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/bazel-disk
+        key: ${{ runner.os }}-${{ inputs.cache-key }}-${{ hashFiles('MODULE.bazel.lock', '.bazelrc') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ inputs.cache-key }}-
+    - name: User bazelrc
+      shell: bash
+      run: |
+        {
+          echo "build --disk_cache=$HOME/.cache/bazel-disk"
+          echo "test --test_output=errors"
+        } >> ~/.bazelrc
+    - name: ssh target for the e2e cases
+      if: inputs.ssh-target == 'true'
+      shell: bash
+      run: |
+        set -eu
+        # The cases hardcode 172.18.0.1 (the devcontainer's host): give the runner that address.
+        command -v sshd >/dev/null || sudo apt-get install -y --no-install-recommends openssh-server
+        sudo ip addr add 172.18.0.1/32 dev lo
+        mkdir -p ~/.ssh && chmod 700 ~/.ssh
+        ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/qwe_ci
+        cat ~/.ssh/qwe_ci.pub >> ~/.ssh/authorized_keys
+        chmod 600 ~/.ssh/authorized_keys
+        sudo mkdir -p /run/sshd
+        sudo systemctl start ssh || sudo /usr/sbin/sshd
+        # the key lives in an agent (the cases use SSH_AUTH_SOCK), which must outlive this step
+        RUNNER_TRACKING_ID="" ssh-agent -a "$HOME/.ssh/agent.sock" >/dev/null
+        export SSH_AUTH_SOCK="$HOME/.ssh/agent.sock"
+        ssh-add ~/.ssh/qwe_ci
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          ssh-keyscan -T 3 172.18.0.1 > ~/.ssh/known_hosts 2>/dev/null && [ -s ~/.ssh/known_hosts ] && break
+          sleep 1
+        done
+        ssh -o BatchMode=yes 172.18.0.1 true
+        # ssh_become_denied assumes the target user has no passwordless sudo, as zeta does.
+        # The runner user has it; drop it last (nothing after this step needs sudo).
+        sudo rm -f /etc/sudoers.d/runner /etc/sudoers.d/90-cloud-init-users
+        if ssh -o BatchMode=yes 172.18.0.1 sudo -n true 2>/dev/null; then
+          echo "the ssh user still has passwordless sudo" >&2; exit 1
+        fi
+        {
+          echo "test --test_env=REMOTE_CONTAINERS=1"
+          echo "test --test_env=QWE_E2E_REQUIRE_SSH=1"
+        } >> ~/.bazelrc

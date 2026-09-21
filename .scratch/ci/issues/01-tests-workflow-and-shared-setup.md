@@ -1,6 +1,6 @@
 # 01: The tests workflow, the shared setup, and the drift test
 
-Status: ready-for-agent
+Status: in-progress (manual criteria await a push)
 Category: enhancement
 Type: task
 Blocked by: none
@@ -59,14 +59,18 @@ ticket 02.
 
 ## Acceptance criteria
 
-- [ ] `workflows_test` fails when a workflow file has no README badge. `unit: tools/ci/workflows_test.sh::badge_missing`
-- [ ] It fails when a README badge names a workflow file that does not exist. `unit: tools/ci/workflows_test.sh::badge_dangling`
-- [ ] It fails when an "Every change" command in `docs/ci-checks.md` appears in no workflow. `unit: tools/ci/workflows_test.sh::command_unwired`
-- [ ] It fails when a gate workflow lacks the push-to-main trigger or `workflow_call`. `unit: tools/ci/workflows_test.sh::trigger_missing`
-- [ ] It passes on the repo as committed. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
+- [x] `workflows_test` fails when a workflow file has no README badge. `unit: tools/ci/workflows_test.sh::badge_missing`
+- [x] It fails when a README badge names a workflow file that does not exist. `unit: tools/ci/workflows_test.sh::badge_dangling`
+- [x] It fails when an "Every change" command in `docs/ci-checks.md` appears in no workflow. `unit: tools/ci/workflows_test.sh::command_unwired`
+- [x] It fails when a gate workflow lacks the push-to-main trigger or `workflow_call`. `unit: tools/ci/workflows_test.sh::trigger_missing`
+- [x] It passes on the repo as committed. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
 - [ ] A push to `main` runs `tests.yml`, it is green, and it shows `bazel test //...` with the ssh cases printing SKIP. `manual: push; open Actions → tests; read the log`
 - [ ] A second push with no source change finishes faster from the disk cache, and the log shows cache hits. `manual: push an empty commit; compare durations; grep the log for "disk cache hit"`
 - [ ] A deliberately failing test turns the run red and uploads the test logs artifact. `manual: on a throwaway branch with the trigger temporarily widened, break an assertion, push, download the artifact, then delete the branch`
 - [ ] The README's tests badge renders and links to the runs page. `manual: view README on github.com`
 
 ## Comments
+
+- Implemented; unit criteria pass locally. The `manual:` criteria are checked from the first pushed run.
+- ssh-target lives in the setup action already (ticket 02 builds on it); tests.yml sets it now.
+- The "Every change" block in docs/ci-checks.md lists only `bazel test //...` until tickets 03 and 06 wire asan and coverage, so rule 2 stays green per commit.

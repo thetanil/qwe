@@ -21,9 +21,9 @@ Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
 
 ```
 bazel test //...
-bazel test --config=asan //...
-bazel run //tools/coverage:check
 ```
+
+Not yet wired into a workflow: `bazel test --config=asan //...` and `bazel run //tools/coverage:check`.
 
 `check` runs `bazel coverage //... --combined_report=lcov` itself and compares
 per-file miss counts with `tools/coverage/floor.txt`, a ratchet: new code without

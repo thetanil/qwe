@@ -1,0 +1,22 @@
+name: collect-logs
+description: Upload the test logs and each test's undeclared outputs (sanitizer and valgrind reports).
+inputs:
+  name:
+    description: Artifact name.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Gather
+      shell: bash
+      run: |
+        dest="$RUNNER_TEMP/testlogs"
+        mkdir -p "$dest"
+        cd "$(bazel info bazel-testlogs 2>/dev/null)" || exit 0
+        find . \( -name test.log -o -name outputs.zip -o -name test.outputs \) -print0 |
+          xargs -0 -r cp -r --parents -t "$dest"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ runner.temp }}/testlogs
+        if-no-files-found: warn
