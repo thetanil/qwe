@@ -1,6 +1,6 @@
 # qwe
 
-qwe (Quantum Workflow Engine) is a single-binary Linux command-line workflow engine. It runs a GitHub-Actions-style workflow to completion and then exits. Almost all of its capabilities come from LuaJIT plugins. The first plugins manage a small fleet of physical devices: power, flashing, VLAN placement and probing.
+qwe (Qualified Workflow Engine) is a single-binary Linux command-line workflow engine. It runs a GitHub-Actions-style workflow to completion and then exits. Almost all of its capabilities come from LuaJIT plugins. The first plugins manage a small fleet of physical devices: power, flashing, VLAN placement and probing.
 
 ## Language
 
