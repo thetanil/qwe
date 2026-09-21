@@ -4,7 +4,7 @@
 
 #include <stddef.h>
 
-#define QWE_VERSION "0.1.0"
+#define QWE_VERSION "0.2.0"
 
 /* Exit codes (spec, "Exit codes"). */
 #define QWE_EXIT_OK 0
