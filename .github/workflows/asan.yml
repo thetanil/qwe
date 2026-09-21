@@ -1,0 +1,25 @@
+name: asan
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: asan-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+jobs:
+  asan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: asan
+          ssh-target: "true"
+      - run: bazel test --config=asan //...
+      - if: failure()
+        uses: ./.github/actions/collect-logs
+        with:
+          name: asan-logs

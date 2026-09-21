@@ -3,6 +3,7 @@
 ## Status
 
 [![tests](https://github.com/thetanil/qwe/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/tests.yml)
+[![asan](https://github.com/thetanil/qwe/actions/workflows/asan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/asan.yml)
 
 https://github.com/mattpocock/skills
 
