@@ -189,12 +189,33 @@ what each one fails on.
   ```
   The job summary lists each process's executions, corpus and coverage. The corpus persists between
   runs in the Actions cache. See `docs/fuzzing.md`.
-- **Releasing.** Bump `QWE_VERSION` in `src/kernel/qwe.h`, push, then write the release in the GitHub web
-  UI with its tag `v<version>` (or just push the tag). All five gates run at that commit, the binaries
-  and `SHA256SUMS` are attached, and the commit hash is added to your notes. If anything fails, the
-  release goes back to a draft.
 - **Drift.** `//tools/ci:workflows_test` (part of `bazel test //...`) fails if a workflow has no badge, a
   command in `docs/ci-checks.md` is in no workflow, or the nightly or release stops calling a gate.
 
 To check a change before pushing, run the same commands locally (`docs/ci-checks.md`); the workflows run
 nothing else.
+
+### Making a release
+
+A release is a pushed tag `v<version>`. Nothing else starts one: a plain `git push` sends commits,
+never tags, so a tag that was only created locally does nothing.
+
+1. Bump `QWE_VERSION` in `src/kernel/qwe.h` and the expected output in
+   `tests/e2e/cli_version/expected/stdout` (`qwe <version>`). Run `bazel test //...`.
+2. Commit and `git push` to `main`. Wait until `tests`, `asan`, `ubsan` and `coverage` are green **on
+   that commit**. The release reruns every gate at the tag, so a red `main` means a failed release.
+3. Tag that exact commit, then push the tag by name:
+   ```
+   git tag v0.2.0                # the tag is "v" + QWE_VERSION, or the version check fails
+   git push origin v0.2.0        # this is the step that starts the release
+   ```
+   (Instead, you can write the release in the GitHub web UI with the tag `v<version>` and publish it;
+   the tag it creates starts the same run.)
+4. Watch `release` in the Actions tab. It runs all five gates (valgrind included, about 25 minutes),
+   builds `qwe` and `qwe-debug`, checks that the tag, `QWE_VERSION` and `qwe --version` agree, then
+   attaches the binaries and `SHA256SUMS`, and adds the commit hash to the notes. A tag with a `-`
+   (`v0.3.0-rc1`) is marked a pre-release.
+5. If a gate or the version check fails, a release you wrote in the web UI goes back to a draft. Fix
+   `main`, then move the tag: `git tag -d v0.2.0 && git push origin :refs/tags/v0.2.0`, tag the fixed
+   commit and push it again.
+
