@@ -76,3 +76,5 @@ ticket 02.
 - The "Every change" block in docs/ci-checks.md lists only `bazel test //...` until tickets 03 and 06 wire asan and coverage, so rule 2 stays green per commit.
 
 - Checked with gh: tests run 35622661563 took 2m08s cold; run 35643065226 took 48s, log "886 disk cache hit", "Cache restored from key". The failed first run uploaded the `tests-logs` artifact (62 KB), which shows the upload path works; the deliberate-break branch check was not run.
+
+- Disk cache switched from a hand-rolled actions/cache step to bazel-contrib/setup-bazel@0.19.0 (bazelisk-cache, disk-cache keyed per config, repository-cache), at the user's direction. The action writes the user bazelrc; the setup action keeps `test --test_output=errors` through its `bazelrc` input.

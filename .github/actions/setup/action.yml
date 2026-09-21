@@ -13,6 +13,14 @@ inputs:
 runs:
   using: composite
   steps:
+    - uses: bazel-contrib/setup-bazel@0.19.0
+      with:
+        bazelisk-cache: true
+        disk-cache: ${{ inputs.cache-key }}
+        repository-cache: true
+        cache-save: ${{ github.event_name != 'pull_request' }}
+        bazelrc: |
+          test --test_output=errors
     - name: Bazel is the pinned version
       shell: bash
       run: |
@@ -26,20 +34,6 @@ runs:
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends ${{ inputs.apt }}
-    - name: Bazel disk cache
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/bazel-disk
-        key: ${{ runner.os }}-${{ inputs.cache-key }}-${{ hashFiles('MODULE.bazel.lock', '.bazelrc') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ inputs.cache-key }}-
-    - name: User bazelrc
-      shell: bash
-      run: |
-        {
-          echo "build --disk_cache=$HOME/.cache/bazel-disk"
-          echo "test --test_output=errors"
-        } >> ~/.bazelrc
     - name: ssh target for the e2e cases
       if: inputs.ssh-target == 'true'
       shell: bash
