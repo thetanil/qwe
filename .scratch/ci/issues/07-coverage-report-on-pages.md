@@ -22,7 +22,7 @@ each green push to `main`:
   `third_party/`. Colour thresholds: red below 70, yellow below 85, green
   otherwise.
 - The README gets a second coverage badge,
-  `https://img.shields.io/endpoint?url=https://thetanil.github.io/qwe/coverage.json`,
+  `https://img.shields.io/endpoint?url=https://thetanil.com/qwe/coverage.json`,
   linked to the report.
 
 Computing the percentage is a script (`tools/coverage/badge.sh <lcov file>`), so it
@@ -39,7 +39,7 @@ pass/fail badge is enough.
 - [x] `badge.sh` on a fixture lcov file writes the expected percentage and colour, and counts only `src/` and `plugins/` records. `unit: tools/coverage/badge_test.sh::src_and_plugins_only`
 - [x] It picks each colour at its boundary. `unit: tools/coverage/badge_test.sh::thresholds`
 - [x] `workflows_test` ignores non-workflow badges. `unit: tools/ci/workflows_test.sh::non_workflow_badge`
-- [ ] A green push to `main` deploys, and `https://thetanil.github.io/qwe/` shows the report. `manual: enable Pages (Settings → Pages → GitHub Actions), push, open the URL`
+- [ ] A green push to `main` deploys, and `https://thetanil.com/qwe/` shows the report. `manual: enable Pages (Settings → Pages → GitHub Actions), push, open the URL`
 - [ ] The percentage badge renders with the same number as the job summary. `manual: view README on github.com`
 
 ## Comments
@@ -48,3 +48,4 @@ pass/fail badge is enough.
 - `coverage.yml` gets a `pages` job (`needs: coverage`, only on `push` to `refs/heads/main`, `pages: write` and `id-token: write`, environment `github-pages`). The `coverage` job writes `coverage-html/coverage.json` with `tools/coverage/badge.sh` and prints it in the job summary; the `coverage-html` artifact is what gets deployed.
 - `nightly.yml` and `release.yml` call `coverage.yml`, and a called workflow's jobs cannot ask for more permissions than the calling job has, even for a job that is skipped. Their `coverage` call jobs therefore carry `pages: write` and `id-token: write` (only those jobs).
 - The README's second coverage badge is a shields.io endpoint badge, not a workflow badge; `workflows_test` ignores it (`non_workflow_badge`). Local check: `badge.sh` on the current report prints 93.0% green.
+- First green push (46eee75, run 35660042207): coverage and pages jobs green; the report and coverage.json are served. `thetanil.github.io/qwe/` answers 301 to `https://thetanil.com/qwe/` (the account's Pages custom domain), so the README badge and docs use that URL directly. coverage.json says 93.0%, green.
