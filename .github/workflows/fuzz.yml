@@ -31,7 +31,7 @@ jobs:
         run: |
           case $SECONDS_IN in '' | *[!0-9]*) echo "seconds must be a whole number" >&2; exit 1 ;; esac
           [ "$SECONDS_IN" -ge 1 ] && [ "$SECONDS_IN" -le 19800 ] || { echo "seconds must be 1..19800" >&2; exit 1; }
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
         with:
           apt: clang
