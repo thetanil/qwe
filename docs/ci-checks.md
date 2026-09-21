@@ -46,6 +46,34 @@ from `nightly.yml` and `release.yml` (by `workflow_call`), never on a push. `wor
 
 ```
 
+## How CI reaches ssh
+
+The 19 e2e cases that need ssh connect to `172.18.0.1`, the devcontainer's host, which is
+hardcoded in their `inventory.yaml` files. `.github/actions/setup` with `ssh-target: "true"`
+(tests, asan, ubsan, valgrind, coverage) makes a runner look like that host:
+
+- **The address.** `172.18.0.1/32` is added to `lo`, so it is reachable and needs no network.
+- **sshd and a key.** sshd runs on the runner; a fresh ed25519 key is authorised for the runner
+  user and held by an `ssh-agent` at `~/.ssh/agent.sock` (the cases authenticate through
+  `SSH_AUTH_SOCK`). `known_hosts` is filled with `ssh-keyscan`, since the cases run with
+  `BatchMode=yes` and cannot answer a host-key prompt.
+- **No passwordless sudo.** `ssh_become_denied` needs a target user that cannot `sudo`, as on zeta.
+  The runner user has a `NOPASSWD` rule, so the setup removes whichever files in `/etc/sudoers.d`
+  grant it, then fails the job if `sudo -n true` still works, locally or over ssh. This is the last
+  thing the step does: **no later step of the job may use `sudo`.**
+- **Environment.** `REMOTE_CONTAINERS=1` and `QWE_E2E_REQUIRE_SSH=1` are written to `$GITHUB_ENV`,
+  and `SSH_AUTH_SOCK` likewise. `~/.bazelrc` belongs to `setup-bazel`, so nothing goes there. The
+  repo `.bazelrc` has `test --test_env=<NAME>` for each, which forwards the value from the
+  environment to the tests; there is no second copy that could win. With `QWE_E2E_REQUIRE_SSH=1`
+  an unreachable target fails the case instead of skipping it.
+- **The agent's life.** The agent is started with `RUNNER_TRACKING_ID=""` so the runner does not
+  kill it when the step ends. Every job gets its own VM, so the two `valgrind.yml` jobs each start
+  their own sshd and agent and nothing outlives the job.
+- **Fallback.** None is coded: the address is in the case files, and there is no host override
+  variable. If the loopback alias ever stops working on runners, the alternatives are a different
+  local alias in both the action and the inventories, or running the ssh cases only where a real
+  target exists.
+
 ## Nightly and release
 
 `nightly.yml` runs at 02:17 UTC and on demand. It first deletes every `setup-bazel-*` cache (a saved

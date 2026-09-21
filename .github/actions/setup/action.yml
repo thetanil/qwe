@@ -60,11 +60,25 @@ runs:
         done
         ssh -o BatchMode=yes 172.18.0.1 true
         # ssh_become_denied assumes the target user has no passwordless sudo, as zeta does.
-        # The runner user has it; drop it last (nothing after this step needs sudo).
-        sudo rm -f /etc/sudoers.d/runner /etc/sudoers.d/90-cloud-init-users
+        # The runner user has it. Drop the rule wherever it is defined: find NOPASSWD grants
+        # in sudoers.d (the file name differs between runner images) and remove those files,
+        # then require that `sudo -n` no longer works. Nothing after this step may use sudo.
+        if sudo -n true 2>/dev/null; then
+          sudo grep -rlE '^[^#]*NOPASSWD' /etc/sudoers.d 2>/dev/null | while read -r f; do
+            echo "removing passwordless sudo rule file $f"
+            sudo rm -f "$f"
+          done
+        fi
+        if sudo -n true 2>/dev/null; then
+          echo "the runner user still has passwordless sudo (a rule outside /etc/sudoers.d?):" >&2
+          sudo -n -l >&2 || true
+          exit 1
+        fi
         if ssh -o BatchMode=yes 172.18.0.1 sudo -n true 2>/dev/null; then
           echo "the ssh user still has passwordless sudo" >&2; exit 1
         fi
-        # the repo .bazelrc passes both through to the tests (setup-bazel owns ~/.bazelrc, so no test_env there)
+        # REMOTE_CONTAINERS and QWE_E2E_REQUIRE_SSH go through GITHUB_ENV (the process environment);
+        # the repo .bazelrc's `test --test_env=NAME` lines forward them from there to the tests.
+        # setup-bazel owns ~/.bazelrc, so nothing is written there.
         echo "REMOTE_CONTAINERS=1" >> "$GITHUB_ENV"
         echo "QWE_E2E_REQUIRE_SSH=1" >> "$GITHUB_ENV"
