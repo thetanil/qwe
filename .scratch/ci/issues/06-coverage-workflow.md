@@ -1,6 +1,6 @@
 # 06: The coverage workflow, and ci-checks.md describes what CI runs
 
-Status: ready-for-agent
+Status: in-progress (manual criteria await a push)
 Category: enhancement
 Type: task
 Blocked by: 02, 03, 04, 05
@@ -41,10 +41,12 @@ on every push, and this is the last gate ticket, so rewrite the doc:
 
 ## Acceptance criteria
 
-- [ ] `workflows_test` checks every command in the "Every push" block (tests, asan, ubsan, both valgrind runs, coverage check), and fails if any is unwired. `unit: tools/ci/workflows_test.sh::command_unwired`
-- [ ] `workflows_test` passes with `coverage.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
+- [x] `workflows_test` checks every command in the "Every push" block (tests, asan, ubsan, both valgrind runs, coverage check), and fails if any is unwired. `unit: tools/ci/workflows_test.sh::command_unwired`
+- [x] `workflows_test` passes with `coverage.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
 - [ ] A push to `main` runs `coverage.yml` green on an unchanged tree, and the job summary shows the lcov totals. `manual: push; open the run summary`
 - [ ] Adding an untested function under `src/` turns it red, and the artifact still contains the HTML report showing the new lines missed. `manual: throwaway branch, as in ticket 03`
 - [ ] The coverage badge renders. `manual: view README on github.com`
 
 ## Comments
+
+- coverage.yml added with badge; docs/ci-checks.md rewritten with the workflow table and a single 'Every push' block, which workflows_test now checks in full. Whether floor.txt holds on the runner's gcc/gcov is seen on the first run; nothing was --update'd.

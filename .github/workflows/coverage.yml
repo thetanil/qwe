@@ -1,0 +1,47 @@
+name: coverage
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+jobs:
+  coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          apt: lcov
+          cache-key: coverage
+          ssh-target: "true"
+      - run: bazel run //tools/coverage:check
+      - name: HTML report
+        if: always()
+        run: bazel run //tools/coverage:html
+      - name: Totals in the job summary
+        if: always()
+        run: |
+          rep=bazel-out/_coverage/_coverage_report.dat
+          [ -f "$rep" ] || exit 0
+          lcov --extract "$rep" '*.c' '*.h' -o "$RUNNER_TEMP/c.info" >/dev/null 2>&1 || true
+          lcov --extract "$rep" '*.lua' -o "$RUNNER_TEMP/lua.info" >/dev/null 2>&1 || true
+          {
+            echo '### Combined'; echo '```'; lcov --summary "$rep" 2>&1; echo '```'
+            echo '### C'; echo '```'; lcov --summary "$RUNNER_TEMP/c.info" 2>&1 || true; echo '```'
+            echo '### Lua'; echo '```'; lcov --summary "$RUNNER_TEMP/lua.info" 2>&1 || true; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage-html/
+          if-no-files-found: warn
+      - if: failure()
+        uses: ./.github/actions/collect-logs
+        with:
+          name: coverage-logs

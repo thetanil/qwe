@@ -1,23 +1,28 @@
 # CI checks
 
-There is no CI service configured yet. This is the list of checks the quality
-feature built, with the exact commands, for the CI feature to wire up. Run
-everything from the repository root; Bazel 8.7.0; clang for the fuzzers.
+GitHub Actions on `thetanil/qwe` runs every check below. Each is its own workflow in
+`.github/workflows/`, with its own README badge (a status badge is per workflow file).
+Run everything from the repository root; Bazel 8.7.0; clang for the fuzzers. The
+`//tools/ci:workflows_test` test fails when a command in "Every push" is in no workflow,
+or a workflow has no badge. `.github/actions/setup` is the shared setup: the runner
+(`ubuntu-24.04`), Bazel at `.bazelversion`, apt packages, a Bazel disk cache per config,
+and an sshd on `172.18.0.1` for the ssh e2e cases (`QWE_E2E_REQUIRE_SSH=1` makes a
+skipped one a failure).
 
-| Check | Command | Cadence | Cost | Fails when |
-|---|---|---|---|---|
-| Tests | `bazel test //...` | every change | seconds, warm cache | any test fails |
-| ASan + LSan | `bazel test --config=asan //...` | every change | about the plain suite | a memory error or leak |
-| UBSan | `bazel test --config=ubsan //...` | nightly | about the plain suite | undefined behaviour |
-| Valgrind, unit tests | `bazel test --config=valgrind //...` | nightly | about 130 s (`load_oom_test` is most of it) | any error, leak or unsuppressed report |
-| Valgrind, e2e | `bazel test //tests/e2e:valgrind_e2e` | nightly | about 6 s | the same, in qwe and its step children |
-| Coverage floor | `bazel run //tools/coverage:check` | every change | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/coverage/floor.txt` |
-| Fuzzing | `tools/fuzz/nightly.sh [seconds]` | nightly | one hour by default, four processes in parallel | any crash artifact exists |
+| Check | Workflow | Command | Cadence | Cost | Fails when |
+|---|---|---|---|---|---|
+| Tests | `tests.yml` | `bazel test //...` | every push to main | seconds, warm cache | any test fails |
+| ASan + LSan | `asan.yml` | `bazel test --config=asan //...` | every push to main | about the plain suite | a memory error or leak |
+| UBSan | `ubsan.yml` | `bazel test --config=ubsan //...` | every push to main | about the plain suite | undefined behaviour |
+| Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | every push to main | about 130 s (`load_oom_test` is most of it) | any error, leak or unsuppressed report |
+| Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test //tests/e2e:valgrind_e2e` | every push to main | about 6 s | the same, in qwe and its step children |
+| Coverage floor | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/coverage/floor.txt` |
+| Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | manual | hours; four processes in parallel | any crash artifact exists |
 
 Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
 `docs/coverage.md` and `docs/fuzzing.md`. What follows is only what CI needs.
 
-## Every change
+## Every push
 
 ```
 bazel test //...
@@ -25,26 +30,16 @@ bazel test --config=asan //...
 bazel test --config=ubsan //...
 bazel test --config=valgrind //...
 bazel test //tests/e2e:valgrind_e2e
+bazel run //tools/coverage:check
 ```
-
-Not yet wired into a workflow: `bazel run //tools/coverage:check`.
 
 `check` runs `bazel coverage //... --combined_report=lcov` itself and compares
 per-file miss counts with `tools/coverage/floor.txt`, a ratchet: new code without
 tests raises a count and fails; deleting code cannot fail. After adding tests,
 `bazel run //tools/coverage:check -- --update` rewrites the floor, and the result
 is committed on purpose. For a browsable report, `bazel run //tools/coverage:html`
-(needs `genhtml`, from the `lcov` package) writes `coverage-html/`; publish it as
-a CI artifact.
-
-## Nightly
-
-```
-bazel test --config=ubsan //...
-bazel test --config=valgrind //...
-bazel test //tests/e2e:valgrind_e2e
-tools/fuzz/nightly.sh
-```
+(needs `genhtml`, from the `lcov` package) writes `coverage-html/`; the coverage workflow uploads it as
+an artifact.
 
 MSan is not supported (`docs/sanitizers.md` says why); do not add a job for it.
 The `sanitizer_smoke_*` tests each config builds fault on purpose and pass only
@@ -77,10 +72,6 @@ It needs clang (`--config=fuzz` sets `CC=clang`) and 4+ idle cores.
 
 Fuzz binaries are `manual`-tagged, so `bazel test //...` and `bazel build //...`
 never build them.
-
-## Not in CI yet
-
-- `--config=valgrind` needs `valgrind` installed (3.22 was measured).
 
 ## Allocation checks
 
