@@ -80,3 +80,7 @@ ticket 02.
 - Disk cache switched from a hand-rolled actions/cache step to bazel-contrib/setup-bazel@0.19.0 (bazelisk-cache, disk-cache keyed per config, repository-cache), at the user's direction. The action writes the user bazelrc; the setup action keeps `test --test_output=errors` through its `bazelrc` input.
 
 - Cache comparison (gh, warm runs): hand-rolled actions/cache (59d822e) tests 48 s, asan 61 s, ubsan 55 s, coverage 2m00; setup-bazel (4ba3163) tests 95 s, asan 96 s, ubsan 127 s, coverage 6m24. Not a like-for-like: setup-bazel keys the disk cache on a hash of the BUILD/MODULE files, and a cache key is immutable, so the entries were saved by the first (red) run, c48158f, and never refreshed (tests: 480 disk cache hits, 418 tests re-run, against 886 and 12 for the hand-rolled cache, which re-keyed on .bazelrc after a green run). To be measured again from a cache seeded by a green run.
+
+- Warm comparison, both seeded by a green run and hit exactly (setup-bazel with cache-version 2 seeded by 640a696, warm run 11509ea; hand-rolled warm run 59d822e):
+  - tests: 41 s vs 48 s; asan: 37 s vs 61 s; ubsan: 56 s vs 55 s; coverage: 99 s vs 120 s (setup-bazel vs hand-rolled).
+  - The earlier setup-bazel numbers (4ba3163) were from a cache seeded by a red run and are not comparable. setup-bazel also caches bazelisk and the repository cache; keys are a hash of BUILD/MODULE files, so a source-only change never re-saves.
