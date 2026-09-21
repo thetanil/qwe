@@ -1,4 +1,107 @@
-# Implemented with Claude using Matt Pocock Skills
+# qwe
+
+**qwe** (Qualified Workflow Engine) is a small Linux command-line tool that runs a workflow to
+completion and exits. You describe the work as YAML in the style of GitHub Actions (jobs, `needs:`,
+ordered steps, `env:`, `outputs`), and qwe runs it on the machine you are sitting at or, over ssh, on
+other machines. It is one static binary written in C99, with no daemon and no runtime to install.
+
+What a step can do comes from plugins written in LuaJIT. A step is either `run:` (a shell command,
+which is itself a built-in plugin) or `uses: <plugin>` with `with:` inputs. The plugins ship inside
+the binary, and you can add your own next to a workflow without rebuilding anything. The kernel stays
+small on purpose: it owns processes, timeouts, cancellation, logs and secrets, and everything else is
+a plugin. The design is written up in `docs/workflow-kernel-design.md` and the vocabulary in
+`CONTEXT.md`.
+
+It began as the engine for managing a small fleet of physical devices (power, flashing, VLAN
+placement, probing) from CI, and that is still the intended use. The device plugins are not written
+yet; what exists is the engine and its first plugins (`run`, `file.ensure`, the `local` and `ssh`
+backends).
+
+## A first workflow
+
+```yaml
+# w.yaml
+jobs:
+  prepare:
+    target: local
+    steps:
+      - id: conf
+        uses: file.ensure          # idempotent: check first, change only if needed
+        with:
+          path: app.conf
+          content: "port = 8080\n"
+          mode: "0640"
+      - run: cat app.conf
+  report:
+    target: local
+    needs: [prepare]               # runs after prepare succeeds
+    steps:
+      - timeout-seconds: 10
+        run: echo "config is in place"
+```
+
+```
+$ qwe validate w.yaml       # checks the workflow against its schemas; runs none of its code
+$ qwe run w.yaml
+[prepare] port = 8080
+[report] config is in place
+```
+
+To run a job on another machine, name it in an inventory (`-i inventory.yaml`, or the default
+location) and point the job at it with `target:`:
+
+```yaml
+targets:
+  bench:
+    backend: ssh
+    host: 192.0.2.10
+```
+
+## What it does
+
+- **A graph of jobs.** `needs:` builds a DAG; independent jobs run in parallel under `max-parallel`,
+  and `--job <id>` runs one job with what it depends on. A failed dependency skips what follows it.
+- **A process per step.** Each step runs in its own forked process group with a timeout
+  (`timeout-seconds`, and a job timeout), so a hung or crashing plugin cannot take the engine down, and
+  an operator cancel or timeout kills the whole group.
+- **Idempotent plugins.** A plugin's `check` says whether there is work to do and `apply` does it, so a
+  second run changes nothing.
+- **ssh targets.** One multiplexed connection per host, `become:` for privilege, and a job whose host
+  cannot be reached fails on its own without stalling the rest.
+- **Secrets.** `qwe keygen` makes a key and `qwe encrypt` turns a value into an `!encrypted` blob that is
+  safe to commit. Secrets reach a step only through `${{ secrets.NAME }}` in `env:` or `with:`, never in
+  a command line, and are redacted from the logs.
+- **Step outputs.** A step writes `name=value` to `$QWE_OUTPUT`; later steps in the job read
+  `${{ steps.<id>.outputs.<name> }}`.
+
+```
+qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]...
+qwe validate <workflow.yaml> [-i <inventory.yaml>]
+qwe keygen | qwe encrypt | qwe --version
+```
+
+`qwe serve` is a stub: it prints `qwe serve: not implemented` and exits 2.
+
+## Getting it
+
+qwe is Linux x86_64 only. Each [release](https://github.com/thetanil/qwe/releases) attaches `qwe`,
+`qwe-debug` (the same build with symbols) and `SHA256SUMS`. To build it yourself you need Bazel 8.7.0
+(the version is pinned in `.bazelversion`); every dependency is vendored in the repository.
+
+```
+bazel build //src/cli:qwe //src/cli:qwe-debug    # bazel-bin/src/cli/
+bazel test //...                                 # the unit, plugin and e2e suites
+```
+
+## Where to read next
+
+| To learn | Read |
+|---|---|
+| the words qwe uses (job, step, target, outcome, reason) | `CONTEXT.md` |
+| how it is built and why | `docs/workflow-kernel-design.md`, `docs/adr/` |
+| the ssh backend and its security decisions | `docs/qwe-ssh-sec.md` |
+| how it is checked (sanitizers, valgrind, coverage, fuzzing) | `docs/ci-checks.md` and the pages it links |
+| how to write a plugin | the next section of this file |
 
 ## Status
 
@@ -12,14 +115,9 @@
 [![fuzz](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml)
 [![release](https://github.com/thetanil/qwe/actions/workflows/release.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/release.yml)
 
-https://github.com/mattpocock/skills
+Implemented with Claude using [Matt Pocock's skills](https://github.com/mattpocock/skills).
 
-# up next
-
-ci to release
-
-
-# For plugin authors
+## Writing a plugin
 
 A project plugin lives next to the workflow, in `.qwe/plugins/<name>/`, and a step
 names it with `uses: <name>`:
@@ -33,7 +131,7 @@ names it with `uses: <name>`:
 `schema.json` is checked against qwe's strict metaschema. `outputs` is optional, and
 every output must say `"secret": true` or `"secret": false`.
 
-## What `plugin.lua` looks like
+### What `plugin.lua` looks like
 
 ```lua
 local M = {}
@@ -59,7 +157,7 @@ the command to execute (see the built-in `run` plugin). Commands go through
 forked child, once per step. An error raised in `check` or `apply` fails the step with
 reason `plugin-error`.
 
-## What `plugin.lua` may not do
+### What `plugin.lua` may not do
 
 **A plugin file has no top-level code.** Everything outside a function runs when the file
 is loaded, so qwe refuses any of it at `qwe validate` and `qwe run`, from the source,
@@ -90,7 +188,7 @@ principle. The known consequences:
 If one of these blocks you, ask: they can be loosened for a specific need, and the check
 is `src/kernel/lua/pluginshape.lua`.
 
-## Trust
+### Trust
 
 Plugins run with your privileges on the operator host. `qwe.strict` (which turns a misspelled
 or undeclared global into an error) prevents mistakes; it is **not** a sandbox, and a plugin
@@ -98,7 +196,7 @@ still has `io`, `os.execute` and the rest of the interpreter. The workflow direc
 inventory are trusted input: read a workflow directory you did not write before running it
 (`qwe validate` runs none of its plugin code). See "Trust boundary" in `CONTEXT.md`.
 
-## Coverage of plugin code
+### Coverage of plugin code
 
 `bazel coverage` measures the Lua that is compiled into the qwe binary: `src/kernel/lua/` and
 the built-in plugins under `plugins/builtin/`. A project plugin in `.qwe/plugins/` is read by
