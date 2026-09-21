@@ -37,7 +37,7 @@ tests raises a count and fails; deleting code cannot fail. After adding tests,
 `bazel run //tools/coverage:check -- --update` rewrites the floor, and the result
 is committed on purpose. For a browsable report, `bazel run //tools/coverage:html`
 (needs `genhtml`, from the `lcov` package) writes `coverage-html/`; the coverage workflow uploads it as
-an artifact.
+an artifact. On a green push to main it is also deployed to GitHub Pages (`https://thetanil.github.io/qwe/`, Settings, Pages, source "GitHub Actions"), next to `coverage.json`, the percentage badge document that `tools/coverage/badge.sh` writes (line coverage of `src/` and `plugins/`; red under 70, yellow under 85, green above).
 
 ## On demand
 

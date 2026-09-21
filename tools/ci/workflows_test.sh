@@ -1,7 +1,7 @@
 #!/bin/bash
 # usage: workflows_test.sh [case...]     (no argument: every case)
 #
-# Cases: badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate repo_is_consistent.
+# Cases: badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge repo_is_consistent.
 # The first four build a copy of the repo's CI files, break one thing, and expect
 # check_repo to fail; repo_is_consistent runs check_repo on the files as committed.
 #
@@ -71,6 +71,18 @@ fixture() {
 	echo "$t"
 }
 
+# expect_pass <name> <mutation command run in the fixture>
+expect_pass() {
+	t=$(fixture)
+	(cd "$t" && eval "$2") || exit 3
+	if ! (check_repo "$t") 2>/dev/null; then
+		echo "$1: check_repo failed a good tree" >&2
+		rm -rf "$t"
+		return 1
+	fi
+	rm -rf "$t"
+}
+
 # expect_fail <name> <mutation command run in the fixture>
 expect_fail() {
 	t=$(fixture)
@@ -89,9 +101,10 @@ case_command_unwired() { expect_fail command_unwired 'sed -i "s|bazel test //\.\
 case_trigger_missing() { expect_fail trigger_missing 'sed -i "/workflow_call:/d" .github/workflows/tests.yml'; }
 case_nightly_calls_every_gate() { expect_fail nightly_calls_every_gate 'sed -i "/valgrind.yml/d" .github/workflows/nightly.yml'; }
 case_release_calls_every_gate() { expect_fail release_calls_every_gate 'sed -i "/coverage.yml/d" .github/workflows/release.yml'; }
+case_non_workflow_badge() { expect_pass non_workflow_badge 'echo "[![c](https://img.shields.io/endpoint?url=https://o.github.io/r/coverage.json)](https://o.github.io/r/)" >> README.md'; }
 case_repo_is_consistent() { (check_repo "$here"); }
 
-cases=${*:-badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate repo_is_consistent}
+cases=${*:-badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge repo_is_consistent}
 rc=0
 for c in $cases; do
 	if "case_$c"; then echo "PASS: $c"; else echo "FAIL: $c" >&2; rc=1; fi

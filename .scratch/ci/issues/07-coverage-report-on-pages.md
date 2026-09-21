@@ -1,6 +1,6 @@
 # 07: Publish the coverage report and a percentage badge on GitHub Pages
 
-Status: needs-triage
+Status: in-progress (manual criteria await a push)
 Category: enhancement
 Type: task
 Blocked by: 06
@@ -36,10 +36,15 @@ pass/fail badge is enough.
 
 ## Acceptance criteria
 
-- [ ] `badge.sh` on a fixture lcov file writes the expected percentage and colour, and counts only `src/` and `plugins/` records. `unit: tools/coverage/badge_test.sh::src_and_plugins_only`
-- [ ] It picks each colour at its boundary. `unit: tools/coverage/badge_test.sh::thresholds`
-- [ ] `workflows_test` ignores non-workflow badges. `unit: tools/ci/workflows_test.sh::non_workflow_badge`
+- [x] `badge.sh` on a fixture lcov file writes the expected percentage and colour, and counts only `src/` and `plugins/` records. `unit: tools/coverage/badge_test.sh::src_and_plugins_only`
+- [x] It picks each colour at its boundary. `unit: tools/coverage/badge_test.sh::thresholds`
+- [x] `workflows_test` ignores non-workflow badges. `unit: tools/ci/workflows_test.sh::non_workflow_badge`
 - [ ] A green push to `main` deploys, and `https://thetanil.github.io/qwe/` shows the report. `manual: enable Pages (Settings → Pages → GitHub Actions), push, open the URL`
 - [ ] The percentage badge renders with the same number as the job summary. `manual: view README on github.com`
 
 ## Comments
+
+- Triage: not wontfix; the user asked for it and enabled Pages with the "GitHub Actions" source.
+- `coverage.yml` gets a `pages` job (`needs: coverage`, only on `push` to `refs/heads/main`, `pages: write` and `id-token: write`, environment `github-pages`). The `coverage` job writes `coverage-html/coverage.json` with `tools/coverage/badge.sh` and prints it in the job summary; the `coverage-html` artifact is what gets deployed.
+- `nightly.yml` and `release.yml` call `coverage.yml`, and a called workflow's jobs cannot ask for more permissions than the calling job has, even for a job that is skipped. Their `coverage` call jobs therefore carry `pages: write` and `id-token: write` (only those jobs).
+- The README's second coverage badge is a shields.io endpoint badge, not a workflow badge; `workflows_test` ignores it (`non_workflow_badge`). Local check: `badge.sh` on the current report prints 93.0% green.

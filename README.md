@@ -7,6 +7,7 @@
 [![ubsan](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml)
 [![valgrind](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml)
 [![coverage](https://github.com/thetanil/qwe/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/coverage.yml)
+[![coverage percent](https://img.shields.io/endpoint?url=https://thetanil.github.io/qwe/coverage.json)](https://thetanil.github.io/qwe/)
 [![nightly](https://github.com/thetanil/qwe/actions/workflows/nightly.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/nightly.yml)
 [![release](https://github.com/thetanil/qwe/actions/workflows/release.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/release.yml)
 
@@ -175,6 +176,7 @@ what each one fails on.
   connect a failure instead of a skip.
 - **Caches.** A saved cache key never changes, so a cache slowly goes stale. The nightly deletes the
   `setup-bazel-*` caches and rebuilds them, and pushes to `main` restore the result.
+- **Coverage report.** A green push to `main` publishes the HTML report and a line-coverage percentage badge (`coverage.json`) to GitHub Pages, from the last job of `coverage.yml`.
 - **Fuzzing** is never part of a push, the nightly or a release. It is a manual run (`tools/fuzz/nightly.sh`,
   see `docs/fuzzing.md`).
 - **Releasing.** Bump `QWE_VERSION` in `src/kernel/qwe.h`, push, then write the release in the GitHub web

@@ -1,4 +1,5 @@
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 # lua_instrumented: see defs.bzl.
 
@@ -12,4 +13,15 @@ sh_binary(
 sh_binary(
     name = "check",
     srcs = ["check.sh"],
+)
+
+# The shields.io endpoint document for the coverage percentage.
+exports_files(["badge.sh"])
+
+sh_test(
+    name = "badge_test",
+    size = "small",
+    srcs = ["badge_test.sh"],
+    args = ["$(location :badge.sh)"],
+    data = [":badge.sh"],
 )

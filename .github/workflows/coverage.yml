@@ -23,6 +23,15 @@ jobs:
       - name: HTML report
         if: always()
         run: bazel run //tools/coverage:html
+      - name: Coverage badge document
+        if: always()
+        run: |
+          rep=bazel-out/_coverage/_coverage_report.dat
+          [ -f "$rep" ] || exit 0
+          [ -d coverage-html ] || exit 0
+          tools/coverage/badge.sh "$rep" > coverage-html/coverage.json
+          cat coverage-html/coverage.json
+          { echo '### Badge'; echo '```'; cat coverage-html/coverage.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Totals in the job summary
         if: always()
         run: |
@@ -45,3 +54,24 @@ jobs:
         uses: ./.github/actions/collect-logs
         with:
           name: coverage-logs
+  pages:
+    # Publishes the report and coverage.json on a green push to main (Settings -> Pages -> GitHub Actions).
+    needs: coverage
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage-html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: coverage-html
+      - id: deploy
+        uses: actions/deploy-pages@v4

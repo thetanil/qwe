@@ -23,6 +23,10 @@ jobs:
     uses: ./.github/workflows/valgrind.yml
   coverage:
     uses: ./.github/workflows/coverage.yml
+    permissions: # the called workflow's pages job asks for these, though it only runs on a push to main
+      contents: read
+      pages: write
+      id-token: write
   publish:
     needs: [tests, asan, ubsan, valgrind, coverage]
     runs-on: ubuntu-24.04
