@@ -65,7 +65,7 @@ ticket 02.
 - [x] It fails when a gate workflow lacks the push-to-main trigger or `workflow_call`. `unit: tools/ci/workflows_test.sh::trigger_missing`
 - [x] It passes on the repo as committed. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
 - [x] A push to `main` runs `tests.yml`, it is green, and it shows `bazel test //...` with the ssh cases printing SKIP. `manual: push; open Actions → tests; read the log`
-- [ ] A second push with no source change finishes faster from the disk cache, and the log shows cache hits. `manual: push an empty commit; compare durations; grep the log for "disk cache hit"`
+- [x] A second push with no source change finishes faster from the disk cache, and the log shows cache hits. `manual: push an empty commit; compare durations; grep the log for "disk cache hit"`
 - [ ] A deliberately failing test turns the run red and uploads the test logs artifact. `manual: on a throwaway branch with the trigger temporarily widened, break an assertion, push, download the artifact, then delete the branch`
 - [x] The README's tests badge renders and links to the runs page. `manual: view README on github.com`
 
@@ -74,3 +74,5 @@ ticket 02.
 - Implemented; unit criteria pass locally. The `manual:` criteria are checked from the first pushed run.
 - ssh-target lives in the setup action already (ticket 02 builds on it); tests.yml sets it now.
 - The "Every change" block in docs/ci-checks.md lists only `bazel test //...` until tickets 03 and 06 wire asan and coverage, so rule 2 stays green per commit.
+
+- Checked with gh: tests run 35622661563 took 2m08s cold; run 35643065226 took 48s, log "886 disk cache hit", "Cache restored from key". The failed first run uploaded the `tests-logs` artifact (62 KB), which shows the upload path works; the deliberate-break branch check was not run.

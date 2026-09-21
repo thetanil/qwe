@@ -36,7 +36,7 @@ Add the valgrind badge.
 
 - [x] `workflows_test` passes with `valgrind.yml` and its badge in place. `unit: tools/ci/workflows_test.sh::repo_is_consistent`
 - [x] A push to `main` runs both jobs green, and `valgrind_smoke_test` ran in `unit`. `manual: push; read both job logs`
-- [ ] The run's timing is recorded in `docs/valgrind.md`'s timing table as a "GitHub runner" row. `manual: copy from the run`
+- [x] The run's timing is recorded in `docs/valgrind.md`'s timing table as a "GitHub runner" row. `manual: copy from the run`
 - [ ] A deliberate uninitialised read turns `unit` red, and the artifact holds the valgrind report. `manual: throwaway branch, as in ticket 03`
 - [x] The valgrind badge renders. `manual: view README on github.com`
 
@@ -52,3 +52,5 @@ Add the valgrind badge.
   - `unit`, `corpus_test`: LuaJIT's `__register_frame` (unwind info of its mcode areas) is reported definitely lost once traces compile. One suppression added to `luajit.supp`, commented.
   - `unit`, `sites_oom_test`: see ticket 11 (the test's own leak, fixed).
   - `unit`, timeouts: `src/kernel:oom_test` takes 486 s, `src/cli/validate:oom_test` 382 s and `load_oom_test` 133 s in the devcontainer (16 cores), so they exceed the 300 s limit. Not excluded: the three are `timeout = "eternal"` and `.bazelrc` gives eternal 3600 s under `--config=valgrind`. `bazel test --config=valgrind //...` is green locally in 8 min. The runner has fewer cores: its timing is the next thing to record.
+
+- Runner timing recorded in docs/valgrind.md (run 35643065173): unit 23 min, e2e 2 min, valgrind-3.22.0 as in the devcontainer. load_oom_test took 288 s on the runner, so the eternal timeout was needed.

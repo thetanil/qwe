@@ -78,6 +78,8 @@ Measured on the 16-core devcontainer, valgrind 3.22:
 | plain `bazel test //src/...` (tests only, built) | about 3 s | baseline |
 | `--config=valgrind`, every `cc_test` | about 8 min | the three oom sweeps dominate, in parallel: `src/kernel:oom_test` 486 s, `src/cli/validate:oom_test` 382 s, `load_oom_test` 133 s (they grew after this table was first measured at 130 s); the rest under 40 s (`corpus_test`) or 5 s |
 | `valgrind_e2e`, six cases in parallel | about 6 s | about 5.5 s each |
+| GitHub runner (ubuntu-24.04, valgrind 3.22.0), `--config=valgrind` `unit` job | about 23 min | `src/kernel:oom_test` 986 s, `src/cli/validate:oom_test` 843 s, `load_oom_test` 288 s (close to the old 300 s limit), `corpus_test` 82 s; run 35643065173 |
+| GitHub runner, `e2e` job | about 2 min | 13 to 20 s per case |
 
 The three oom sweeps are `timeout = "eternal"`, and `.bazelrc` gives `--config=valgrind` 300 s for every
 other size and 3600 s for eternal: a runner with fewer cores takes longer than the devcontainer.
