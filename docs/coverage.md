@@ -210,3 +210,10 @@ Tests added, all `qwe validate` cases with the exact message and position as the
 `validate_secret_not_visible`, `validate_vars_at_workflow_level`, `validate_env_names`,
 `validate_become_value`, `validate_unknown_target`, `validate_step_run_and_uses`,
 `inventory_bad_names`, `plugin_files_malformed`, `plugin_shape_and_array_args`.
+
+## The HTML report leaves out vendored code
+
+`bazel run //tools/coverage:html` (and the report published to GitHub Pages) runs the combined report
+through `tools/coverage/ours.sh`, which drops every `third_party/` record (tinycbor is the one that
+shows up: it is vendored C that our tests exercise). The CI job summary totals and the percentage
+badge (`badge.sh`) count `src/` and `plugins/` only, too. `check.sh` and `floor.txt` always did.

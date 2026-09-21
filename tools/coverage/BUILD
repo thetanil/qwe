@@ -25,3 +25,14 @@ sh_test(
     args = ["$(location :badge.sh)"],
     data = [":badge.sh"],
 )
+
+# Drops third_party/ from the report, for the HTML and the CI totals.
+exports_files(["ours.sh"])
+
+sh_test(
+    name = "ours_test",
+    size = "small",
+    srcs = ["ours_test.sh"],
+    args = ["$(location :ours.sh)"],
+    data = [":ours.sh"],
+)

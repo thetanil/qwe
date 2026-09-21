@@ -37,10 +37,11 @@ jobs:
         run: |
           rep=bazel-out/_coverage/_coverage_report.dat
           [ -f "$rep" ] || exit 0
-          lcov --extract "$rep" '*.c' '*.h' -o "$RUNNER_TEMP/c.info" >/dev/null 2>&1 || true
-          lcov --extract "$rep" '*.lua' -o "$RUNNER_TEMP/lua.info" >/dev/null 2>&1 || true
+          tools/coverage/ours.sh "$rep" > "$RUNNER_TEMP/ours.info"
+          lcov --extract "$RUNNER_TEMP/ours.info" '*.c' '*.h' -o "$RUNNER_TEMP/c.info" >/dev/null 2>&1 || true
+          lcov --extract "$RUNNER_TEMP/ours.info" '*.lua' -o "$RUNNER_TEMP/lua.info" >/dev/null 2>&1 || true
           {
-            echo '### Combined'; echo '```'; lcov --summary "$rep" 2>&1; echo '```'
+            echo '### Combined (src/ and plugins/)'; echo '```'; lcov --summary "$RUNNER_TEMP/ours.info" 2>&1; echo '```'
             echo '### C'; echo '```'; lcov --summary "$RUNNER_TEMP/c.info" 2>&1 || true; echo '```'
             echo '### Lua'; echo '```'; lcov --summary "$RUNNER_TEMP/lua.info" 2>&1 || true; echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -49,3 +49,5 @@ pass/fail badge is enough.
 - `nightly.yml` and `release.yml` call `coverage.yml`, and a called workflow's jobs cannot ask for more permissions than the calling job has, even for a job that is skipped. Their `coverage` call jobs therefore carry `pages: write` and `id-token: write` (only those jobs).
 - The README's second coverage badge is a shields.io endpoint badge, not a workflow badge; `workflows_test` ignores it (`non_workflow_badge`). Local check: `badge.sh` on the current report prints 93.0% green.
 - First green push (46eee75, run 35660042207): coverage and pages jobs green; the report and coverage.json are served. `thetanil.github.io/qwe/` answers 301 to `https://thetanil.com/qwe/` (the account's Pages custom domain), so the README badge and docs use that URL directly. coverage.json says 93.0%, green.
+
+- Vendored code (tinycbor, the only third_party record in the report) is dropped from the HTML report and the CI job-summary totals by `tools/coverage/ours.sh` (tested by `//tools/coverage:ours_test`); the badge and the floor already counted `src/` and `plugins/` only.

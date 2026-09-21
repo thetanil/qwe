@@ -8,5 +8,8 @@ command -v genhtml >/dev/null || { echo "html: genhtml not found (the lcov packa
 cd "${BUILD_WORKSPACE_DIRECTORY:?run this with bazel run}"
 out=${1:-coverage-html}
 bazel coverage //... --combined_report=lcov
-genhtml bazel-out/_coverage/_coverage_report.dat --output-directory "$out" >/dev/null
+ours=$(mktemp)
+trap 'rm -f "$ours"' EXIT
+tools/coverage/ours.sh bazel-out/_coverage/_coverage_report.dat > "$ours"
+genhtml "$ours" --output-directory "$out" >/dev/null
 echo "coverage report: $PWD/$out/index.html"
