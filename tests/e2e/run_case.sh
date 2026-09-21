@@ -48,9 +48,11 @@ case_dir=$2
 
 case_dir=$(cd "$case_dir" && pwd)
 if [ -f "$case_dir/needs-ssh" ]; then
-	if [ -z "$REMOTE_CONTAINERS" ] || ! ssh -o BatchMode=yes -o ConnectTimeout=5 172.18.0.1 true >/dev/null 2>&1; then
+	ssh_err=
+	if [ -z "$REMOTE_CONTAINERS" ] || ! ssh_err=$(ssh -o BatchMode=yes -o ConnectTimeout=5 172.18.0.1 true 2>&1); then
 		if [ -n "$QWE_E2E_REQUIRE_SSH" ]; then
 			echo "FAIL: $(basename "$case_dir"): needs ssh to 172.18.0.1 and QWE_E2E_REQUIRE_SSH is set, but the host is not reachable (REMOTE_CONTAINERS unset, or ssh failed)" >&2
+			echo "REMOTE_CONTAINERS=${REMOTE_CONTAINERS:-(unset)} SSH_AUTH_SOCK=${SSH_AUTH_SOCK:-(unset)} HOME=${HOME:-(unset)}; ssh said: $ssh_err" >&2
 			exit 1
 		fi
 		echo "SKIP: $(basename "$case_dir"): needs ssh to 172.18.0.1 (REMOTE_CONTAINERS unset, or the host is not reachable)" >&2
