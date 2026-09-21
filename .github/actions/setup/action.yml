@@ -18,6 +18,7 @@ runs:
         bazelisk-cache: true
         disk-cache: ${{ inputs.cache-key }}
         repository-cache: true
+        cache-version: 2
         cache-save: ${{ github.event_name != 'pull_request' }}
         bazelrc: |
           test --test_output=errors
