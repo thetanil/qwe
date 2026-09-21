@@ -169,6 +169,7 @@ what each one fails on.
 | `coverage` | the coverage floor, and the HTML report as an artifact | every push to `main` |
 | `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes) | by hand, nightly, and in a release |
 | `nightly` | all five of the above, from fresh caches | 02:17 UTC, and by hand |
+| `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | by hand only |
 | `release` | all five again, then builds and publishes | a pushed tag `v*` |
 
 - **Runner and setup.** `ubuntu-24.04`, Bazel from `.bazelversion`, the caches through
@@ -178,8 +179,16 @@ what each one fails on.
 - **Caches.** A saved cache key never changes, so a cache slowly goes stale. The nightly deletes the
   `setup-bazel-*` caches and rebuilds them, and pushes to `main` restore the result.
 - **Coverage report.** A green push to `main` publishes the HTML report and a line-coverage percentage badge (`coverage.json`) to GitHub Pages, from the last job of `coverage.yml`.
-- **Fuzzing** is never part of a push, the nightly or a release. It is a manual run (`gh workflow run fuzz.yml`,
-  see `docs/fuzzing.md`).
+- **Fuzzing** is never part of a push, the nightly or a release. Start it by hand and read the result:
+  ```
+  gh workflow run fuzz.yml -f seconds=3600     # seconds: at most 19800; 300 is a quick trial
+  gh run list --workflow=fuzz.yml --limit 3    # find the run
+  gh run watch                                 # follow it
+  gh run view --log-failed                     # after a failure
+  gh run download -n fuzz-findings             # the crash files and per-process logs
+  ```
+  The job summary lists each process's executions, corpus and coverage. The corpus persists between
+  runs in the Actions cache. See `docs/fuzzing.md`.
 - **Releasing.** Bump `QWE_VERSION` in `src/kernel/qwe.h`, push, then write the release in the GitHub web
   UI with its tag `v<version>` (or just push the tag). All five gates run at that commit, the binaries
   and `SHA256SUMS` are attached, and the commit hash is added to your notes. If anything fails, the

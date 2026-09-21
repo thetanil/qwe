@@ -1,6 +1,6 @@
 # 07: Publish the coverage report and a percentage badge on GitHub Pages
 
-Status: in-progress (manual criteria await a push)
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 06
@@ -39,8 +39,8 @@ pass/fail badge is enough.
 - [x] `badge.sh` on a fixture lcov file writes the expected percentage and colour, and counts only `src/` and `plugins/` records. `unit: tools/coverage/badge_test.sh::src_and_plugins_only`
 - [x] It picks each colour at its boundary. `unit: tools/coverage/badge_test.sh::thresholds`
 - [x] `workflows_test` ignores non-workflow badges. `unit: tools/ci/workflows_test.sh::non_workflow_badge`
-- [ ] A green push to `main` deploys, and `https://thetanil.com/qwe/` shows the report. `manual: enable Pages (Settings → Pages → GitHub Actions), push, open the URL`
-- [ ] The percentage badge renders with the same number as the job summary. `manual: view README on github.com`
+- [x] A green push to `main` deploys, and `https://thetanil.com/qwe/` shows the report. `manual: enable Pages (Settings → Pages → GitHub Actions), push, open the URL`
+- [x] The percentage badge renders with the same number as the job summary. `manual: view README on github.com`
 
 ## Comments
 
@@ -51,3 +51,4 @@ pass/fail badge is enough.
 - First green push (46eee75, run 35660042207): coverage and pages jobs green; the report and coverage.json are served. `thetanil.github.io/qwe/` answers 301 to `https://thetanil.com/qwe/` (the account's Pages custom domain), so the README badge and docs use that URL directly. coverage.json says 93.0%, green.
 
 - Vendored code (tinycbor, the only third_party record in the report) is dropped from the HTML report and the CI job-summary totals by `tools/coverage/ours.sh` (tested by `//tools/coverage:ours_test`); the badge and the floor already counted `src/` and `plugins/` only.
+- Closed by the user: the first green push deployed the report, and the badge renders.
