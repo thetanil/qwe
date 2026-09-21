@@ -1,6 +1,6 @@
 # 02: The ssh e2e cases run in CI instead of skipping
 
-Status: ready-for-agent
+Status: in-progress (manual criteria await a push)
 Category: enhancement
 Type: task
 Blocked by: 01
@@ -47,10 +47,15 @@ not, so local runs without the host still skip.
 
 ## Acceptance criteria
 
-- [ ] With `QWE_E2E_REQUIRE_SSH=1` and no reachable target, a `needs-ssh` case fails with a message naming the case and the host. `e2e: tests/e2e/require_ssh_unreachable/`
-- [ ] Without it, the same case still prints SKIP and passes, which is today's behaviour. `e2e: tests/e2e/require_ssh_unreachable/` (second invocation in the case's `check.sh`, or a sibling case)
+- [x] With `QWE_E2E_REQUIRE_SSH=1` and no reachable target, a `needs-ssh` case fails with a message naming the case and the host. `unit: tests/e2e/require_ssh_test.sh`
+- [x] Without it, the same case still prints SKIP and passes, which is today's behaviour. `unit: tests/e2e/require_ssh_test.sh` (second invocation in the case's `check.sh`, or a sibling case)
 - [ ] In the `tests.yml` run, all 19 `needs-ssh` cases run, and none prints SKIP. `manual: push; grep the run's test logs for "SKIP:"; expect none`
 - [ ] Every ssh case passes on the runner. `manual: the same run is green`
 - [ ] The devcontainer is unaffected: `bazel test //...` there is still green with the cases running against the real host. `manual: run locally before committing`
 
 ## Comments
+
+- Implemented as `//tests/e2e:require_ssh_test` (an sh_test with a fake failing `ssh`), not an e2e case dir: a case runs under the real environment, where the target may be reachable.
+- Approach used: the preferred one, `172.18.0.1/32` added to `lo`, `known_hosts` pre-seeded by ssh-keyscan; no case files changed. Whether it works on a runner is checked by the first run.
+- The `ssh_become_*` assumption: only `ssh_become_denied` uses sudo, and it expects no passwordless sudo for the ssh user (zeta's). The runner user has it, so the setup action deletes `/etc/sudoers.d/runner` last and checks `sudo -n true` fails over ssh.
+- `.bazelrc` passes `QWE_E2E_REQUIRE_SSH` through; the action's `~/.bazelrc` sets it and `REMOTE_CONTAINERS=1` to 1.

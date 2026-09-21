@@ -1,3 +1,4 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load(":defs.bzl", "e2e_test", "e2e_valgrind_test")
 exports_files(["run_case.sh", "invert.sh"])
 
@@ -324,3 +325,12 @@ e2e_test(name = "keygen_rejects_argument")
 e2e_test(name = "keygen_no_home")
 
 e2e_test(name = "cli_no_subcommand")
+
+# QWE_E2E_REQUIRE_SSH=1: an unreachable needs-ssh case fails instead of skipping.
+sh_test(
+    name = "require_ssh_test",
+    size = "small",
+    srcs = ["require_ssh_test.sh"],
+    args = ["$(location :run_case.sh)"],
+    data = [":run_case.sh"],
+)

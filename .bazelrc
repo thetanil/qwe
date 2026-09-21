@@ -7,6 +7,7 @@ test --test_output=errors
 test --test_env=REMOTE_CONTAINERS
 test --test_env=SSH_AUTH_SOCK
 test --test_env=HOME
+test --test_env=QWE_E2E_REQUIRE_SSH
 
 # Sanitizer builds (quality/03). A finding fails the test: no recovery.
 # Reports go to files named per pid, so a forked step child's report never

@@ -21,6 +21,7 @@
 #   needs-ssh         optional marker: the case needs the devcontainer's ssh target. It
 #                     is skipped (prints SKIP, passes) unless REMOTE_CONTAINERS is set
 #                     and `ssh -o BatchMode=yes 172.18.0.1 true` works
+#                     With QWE_E2E_REQUIRE_SSH=1 (CI) an unreachable target fails the case instead.
 #   setup.sh          optional: run in the work dir before qwe (chmod a key file, say)
 #   stdin             optional: qwe's standard input (a file; setup.sh may create or replace
 #                     it, and a directory there makes reading stdin fail with EISDIR)
@@ -48,6 +49,10 @@ case_dir=$2
 case_dir=$(cd "$case_dir" && pwd)
 if [ -f "$case_dir/needs-ssh" ]; then
 	if [ -z "$REMOTE_CONTAINERS" ] || ! ssh -o BatchMode=yes -o ConnectTimeout=5 172.18.0.1 true >/dev/null 2>&1; then
+		if [ -n "$QWE_E2E_REQUIRE_SSH" ]; then
+			echo "FAIL: $(basename "$case_dir"): needs ssh to 172.18.0.1 and QWE_E2E_REQUIRE_SSH is set, but the host is not reachable (REMOTE_CONTAINERS unset, or ssh failed)" >&2
+			exit 1
+		fi
 		echo "SKIP: $(basename "$case_dir"): needs ssh to 172.18.0.1 (REMOTE_CONTAINERS unset, or the host is not reachable)" >&2
 		exit 0
 	fi
