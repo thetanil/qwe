@@ -7,7 +7,9 @@
 
 static int usage(void)
 {
-	fprintf(stderr, "usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]... [--debug]\n");
+	fprintf(stderr,
+		"usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]... [--debug] "
+		"[--summary <file>]\n");
 	return QWE_EXIT_USAGE;
 }
 
@@ -39,6 +41,12 @@ int qwe_cmd_run(int argc, char **argv)
 				return usage();
 			}
 			jobs[njobs++] = argv[i];
+		} else if (strcmp(argv[i], "--summary") == 0) {
+			if (++i >= argc || opts.summary) {
+				free(jobs);
+				return usage();
+			}
+			opts.summary = argv[i];
 		} else if (argv[i][0] == '-' || path) {
 			free(jobs);
 			return usage(); /* an unknown option, or a second file */

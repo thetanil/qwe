@@ -28,6 +28,7 @@ cc_library(
         ":proc",
         ":timer",
         ":result",
+        ":summary",
         ":ring",
         ":sched",
         ":sink",
@@ -129,6 +130,23 @@ cc_test(
     srcs = ["result_test.c"],
     deps = [
         ":result",
+        "//third_party/greatest",
+    ],
+)
+
+cc_library(
+    name = "summary",
+    srcs = ["summary.c"],
+    hdrs = ["summary.h"],
+    deps = [":result"],
+)
+
+cc_test(
+    name = "summary_test",
+    size = "small",
+    srcs = ["summary_test.c"],
+    deps = [
+        ":summary",
         "//third_party/greatest",
     ],
 )

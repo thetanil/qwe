@@ -75,7 +75,7 @@ targets:
   `${{ steps.<id>.outputs.<name> }}`.
 
 ```
-qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]...
+qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]... [--summary <file>]
 qwe validate <workflow.yaml> [-i <inventory.yaml>]
 qwe keygen | qwe encrypt | qwe --version
 ```

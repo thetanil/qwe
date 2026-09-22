@@ -1,0 +1,10 @@
+jobs:
+  a:
+    target: local
+    steps:
+      - run: exit 1
+  b:
+    target: local
+    needs: [a]
+    steps:
+      - run: echo NEVER

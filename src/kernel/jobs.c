@@ -174,6 +174,8 @@ void qwe_jobs_free(lua_State *L, struct job *jobs, size_t n)
 		free(j->needs);
 		for (k = 0; k < j->nsteps && j->steps; k++) {
 			free((char *)j->steps[k].id);
+			free((char *)j->steps[k].name);
+			free((char *)j->steps[k].plugin);
 			free(j->steps[k].outputs_json);
 		}
 		free(j->steps);

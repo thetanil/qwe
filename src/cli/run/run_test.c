@@ -15,6 +15,7 @@ TEST option_parsing(void)
 	char *inv_needs_path[] = {"run", "w.yaml", "-i"};
 	char *inv_twice[] = {"run", "w.yaml", "-i", "a.yaml", "-i", "b.yaml"};
 	char *unknown_after_file[] = {"run", "w.yaml", "--job", "a", "--bogus"};
+	char *summary_twice[] = {"run", "w.yaml", "--summary", "a.md", "--summary", "b.md"};
 
 	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(3, no_preconnect));
 	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(3, no_preconnect_after));
@@ -25,12 +26,22 @@ TEST option_parsing(void)
 	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(3, inv_needs_path));
 	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(6, inv_twice));
 	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(5, unknown_after_file));
+	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(6, summary_twice));
+	PASS();
+}
+
+TEST summary_needs_argument(void)
+{
+	char *no_arg[] = {"run", "w.yaml", "--summary"};
+
+	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(3, no_arg));
 	PASS();
 }
 
 SUITE(run)
 {
 	RUN_TEST(option_parsing);
+	RUN_TEST(summary_needs_argument);
 }
 
 GREATEST_MAIN_DEFS();

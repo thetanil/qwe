@@ -20,6 +20,7 @@ struct qwe_run_options {
 	const char *inventory; /* -i: the inventory file, or NULL for inventory.yaml next to the workflow */
 	const char *const *jobs; /* --job: the jobs to run (with what they need), or NULL for all */
 	size_t njobs;
+	const char *summary; /* --summary: a markdown report of the run is appended here, or NULL for none */
 };
 
 /* Runs the workflow at path to completion; returns the process exit code. */

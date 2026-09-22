@@ -1,0 +1,14 @@
+jobs:
+  first:
+    target: local
+    steps:
+      - id: create
+        uses: file.ensure
+        with: {path: "f.txt", content: "hi", mode: "0640"}
+  second:
+    target: local
+    needs: [first]
+    steps:
+      - id: again
+        uses: file.ensure
+        with: {path: "f.txt", content: "hi", mode: "0640"}

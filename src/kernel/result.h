@@ -13,6 +13,8 @@ struct qwe_step_result {
 	char *outputs_json; /* the step's outputs as a JSON object; NULL if it has none */
 	time_t started, ended; /* 0 if it never started */
 	long duration_ms; /* -1 if it never started */
+	const char *name; /* the step's name:, or NULL; not written to result.json (the run summary's id column) */
+	const char *plugin; /* "run", or the step's uses: value; not written to result.json */
 };
 
 struct qwe_job_result {

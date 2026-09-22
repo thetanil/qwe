@@ -16,6 +16,7 @@
 #include "src/kernel/ring.h"
 #include "src/kernel/sched.h"
 #include "src/kernel/sink.h"
+#include "src/kernel/summary.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -580,6 +581,36 @@ static char *step_id(struct job *job, size_t i)
 	return id;
 }
 
+/* The step's name:, or NULL: the run summary falls back to it when there is no id. */
+static char *step_name(struct job *job, size_t i)
+{
+	lua_State *L = job->L;
+	char *name;
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, job->ref);
+	lua_getfield(L, -1, "steps");
+	lua_rawgeti(L, -1, (int)i + 1);
+	lua_getfield(L, -1, "name");
+	name = lua_isstring(L, -1) ? qwe_xstrdup(lua_tostring(L, -1)) : NULL;
+	lua_pop(L, 4);
+	return name;
+}
+
+/* "run", or the step's uses: value: the run summary's plugin column. */
+static char *step_plugin(struct job *job, size_t i)
+{
+	lua_State *L = job->L;
+	char *plugin;
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, job->ref);
+	lua_getfield(L, -1, "steps");
+	lua_rawgeti(L, -1, (int)i + 1);
+	lua_getfield(L, -1, "uses");
+	plugin = qwe_xstrdup(lua_isstring(L, -1) ? lua_tostring(L, -1) : "run");
+	lua_pop(L, 4);
+	return plugin;
+}
+
 /* A resource the shell could not get: the job is owed a start-failed. The
  * operation and errno go to the trace with that event. */
 static void owe_start_failed(struct job *job, const char *what, const char *op, int err)
@@ -914,6 +945,8 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 	int err = 0;
 
 	res->id = step_id(job, r->cur);
+	res->name = step_name(job, r->cur);
+	res->plugin = step_plugin(job, r->cur);
 	free(r->out_path);
 	free(r->step_json);
 	r->step_json = NULL;
@@ -1044,6 +1077,8 @@ static void job_end(struct run_ctx *ctx, struct job *job)
 		job->duration_ms = mono_diff_ms(job->mono_start_ns, mono_now_ns());
 		for (i = r->cur; i < job->nsteps; i++) {
 			job->steps[i].id = step_id(job, i);
+			job->steps[i].name = step_name(job, i);
+			job->steps[i].plugin = step_plugin(job, i);
 			job->steps[i].outcome = "skipped";
 		}
 	}
@@ -1730,6 +1765,8 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	size_t i;
 	int rc = QWE_EXIT_OK, all_ok = 1, trace_ok = 0;
 	FILE *fp;
+	int64_t run_mono_start;
+	long run_duration_ms;
 
 	memset(&ctx, 0, sizeof ctx);
 	if (load_workflow("qwe run", path, opts ? opts->inventory : NULL, &L) != 0)
@@ -1809,10 +1846,12 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	lua_pop(L, 1);
 	note_disabled(&ctx);
 	preconnect(&ctx);
+	run_mono_start = mono_now_ns();
 	if (run_all(&ctx, max_parallel) < 0)
 		rc = QWE_EXIT_FAILED;
 	close_masters(L);
 	qwe_redact_clear();
+	run_duration_ms = mono_diff_ms(run_mono_start, mono_now_ns());
 
 	results = qwe_xcalloc((size_t)n, sizeof *results);
 	for (i = 0; i < (size_t)n; i++) {
@@ -1841,6 +1880,12 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	if (!fp || qwe_result_write(fp, run_id, results, (size_t)n) < 0 || fclose(fp) != 0) {
 		fprintf(stderr, "qwe run: cannot write %s: %s\n", run_dir, strerror(errno));
 		rc = QWE_EXIT_FAILED;
+	}
+	if (opts && opts->summary) {
+		const char *outcome = rc == QWE_EXIT_CANCELLED ? "cancelled" : all_ok ? "success" : "failed";
+
+		if (qwe_summary_write(opts->summary, path, outcome, run_duration_ms, results, (size_t)n) < 0)
+			fprintf(stderr, "qwe run: cannot write summary %s: %s\n", opts->summary, strerror(errno));
 	}
 	report_disabled(jobs, (size_t)n);
 	qwe_lc_set_abort_hook(NULL, NULL);

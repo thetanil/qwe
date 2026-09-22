@@ -330,6 +330,16 @@ e2e_test(name = "result_duration_ms")
 
 e2e_test(name = "result_duration_ms_skipped")
 
+e2e_test(name = "summary_success")
+
+e2e_test(name = "summary_failure_skip")
+
+e2e_test(name = "summary_timeout")
+
+e2e_test(name = "summary_unwritable")
+
+e2e_test(name = "summary_unwritable_failed_run")
+
 # QWE_E2E_REQUIRE_SSH=1: an unreachable needs-ssh case fails instead of skipping.
 sh_test(
     name = "require_ssh_test",

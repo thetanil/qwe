@@ -39,6 +39,8 @@
 # expected/RUN/lifecycle.trace.
 # check.sh sees the trace with its real times as lifecycle.raw (seconds since the
 # run started, first field), and result.json with its real numbers as result.raw.json.
+# If qwe wrote summary.md (--summary summary.md), its duration column and its
+# heading's "(N ms)" are also masked to DURATION, so goldens can say expected/summary.md.
 #
 #
 # Exit: 0 pass, 1 golden mismatch, 3 harness error.
@@ -170,6 +172,14 @@ if [ -d "$work/.qwe/runs" ] && [ "$(ls "$work/.qwe/runs" | wc -l)" = 1 ]; then
 		sed -e 's/^[0-9][0-9]*\.[0-9][0-9]* /TIME /' "$work/RUN/lifecycle.trace" >"$work/RUN/lifecycle.trace.new" &&
 			mv "$work/RUN/lifecycle.trace.new" "$work/RUN/lifecycle.trace"
 	fi
+fi
+# --summary writes wherever the case's args point (conventionally summary.md); its
+# duration column and heading duration are masked to DURATION, same as duration_ms.
+if [ -f "$work/summary.md" ]; then
+	sed -e 's/([0-9][0-9]* ms)/(DURATION ms)/' \
+	    -e 's/| [0-9][0-9]* |$/| DURATION |/' \
+	    "$work/summary.md" >"$work/summary.md.new" &&
+		mv "$work/summary.md.new" "$work/summary.md"
 fi
 
 fail=0

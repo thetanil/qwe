@@ -1,0 +1,4 @@
+run
+w.yaml
+--summary
+nodir/summary.md
