@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
         with:
+          apt: gdb # for the TEMPORARY diagnostic step below; the ssh-target step that
+          # follows removes passwordless sudo, so this must install before it, not after
           cache-key: release
           ssh-target: "true" # the full suite needs it
       # TEMPORARY diagnostic: bazel test --config=release //... segfaults on every
@@ -29,7 +31,6 @@ jobs:
       - run: bazel build --config=release //src/cli:qwe-debug
       - name: gdb backtrace of qwe-debug under release
         run: |
-          sudo apt-get install -y --no-install-recommends gdb
           echo "--- qwe-debug --version ---"
           gdb --batch -ex run -ex bt -ex "info registers" -ex "disassemble" \
             --args bazel-bin/src/cli/qwe-debug --version || true
