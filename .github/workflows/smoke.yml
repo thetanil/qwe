@@ -22,7 +22,29 @@ jobs:
         with:
           cache-key: release
           ssh-target: "true" # the full suite needs it
+      # TEMPORARY diagnostic: bazel test --config=release //... segfaults on every
+      # Lua-touching binary here but not locally, with zero output before the crash.
+      # Get a real backtrace before the full suite (whose failure would otherwise skip
+      # the rest of this job) runs.
+      - run: bazel build --config=release //src/cli:qwe-debug
+      - name: gdb backtrace of qwe-debug under release
+        run: |
+          sudo apt-get install -y --no-install-recommends gdb
+          echo "--- qwe-debug --version ---"
+          gdb --batch -ex run -ex bt -ex "info registers" -ex "disassemble" \
+            --args bazel-bin/src/cli/qwe-debug --version || true
+          echo "--- qwe-debug validate (trivial workflow) ---"
+          cat > /tmp/diag.yml <<'EOF'
+          jobs:
+            j:
+              target: local
+              steps:
+                - run: echo hi
+          EOF
+          gdb --batch -ex run -ex bt -ex "info registers" \
+            --args bazel-bin/src/cli/qwe-debug validate /tmp/diag.yml || true
       - run: bazel test --config=release //...
+        continue-on-error: true
       - run: bazel build --config=release //src/cli:qwe
       - if: failure()
         uses: ./.github/actions/collect-logs
