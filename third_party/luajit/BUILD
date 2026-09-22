@@ -154,11 +154,15 @@ cc_library(
         "-std=gnu99",
         "-fomit-frame-pointer",
         "-fno-stack-protector",
-        # LuaJIT's tagged values (lj_obj.h's TValue) are type-punned through a union by
-        # design; under -O2 (--config=release, ADR pending) GCC's strict-aliasing
-        # optimizer miscompiles that into crashes (SIGSEGV, everywhere the VM runs) that
-        # a fastbuild (-O0) or -c dbg (-O0) binary never shows. This flag is required for
-        # any optimized LuaJIT build, on any platform, not specific to this repo.
+        # -O2 (--config=release, ADR pending) miscompiles this library on the CI runner in
+        # a way that never reproduces locally: -fno-strict-aliasing alone (LuaJIT's tagged
+        # values are type-punned through a union) did not stop it, nor did pinning the host
+        # code generators (minilua, buildvm) to -O0. Pin the runtime library itself to -O0,
+        # matching fastbuild, which is known-good: the interpreter's dispatch loop and C
+        # library functions are what -O2 would speed up, not the JIT-compiled Lua code that
+        # dominates real workloads, so this is a small, targeted cost, not a lost feature.
+        # -fno-strict-aliasing stays as defense in depth.
+        "-O0",
         "-fno-strict-aliasing",
         "-U_FORTIFY_SOURCE",
         "-D_FILE_OFFSET_BITS=64",
