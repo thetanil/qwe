@@ -1,6 +1,6 @@
 # 05: smoke.yml: build the release binary, run smoke_run.yml on a clean runner
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 02, 04
@@ -34,11 +34,45 @@ test rules 1–3 hold.
 
 ## Acceptance criteria
 
-- [ ] `smoke_run.yml` passes with the fastbuild binary in the Bazel suite: `e2e: tests/smoke:smoke_workflows_test`
-- [ ] The drift test accepts smoke.yml (badge, workflow_call, push to main, commands listed): `unit: tools/ci/workflows_test.sh::repo_is_consistent`
-- [ ] On a push to main, build and smoke are green, and the run summary shows the smoke_run report from 02: `manual: push; open the run; screenshot or paste the summary into a comment`
-- [ ] Deliberately breaking `smoke_run.yml` (for example `exit 1` in a step) on a branch dispatch fails the smoke step and the job: `manual: workflow_dispatch on a scratch branch; record the run URL`
-- [ ] The smoke job's log shows `statically linked`: `manual: same run`
-- [ ] `bazel test //...` green
+- [x] `smoke_run.yml` passes with the fastbuild binary in the Bazel suite: `e2e: tests/smoke:smoke_workflows_test`
+- [x] The drift test accepts smoke.yml (badge, workflow_call, push to main, commands listed): `unit: tools/ci/workflows_test.sh::repo_is_consistent`
+- [ ] On a push to main, build and smoke are green, and the run summary shows the smoke_run report from 02: `manual: push; open the run; screenshot or paste the summary into a comment` (not run: this session never pushes, per the workspace's "never push" rule; see comments)
+- [ ] Deliberately breaking `smoke_run.yml` (for example `exit 1` in a step) on a branch dispatch fails the smoke step and the job: `manual: workflow_dispatch on a scratch branch; record the run URL` (not run, same reason)
+- [ ] The smoke job's log shows `statically linked`: `manual: same run` (not run on GitHub; verified equivalently below)
+- [x] `bazel test //...` green
 
 ## Comments
+
+- `.github/workflows/smoke.yml`: `build` (shared setup, `cache-key: release`, `ssh-target: "true"`)
+  runs `bazel test --config=release //...` then `bazel build --config=release //src/cli:qwe`,
+  uploads it as `qwe-build`. `smoke` (`needs: build`) has no shared-setup step at all — just
+  checkout, `download-artifact`, `chmod +x`, a `file qwe | grep -q "statically linked"` gate,
+  then the one `smoke_run` step.
+- `tests/smoke/smoke_run.yml`: echo, a multi-line script, job env overriding workflow env and
+  step env overriding job env (each asserted with `test` in a `run:`, since `assert` doesn't
+  exist until 08), and a `$QWE_OUTPUT` step output consumed by a later step.
+- `tests/smoke/smoke_workflows_test.sh` + `BUILD` (`//tests/smoke:smoke_workflows_test`): runs
+  `qwe validate` then `qwe run` on every `tests/smoke/*.yml` except `neg_*.yml`, with the
+  fastbuild binary, expecting exit 0 from both. A workflow needing root or a real package
+  install carries `# smoke: skip-in-bazel: <reason>` near its top and is skipped here (none yet
+  — this is scaffolding for 10/11's apt/become workflows).
+- README got a `smoke` badge; `docs/ci-checks.md` got a table row and two new "Every push"
+  commands (`bazel test --config=release //...`,
+  `./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"`), which
+  `tools/ci/workflows_test.sh::repo_is_consistent` confirms are wired up.
+- **The three GitHub-only manual criteria are not checked off.** This session works under
+  `thetanil/qwe/CLAUDE.md`'s "**Never push.**" rule (this project's own override of the
+  workspace default, which is otherwise "never commit"), and has no way to trigger a GitHub
+  Actions run without pushing or dispatching on the remote. What I could verify locally instead:
+  - Built the release binary and ran the exact `smoke` job commands (`file qwe | grep -q
+    "statically linked"`, then `./qwe validate ... && ./qwe run ... --summary
+    "$GITHUB_STEP_SUMMARY"`) from a scratch directory standing in for the checkout — same
+    output shape as the manual verification asks for, icons and all.
+  - `file bazel-bin/src/cli/qwe` reports `statically linked` (also re-confirmed from 04).
+  - Did not simulate the "deliberately break it" case beyond what `summary_log_tail`/
+    `summary_*` already cover in `bazel test //...` (a failing `run:` step, `continue-on-error`
+    semantics, `qwe run`'s own exit code) — those are the same mechanics the broken-branch
+    check would exercise, just not through an actual `workflow_dispatch`.
+  When the user pushes (or dispatches `smoke.yml` on a branch), these three should be
+  straightforward to close out by pasting the run's summary/log into this file.
+- `bazel test //...`: 225 passed, 3 skipped (pre-existing), 0 failed. Coverage floor holds.

@@ -17,6 +17,7 @@ skipped one a failure).
 | Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | nightly, release and manual | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
 | Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | nightly, release and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
 | Coverage floor | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/coverage/floor.txt` |
+| Smoke | `smoke.yml` (job `build` then `smoke`) | `./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"` | every push to main | build ~ the plain suite under `--config=release`; smoke seconds on a fresh runner | the release binary fails a real smoke workflow, or is not statically linked |
 | Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | nightly (3600 s) and manual | hours; four processes in parallel | any crash artifact exists |
 
 Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
@@ -29,6 +30,8 @@ bazel test //...
 bazel test --config=asan //...
 bazel test --config=ubsan //...
 bazel run //tools/coverage:check
+bazel test --config=release //...
+./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"
 ```
 
 `check` runs `bazel coverage //... --combined_report=lcov` itself and compares

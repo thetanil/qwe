@@ -1,0 +1,54 @@
+name: smoke
+# Proves the release binary does real work on a clean Linux machine, not just inside the Bazel
+# sandbox: build it with the release config, then run our smoke workflows against the machine
+# itself (the local backend, no ssh), one GitHub step per workflow, each appending its report to
+# the run summary.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-smoke-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: release
+          ssh-target: "true" # the full suite needs it
+      - run: bazel test --config=release //...
+      - run: bazel build --config=release //src/cli:qwe
+      - if: failure()
+        uses: ./.github/actions/collect-logs
+        with:
+          name: smoke-build-logs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: qwe-build
+          path: bazel-bin/src/cli/qwe
+          if-no-files-found: error
+  smoke:
+    needs: build
+    # A fresh runner with no shared setup: that setup's ssh-target step removes passwordless
+    # sudo, which the become and apt smoke workflows need, and this job proves the binary needs
+    # no Bazel to run.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: qwe-build
+          path: .
+      - run: chmod +x qwe
+      - name: The binary is statically linked
+        run: file qwe | grep -q "statically linked" || { file qwe; exit 1; }
+      - name: smoke_run
+        run: |
+          ./qwe validate tests/smoke/smoke_run.yml &&
+          ./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"

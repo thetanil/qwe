@@ -1,0 +1,30 @@
+# smoke: run. Proves the default step kind (run:) and its plumbing: multi-line scripts,
+# workflow/job/step env: precedence, and a $QWE_OUTPUT step output read by a later step.
+# Runs both against the shipped binary in the smoke GitHub job and against the fastbuild
+# binary in `bazel test //...` (tests/smoke:smoke_workflows_test).
+name: smoke run
+env:
+  LEVEL: workflow
+jobs:
+  run:
+    target: local
+    env:
+      LEVEL: job
+    steps:
+      - id: echo
+        run: echo "hello from qwe smoke"
+      - id: multiline
+        run: |
+          echo "line one"
+          echo "line two"
+          echo "line three"
+      - id: job-env-wins-over-workflow
+        run: test "$LEVEL" = "job"
+      - id: step-env-wins-over-job
+        run: test "$LEVEL" = "step"
+        env:
+          LEVEL: step
+      - id: produce
+        run: echo "greeting=hello smoke" >> "$QWE_OUTPUT"
+      - id: consume
+        run: test "${{ steps.produce.outputs.greeting }}" = "hello smoke"
