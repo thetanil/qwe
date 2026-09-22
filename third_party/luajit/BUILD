@@ -24,7 +24,16 @@ LIB_C = [
 cc_binary(
     name = "minilua",
     srcs = ["src/host/minilua.c"],
-    copts = ["-w"],
+    # minilua is itself a small Lua interpreter (the same union-based tagged-value
+    # representation as full LuaJIT) used only to generate other LuaJIT sources
+    # (genversion.lua, dynasm.lua -> buildvm_arch.h): under --config=release, Bazel's
+    # exec/host configuration builds tools like this one at -c opt regardless of the
+    # target build's compilation mode, and -O2's strict-aliasing optimizer can silently
+    # miscompile it. A code generator that runs once at build time gains nothing from
+    # optimization and has everything to lose from running wrong, so pin it to -O0
+    # -fno-strict-aliasing outright rather than relying on copt order to win the fight
+    # with whatever -c opt the exec config is using.
+    copts = ["-w", "-O0", "-fno-strict-aliasing"],
     linkopts = ["-lm"],
     visibility = ["//visibility:public"],
 )
@@ -70,6 +79,10 @@ cc_binary(
     ],
     copts = [
         "-w",
+        # A code generator (produces lj_vm.S and the lj_*def.h headers by introspecting
+        # LuaJIT's own struct layouts): same reasoning as minilua's copts above.
+        "-O0",
+        "-fno-strict-aliasing",
         "-DLUAJIT_TARGET=LUAJIT_ARCH_x64",
         "-DLJ_ARCH_HASFPU=1",
         "-DLJ_ABI_SOFTFP=0",
