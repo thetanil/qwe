@@ -1,0 +1,12 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - name: "a|b"
+        run: echo ok
+      - name: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        run: |
+          printf 'has a ``` run and a | pipe\n'
+          printf 'L%.0s' $(seq 1 300)
+          printf '\n'
+          exit 1

@@ -15,6 +15,7 @@ src/kernel/preamble.c 1
 src/kernel/redact.c 3
 src/kernel/ring.c 1
 src/kernel/sink.c 1
+src/kernel/summary.c 1
 src/kernel/validate.c 13
 src/kernel/workflow.c 11
 src/secrets/envelope.c 4

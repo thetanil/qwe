@@ -138,7 +138,10 @@ cc_library(
     name = "summary",
     srcs = ["summary.c"],
     hdrs = ["summary.h"],
-    deps = [":result"],
+    deps = [
+        ":alloc",
+        ":result",
+    ],
 )
 
 cc_test(

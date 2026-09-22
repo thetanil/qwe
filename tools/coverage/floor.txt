@@ -73,6 +73,7 @@ src/kernel/sched.c 0
 src/kernel/sched.h 0
 src/kernel/sink.c 2
 src/kernel/sink.h 0
+src/kernel/summary.c 6
 src/kernel/timer.c 1
 src/kernel/timer.h 0
 src/kernel/trace.c 9

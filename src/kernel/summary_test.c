@@ -7,21 +7,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
-/* Runs qwe_summary_write into a fresh temp file and returns its content (caller frees). */
-static char *written(const char *workflow_file, const char *overall_outcome, long run_duration_ms,
-		     const struct qwe_job_result *jobs, size_t njobs)
+/* Reads a whole file's content (caller frees). */
+static char *slurp(const char *path)
 {
-	char path[] = "/tmp/qwe-summary-test-XXXXXX";
-	int fd = mkstemp(path);
-	FILE *fp;
+	FILE *fp = fopen(path, "r");
 	char *buf;
 	long len;
 
-	close(fd);
-	qwe_summary_write(path, workflow_file, overall_outcome, run_duration_ms, jobs, njobs);
-	fp = fopen(path, "r");
 	fseek(fp, 0, SEEK_END);
 	len = ftell(fp);
 	rewind(fp);
@@ -29,8 +24,28 @@ static char *written(const char *workflow_file, const char *overall_outcome, lon
 	fread(buf, 1, (size_t)len, fp);
 	buf[len] = '\0';
 	fclose(fp);
-	unlink(path);
 	return buf;
+}
+
+/* Runs qwe_summary_write into a fresh temp file and returns its content (caller frees). */
+static char *written_in(const char *run_dir, const char *workflow_file, const char *overall_outcome,
+			long run_duration_ms, const struct qwe_job_result *jobs, size_t njobs)
+{
+	char path[] = "/tmp/qwe-summary-test-XXXXXX";
+	int fd = mkstemp(path);
+	char *out;
+
+	close(fd);
+	qwe_summary_write(path, run_dir, workflow_file, overall_outcome, run_duration_ms, jobs, njobs);
+	out = slurp(path);
+	unlink(path);
+	return out;
+}
+
+static char *written(const char *workflow_file, const char *overall_outcome, long run_duration_ms,
+		     const struct qwe_job_result *jobs, size_t njobs)
+{
+	return written_in(NULL, workflow_file, overall_outcome, run_duration_ms, jobs, njobs);
 }
 
 TEST heading_jobs_and_steps(void)
@@ -89,22 +104,12 @@ TEST appends(void)
 	char path[] = "/tmp/qwe-summary-test-XXXXXX";
 	int fd = mkstemp(path);
 	struct qwe_job_result job = {.id = "j", .outcome = "success", .duration_ms = 1};
-	FILE *fp;
-	char *buf;
-	long len;
-	char *first, *second;
+	char *buf, *first, *second;
 
 	close(fd);
-	ASSERT_EQ(0, qwe_summary_write(path, "one.yaml", "success", 1, &job, 1));
-	ASSERT_EQ(0, qwe_summary_write(path, "two.yaml", "success", 1, &job, 1));
-	fp = fopen(path, "r");
-	fseek(fp, 0, SEEK_END);
-	len = ftell(fp);
-	rewind(fp);
-	buf = malloc((size_t)len + 1);
-	fread(buf, 1, (size_t)len, fp);
-	buf[len] = '\0';
-	fclose(fp);
+	ASSERT_EQ(0, qwe_summary_write(path, NULL, "one.yaml", "success", 1, &job, 1));
+	ASSERT_EQ(0, qwe_summary_write(path, NULL, "two.yaml", "success", 1, &job, 1));
+	buf = slurp(path);
 	unlink(path);
 	first = strstr(buf, "one.yaml");
 	second = strstr(buf, "two.yaml");
@@ -117,7 +122,7 @@ TEST unwritable_path_fails(void)
 {
 	struct qwe_job_result job = {.id = "j", .outcome = "success"};
 
-	ASSERT_EQ(-1, qwe_summary_write("/no/such/dir/summary.md", "w.yaml", "success", 0, &job, 1));
+	ASSERT_EQ(-1, qwe_summary_write("/no/such/dir/summary.md", NULL, "w.yaml", "success", 0, &job, 1));
 	PASS();
 }
 
@@ -156,10 +161,121 @@ TEST write_failure_after_open_fails(void)
 	tiny.rlim_cur = 1;
 	tiny.rlim_max = old.rlim_max;
 	setrlimit(RLIMIT_FSIZE, &tiny);
-	rc = qwe_summary_write(path, "w.yaml", "success", 0, &job, 1);
+	rc = qwe_summary_write(path, NULL, "w.yaml", "success", 0, &job, 1);
 	setrlimit(RLIMIT_FSIZE, &old);
 	unlink(path);
 	ASSERT_EQ(-1, rc);
+	PASS();
+}
+
+/* A pipe is escaped, an embedded newline folds to a space, and a cell past 200
+ * (escaped) bytes is cut with an ellipsis appended. */
+TEST cell_escaping(void)
+{
+	char long_id[250];
+	struct qwe_step_result step;
+	struct qwe_job_result job;
+	char *out;
+
+	memset(long_id, 'x', sizeof long_id - 1);
+	long_id[sizeof long_id - 1] = '\0';
+	step = (struct qwe_step_result){.id = long_id, .outcome = "success", .duration_ms = 1};
+	job = (struct qwe_job_result){.id = "j", .outcome = "success", .steps = &step, .nsteps = 1};
+	out = written("w.yaml", "success", 1, &job, 1);
+	ASSERT(strstr(out, "\xE2\x80\xA6")); /* the cut cell's ellipsis */
+	ASSERT_EQ(NULL, strstr(out, long_id)); /* the full, uncut id never appears */
+	free(out);
+
+	step = (struct qwe_step_result){.id = "a|b\nc", .outcome = "success", .duration_ms = 1};
+	job = (struct qwe_job_result){.id = "j", .outcome = "success", .steps = &step, .nsteps = 1};
+	out = written("w.yaml", "success", 1, &job, 1);
+	ASSERT(strstr(out, "| a\\|b c | run |"));
+	free(out);
+	PASS();
+}
+
+/* A job with a failed step gets a collapsed log-tail block below its steps table,
+ * with only the log's last lines, inside a fence longer than any backtick run
+ * the tail contains. A job without a failure gets no block. */
+TEST log_tail_block(void)
+{
+	char dir[] = "/tmp/qwe-summary-test-dir-XXXXXX";
+	char logpath[64];
+	char *out;
+	FILE *fp;
+	struct qwe_step_result step = {.id = "s", .outcome = "failed", .reason = "exit-code", .duration_ms = 1};
+	struct qwe_step_result ok_step = {.id = "t", .outcome = "success", .duration_ms = 1};
+	struct qwe_job_result jobs[2];
+	int i;
+
+	ASSERT(mkdtemp(dir) != NULL);
+	snprintf(logpath, sizeof logpath, "%s/j.log", dir);
+	fp = fopen(logpath, "w");
+	for (i = 0; i < 25; i++)
+		fprintf(fp, "line %d\n", i);
+	fputs("a ``` run\n", fp); /* a 3-backtick run: the fence must beat it */
+	fclose(fp);
+
+	jobs[0] = (struct qwe_job_result){.id = "j", .outcome = "failed", .steps = &step, .nsteps = 1};
+	jobs[1] = (struct qwe_job_result){.id = "ok", .outcome = "success", .steps = &ok_step, .nsteps = 1};
+	out = written_in(dir, "w.yaml", "failed", 1, jobs, 2);
+
+	ASSERT(strstr(out, "<details>"));
+	ASSERT_EQ(NULL, strstr(out, "line 5\n")); /* only the last 20 of 26 lines survive */
+	ASSERT(strstr(out, "line 6\n"));
+	ASSERT(strstr(out, "line 24\n"));
+	ASSERT(strstr(out, "````\n")); /* a 4-backtick fence beats the tail's 3-backtick run */
+	{
+		/* the "ok" job has no failed step: no second <details> block */
+		char *first = strstr(out, "<details>");
+
+		ASSERT(first && strstr(first + 1, "<details>") == NULL);
+	}
+	free(out);
+	unlink(logpath);
+	rmdir(dir);
+	PASS();
+}
+
+/* A failed step whose job's log file is missing (or unreadable) gets no block at all:
+ * a summary problem here is silent, not a crash or a garbled report. */
+TEST log_tail_missing_file_is_silent(void)
+{
+	char dir[] = "/tmp/qwe-summary-test-dir-XXXXXX";
+	struct qwe_step_result step = {.id = "s", .outcome = "failed", .reason = "exit-code"};
+	struct qwe_job_result job = {.id = "j", .outcome = "failed", .steps = &step, .nsteps = 1};
+	char *out;
+
+	ASSERT(mkdtemp(dir) != NULL);
+	out = written_in(dir, "w.yaml", "failed", 1, &job, 1);
+	ASSERT_EQ(NULL, strstr(out, "<details>"));
+	free(out);
+	rmdir(dir);
+	PASS();
+}
+
+/* A log with no trailing newline (never happens from a real run, but log_tail
+ * does not assume it) still closes its fence on its own line. */
+TEST log_tail_without_trailing_newline(void)
+{
+	char dir[] = "/tmp/qwe-summary-test-dir-XXXXXX";
+	char logpath[64];
+	struct qwe_step_result step = {.id = "s", .outcome = "failed", .reason = "exit-code"};
+	struct qwe_job_result job = {.id = "j", .outcome = "failed", .steps = &step, .nsteps = 1};
+	FILE *fp;
+	char *out;
+
+	ASSERT(mkdtemp(dir) != NULL);
+	snprintf(logpath, sizeof logpath, "%s/j.log", dir);
+	fp = fopen(logpath, "w");
+	fputs("no newline at the end", fp);
+	fclose(fp);
+
+	out = written_in(dir, "w.yaml", "failed", 1, &job, 1);
+	ASSERT(strstr(out, "no newline at the end\n```"));
+	free(out);
+	unlink(logpath);
+	rmdir(dir);
 	PASS();
 }
 
@@ -172,6 +288,10 @@ SUITE(summary)
 	RUN_TEST(unwritable_path_fails);
 	RUN_TEST(every_outcome_marker);
 	RUN_TEST(write_failure_after_open_fails);
+	RUN_TEST(cell_escaping);
+	RUN_TEST(log_tail_block);
+	RUN_TEST(log_tail_missing_file_is_silent);
+	RUN_TEST(log_tail_without_trailing_newline);
 }
 
 GREATEST_MAIN_DEFS();

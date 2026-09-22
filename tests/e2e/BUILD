@@ -340,6 +340,14 @@ e2e_test(name = "summary_unwritable")
 
 e2e_test(name = "summary_unwritable_failed_run")
 
+e2e_test(name = "summary_log_tail")
+
+e2e_test(name = "summary_markdown_hostile")
+
+e2e_test(name = "summary_secret_redacted")
+
+e2e_test(name = "summary_append")
+
 # QWE_E2E_REQUIRE_SSH=1: an unreachable needs-ssh case fails instead of skipping.
 sh_test(
     name = "require_ssh_test",

@@ -1884,7 +1884,8 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	if (opts && opts->summary) {
 		const char *outcome = rc == QWE_EXIT_CANCELLED ? "cancelled" : all_ok ? "success" : "failed";
 
-		if (qwe_summary_write(opts->summary, path, outcome, run_duration_ms, results, (size_t)n) < 0)
+		if (qwe_summary_write(opts->summary, ctx.run_dir_abs, path, outcome, run_duration_ms, results,
+				      (size_t)n) < 0)
 			fprintf(stderr, "qwe run: cannot write summary %s: %s\n", opts->summary, strerror(errno));
 	}
 	report_disabled(jobs, (size_t)n);
