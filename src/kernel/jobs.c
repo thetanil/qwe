@@ -70,6 +70,7 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 			cap = cap ? cap * 2 : 8;
 		}
 		memset(&jobs[n], 0, sizeof jobs[n]);
+		jobs[n].duration_ms = -1;
 		jobs[n].run.timer.fd = jobs[n].run.step_timer.fd = jobs[n].run.grace_timer.fd = -1;
 		jobs[n].run.proc.out_fd = -1;
 		jobs[n].run.live_step = -1;

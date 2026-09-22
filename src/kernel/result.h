@@ -12,6 +12,7 @@ struct qwe_step_result {
 	int changed;
 	char *outputs_json; /* the step's outputs as a JSON object; NULL if it has none */
 	time_t started, ended; /* 0 if it never started */
+	long duration_ms; /* -1 if it never started */
 };
 
 struct qwe_job_result {
@@ -20,6 +21,7 @@ struct qwe_job_result {
 	const char *reason; /* may be NULL */
 	const char *detail; /* what the reason came with (a disabled target's note), or NULL: then not written */
 	time_t started, ended; /* 0 if it never started */
+	long duration_ms; /* -1 if it never started */
 	unsigned long dropped_bytes;
 	const struct qwe_step_result *steps;
 	size_t nsteps;

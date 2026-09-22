@@ -24,6 +24,14 @@ static void put_opt(FILE *fp, const char *s)
 		fputs("null", fp);
 }
 
+static void put_duration(FILE *fp, long ms)
+{
+	if (ms < 0)
+		fputs("null", fp);
+	else
+		fprintf(fp, "%ld", ms);
+}
+
 void qwe_json_string(FILE *fp, const char *s)
 {
 	fputc('"', fp);
@@ -78,6 +86,8 @@ int qwe_result_write(FILE *fp, const char *run_id, const struct qwe_job_result *
 		put_time(fp, j->started);
 		fputs(",\n      \"ended\": ", fp);
 		put_time(fp, j->ended);
+		fputs(",\n      \"duration_ms\": ", fp);
+		put_duration(fp, j->duration_ms);
 		fprintf(fp, ",\n      \"dropped_bytes\": %lu", j->dropped_bytes);
 		fputs(",\n      \"steps\": [", fp);
 		for (k = 0; k < j->nsteps; k++) {
@@ -93,6 +103,8 @@ int qwe_result_write(FILE *fp, const char *run_id, const struct qwe_job_result *
 			put_time(fp, s->started);
 			fputs(",\n          \"ended\": ", fp);
 			put_time(fp, s->ended);
+			fputs(",\n          \"duration_ms\": ", fp);
+			put_duration(fp, s->duration_ms);
 			if (s->outputs_json)
 				fprintf(fp, ",\n          \"outputs\": %s", s->outputs_json);
 			fputs("\n        }", fp);

@@ -90,10 +90,40 @@ TEST hostile_text_in_a_result(void)
 	PASS();
 }
 
+/* duration_ms writes as a bare integer when set, and null when negative
+ * (never started). */
+TEST duration_written(void)
+{
+	struct qwe_step_result step = {
+		.id = "s", .outcome = "success", .changed = 0, .duration_ms = 5,
+	};
+	struct qwe_step_result skipped_step = {
+		.id = "t", .outcome = "skipped", .duration_ms = -1,
+	};
+	struct qwe_step_result steps[2];
+	struct qwe_job_result job = {
+		.id = "j", .outcome = "success", .duration_ms = 1234, .steps = steps, .nsteps = 2,
+	};
+	char *buf = NULL;
+	size_t len = 0;
+	FILE *fp = open_memstream(&buf, &len);
+
+	steps[0] = step;
+	steps[1] = skipped_step;
+	ASSERT_EQ(0, qwe_result_write(fp, "run", &job, 1));
+	fclose(fp);
+	ASSERT(strstr(buf, "\"duration_ms\": 1234"));
+	ASSERT(strstr(buf, "\"duration_ms\": 5"));
+	ASSERT(strstr(buf, "\"duration_ms\": null"));
+	free(buf);
+	PASS();
+}
+
 SUITE(result)
 {
 	RUN_TEST(escaping);
 	RUN_TEST(hostile_text_in_a_result);
+	RUN_TEST(duration_written);
 }
 
 GREATEST_MAIN_DEFS();

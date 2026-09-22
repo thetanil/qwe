@@ -326,6 +326,10 @@ e2e_test(name = "keygen_no_home")
 
 e2e_test(name = "cli_no_subcommand")
 
+e2e_test(name = "result_duration_ms")
+
+e2e_test(name = "result_duration_ms_skipped")
+
 # QWE_E2E_REQUIRE_SSH=1: an unreachable needs-ssh case fails instead of skipping.
 sh_test(
     name = "require_ssh_test",

@@ -593,6 +593,23 @@ static void owe_start_failed(struct job *job, const char *what, const char *op, 
 	r->followup = QWE_LC_EV_START_FAILED;
 }
 
+/* CLOCK_MONOTONIC, in nanoseconds. */
+static int64_t mono_now_ns(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
+/* Milliseconds from start_ns to end_ns, never negative. */
+static long mono_diff_ms(int64_t start_ns, int64_t end_ns)
+{
+	long ms = (long)((end_ns - start_ns) / 1000000);
+
+	return ms < 0 ? 0 : ms;
+}
+
 /* Gives back what a started job holds. */
 static void job_release(struct run_ctx *ctx, struct job *job)
 {
@@ -634,6 +651,7 @@ static void job_start(struct run_ctx *ctx, struct job *job)
 	struct job_run *r = &job->run;
 	const char *op = NULL;
 	int err = 0;
+	size_t i;
 
 	job->L = ctx->L;
 	lua_newtable(job->L);
@@ -666,7 +684,10 @@ static void job_start(struct run_ctx *ctx, struct job *job)
 		return;
 	}
 	job->started = time(NULL);
+	job->mono_start_ns = mono_now_ns();
 	job->steps = qwe_xcalloc(job->nsteps, sizeof *job->steps);
+	for (i = 0; i < job->nsteps; i++)
+		job->steps[i].duration_ms = -1;
 	if (job->timeout_ms > 0)
 		qwe_timer_arm(&r->timer, job->timeout_ms);
 	ev_add(ctx, job, EV_JOB_TIMER, r->timer.fd, -1);
@@ -907,6 +928,7 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 	}
 
 	res->started = time(NULL);
+	r->step_mono_start_ns = mono_now_ns();
 	r->live_step = (long)r->cur;
 	r->leader_reaped = 0;
 	r->res_len = 0;
@@ -968,9 +990,13 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 static void step_finish(struct run_ctx *ctx, struct job *job)
 {
 	struct job_run *r = &job->run;
+	struct qwe_step_result *res;
 
 	if (r->live_step < 0)
 		return;
+	res = &job->steps[r->live_step];
+	if (res->duration_ms < 0)
+		res->duration_ms = mono_diff_ms(r->step_mono_start_ns, mono_now_ns());
 	if (r->proc_ok) {
 		/* The child is gone; whatever it wrote is already in the pipe. */
 		drain(r->proc.out_fd, &r->ring, &r->sink, &r->red);
@@ -1015,6 +1041,7 @@ static void job_end(struct run_ctx *ctx, struct job *job)
 	step_finish(ctx, job);
 	if (job->steps) {
 		job->ended = time(NULL);
+		job->duration_ms = mono_diff_ms(job->mono_start_ns, mono_now_ns());
 		for (i = r->cur; i < job->nsteps; i++) {
 			job->steps[i].id = step_id(job, i);
 			job->steps[i].outcome = "skipped";
@@ -1795,6 +1822,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 		results[i].detail = jobs[i].detail;
 		results[i].started = jobs[i].started;
 		results[i].ended = jobs[i].ended;
+		results[i].duration_ms = jobs[i].duration_ms;
 		results[i].dropped_bytes = jobs[i].dropped;
 		results[i].steps = jobs[i].steps;
 		results[i].nsteps = jobs[i].steps ? jobs[i].nsteps : 0;

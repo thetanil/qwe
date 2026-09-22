@@ -33,11 +33,12 @@
 #
 #
 # If qwe left exactly one .qwe/runs/<id>/, that directory is renamed to RUN/ and
-# result.json has its run id and times replaced by RUN and TIME, and the first
-# field (the time) of each lifecycle.trace line by TIME, so goldens can say
-# expected/RUN/j.log, expected/RUN/result.json and expected/RUN/lifecycle.trace.
+# result.json has its run id and times replaced by RUN and TIME, its duration_ms
+# values by DURATION, and the first field (the time) of each lifecycle.trace line
+# by TIME, so goldens can say expected/RUN/j.log, expected/RUN/result.json and
+# expected/RUN/lifecycle.trace.
 # check.sh sees the trace with its real times as lifecycle.raw (seconds since the
-# run started, first field).
+# run started, first field), and result.json with its real numbers as result.raw.json.
 #
 #
 # Exit: 0 pass, 1 golden mismatch, 3 harness error.
@@ -153,9 +154,12 @@ fi
 if [ -d "$work/.qwe/runs" ] && [ "$(ls "$work/.qwe/runs" | wc -l)" = 1 ]; then
 	mv "$work/.qwe/runs/"* "$work/RUN"
 	if [ -f "$work/RUN/result.json" ]; then
+		# check.sh can still measure: the unblanked result is kept as result.raw.json
+		cp "$work/RUN/result.json" "$work/result.raw.json"
 		sed -e 's/"run_id": "[^"]*"/"run_id": "RUN"/' \
 		    -e 's/"started": "[^"]*"/"started": "TIME"/' \
 		    -e 's/"ended": "[^"]*"/"ended": "TIME"/' \
+		    -e 's/"duration_ms": [0-9][0-9]*/"duration_ms": DURATION/' \
 		    "$work/RUN/result.json" >"$work/RUN/result.json.new" &&
 			mv "$work/RUN/result.json.new" "$work/RUN/result.json"
 	fi

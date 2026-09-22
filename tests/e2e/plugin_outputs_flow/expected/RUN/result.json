@@ -6,6 +6,7 @@
       "reason": null,
       "started": "TIME",
       "ended": "TIME",
+      "duration_ms": DURATION,
       "dropped_bytes": 0,
       "steps": [
         {
@@ -15,6 +16,7 @@
           "changed": true,
           "started": "TIME",
           "ended": "TIME",
+          "duration_ms": DURATION,
           "outputs": {"mode":"0640"}
         },
         {
@@ -23,7 +25,8 @@
           "reason": null,
           "changed": true,
           "started": "TIME",
-          "ended": "TIME"
+          "ended": "TIME",
+          "duration_ms": DURATION
         }
       ]
     }

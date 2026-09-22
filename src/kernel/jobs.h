@@ -13,6 +13,7 @@
 
 #include <lua.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <time.h>
 
 /* What one running job holds beyond its result. */
@@ -23,6 +24,7 @@ struct job_run {
 	struct qwe_timer timer;      /* the job's own limit */
 	struct qwe_timer step_timer; /* the live step's limit */
 	struct qwe_timer grace_timer;
+	int64_t step_mono_start_ns; /* CLOCK_MONOTONIC at the live step's start, for duration_ms */
 	struct qwe_proc proc;
 	int ring_ok, sink_ok, timer_ok; /* which of the job's resources are held */
 	int proc_ok;                 /* the live step's pipe and timers are open */
@@ -61,6 +63,8 @@ struct job {
 	struct qwe_step_result *steps; /* NULL until the job has started */
 	size_t nsteps;
 	time_t started, ended;
+	long duration_ms; /* -1 until the job gets its slot */
+	int64_t mono_start_ns; /* CLOCK_MONOTONIC at job_start, for duration_ms */
 	unsigned long dropped;
 	long timeout_ms; /* the job's own limit, 0 for none */
 	char *detail; /* the disabled: note of the job's target, when it is skipped for it */

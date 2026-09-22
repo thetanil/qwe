@@ -6,6 +6,7 @@
       "reason": "exit-code",
       "started": "TIME",
       "ended": "TIME",
+      "duration_ms": DURATION,
       "dropped_bytes": 0,
       "steps": [
         {
@@ -14,7 +15,8 @@
           "reason": "exit-code",
           "changed": true,
           "started": "TIME",
-          "ended": "TIME"
+          "ended": "TIME",
+          "duration_ms": DURATION
         }
       ]
     },
@@ -23,6 +25,7 @@
       "reason": "dependency-failed",
       "started": null,
       "ended": null,
+      "duration_ms": null,
       "dropped_bytes": 0,
       "steps": []
     },
@@ -31,6 +34,7 @@
       "reason": "dependency-failed",
       "started": null,
       "ended": null,
+      "duration_ms": null,
       "dropped_bytes": 0,
       "steps": []
     },
@@ -39,6 +43,7 @@
       "reason": null,
       "started": "TIME",
       "ended": "TIME",
+      "duration_ms": DURATION,
       "dropped_bytes": 0,
       "steps": [
         {
@@ -47,7 +52,8 @@
           "reason": null,
           "changed": true,
           "started": "TIME",
-          "ended": "TIME"
+          "ended": "TIME",
+          "duration_ms": DURATION
         }
       ]
     }

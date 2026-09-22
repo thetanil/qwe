@@ -1,19 +1,9 @@
 {
   "run_id": "RUN",
   "jobs": {
-    "flash": {
-      "outcome": "skipped",
-      "reason": "target-disabled",
-      "detail": "in for repair, 2026-09",
-      "started": null,
-      "ended": null,
-      "duration_ms": null,
-      "dropped_bytes": 0,
-      "steps": []
-    },
-    "other": {
-      "outcome": "success",
-      "reason": null,
+    "a": {
+      "outcome": "failed",
+      "reason": "exit-code",
       "started": "TIME",
       "ended": "TIME",
       "duration_ms": DURATION,
@@ -21,8 +11,8 @@
       "steps": [
         {
           "id": null,
-          "outcome": "success",
-          "reason": null,
+          "outcome": "failed",
+          "reason": "exit-code",
           "changed": true,
           "started": "TIME",
           "ended": "TIME",
@@ -30,7 +20,7 @@
         }
       ]
     },
-    "verify": {
+    "b": {
       "outcome": "skipped",
       "reason": "dependency-failed",
       "started": null,

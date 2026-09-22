@@ -6,6 +6,7 @@
       "reason": "cancel-requested",
       "started": "TIME",
       "ended": "TIME",
+      "duration_ms": DURATION,
       "dropped_bytes": 0,
       "steps": [
         {
@@ -14,7 +15,8 @@
           "reason": "cancel-requested",
           "changed": true,
           "started": "TIME",
-          "ended": "TIME"
+          "ended": "TIME",
+          "duration_ms": DURATION
         }
       ]
     },
@@ -23,6 +25,7 @@
       "reason": "cancel-requested",
       "started": null,
       "ended": null,
+      "duration_ms": null,
       "dropped_bytes": 0,
       "steps": []
     },
@@ -31,6 +34,7 @@
       "reason": "cancel-requested",
       "started": null,
       "ended": null,
+      "duration_ms": null,
       "dropped_bytes": 0,
       "steps": []
     }
