@@ -1,0 +1,70 @@
+{
+  "run_id": "20260922T231712Z-1530198",
+  "jobs": {
+    "run": {
+      "outcome": "success",
+      "reason": null,
+      "started": "2026-09-22T23:17:12Z",
+      "ended": "2026-09-22T23:17:12Z",
+      "duration_ms": 6,
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "echo",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "2026-09-22T23:17:12Z",
+          "ended": "2026-09-22T23:17:12Z",
+          "duration_ms": 1
+        },
+        {
+          "id": "multiline",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "2026-09-22T23:17:12Z",
+          "ended": "2026-09-22T23:17:12Z",
+          "duration_ms": 1
+        },
+        {
+          "id": "job-env-wins-over-workflow",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "2026-09-22T23:17:12Z",
+          "ended": "2026-09-22T23:17:12Z",
+          "duration_ms": 0
+        },
+        {
+          "id": "step-env-wins-over-job",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "2026-09-22T23:17:12Z",
+          "ended": "2026-09-22T23:17:12Z",
+          "duration_ms": 0
+        },
+        {
+          "id": "produce",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "2026-09-22T23:17:12Z",
+          "ended": "2026-09-22T23:17:12Z",
+          "duration_ms": 0,
+          "outputs": {"greeting":"hello smoke"}
+        },
+        {
+          "id": "consume",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "2026-09-22T23:17:12Z",
+          "ended": "2026-09-22T23:17:12Z",
+          "duration_ms": 0
+        }
+      ]
+    }
+  }
+}

@@ -90,7 +90,7 @@ qwe is Linux x86_64 only. Each [release](https://github.com/thetanil/qwe/release
 
 ```
 bazel build //src/cli:qwe //src/cli:qwe-debug              # bazel-bin/src/cli/
-bazel build --config=release //src/cli:qwe //src/cli:qwe-debug  # the same, optimised: what ships
+bazel build --config=release //src/cli:qwe //src/cli:qwe-debug  # the same codegen, symbols kept for qwe-debug: what ships
 bazel test //...                                            # the unit, plugin and e2e suites
 ```
 
@@ -243,9 +243,10 @@ same report covers the C; `docs/coverage.md` has the per-file numbers and how th
 valgrind builds link dynamically, because a sanitizer runtime cannot be linked statically and
 valgrind cannot intercept `malloc` in a static binary; `qwe` keeps its symbols there.
 
-Add `--config=release` for the build that ships: optimised (`-c opt`), with `qwe-debug` still
-keeping its DWARF (`qwe` is stripped regardless). `release.yml` and the smoke workflow's build
-both use it, and the full test suite runs under it too.
+Add `--config=release` for the build that ships: the same codegen as the fastbuild default (not
+`-c opt` -- `-O2` miscompiled LuaJIT's unwind path in a way that only showed up on the CI runner;
+see `.bazelrc`), with `qwe-debug` still keeping its DWARF (`qwe` is stripped regardless).
+`release.yml` and the smoke workflow's build both use it, and the full test suite runs under it too.
 
 ## Keeping coverage from dropping
 

@@ -154,16 +154,6 @@ cc_library(
         "-std=gnu99",
         "-fomit-frame-pointer",
         "-fno-stack-protector",
-        # -O2 (--config=release, ADR pending) miscompiles this library on the CI runner in
-        # a way that never reproduces locally: -fno-strict-aliasing alone (LuaJIT's tagged
-        # values are type-punned through a union) did not stop it, nor did pinning the host
-        # code generators (minilua, buildvm) to -O0. Pin the runtime library itself to -O0,
-        # matching fastbuild, which is known-good: the interpreter's dispatch loop and C
-        # library functions are what -O2 would speed up, not the JIT-compiled Lua code that
-        # dominates real workloads, so this is a small, targeted cost, not a lost feature.
-        # -fno-strict-aliasing stays as defense in depth.
-        "-O0",
-        "-fno-strict-aliasing",
         "-U_FORTIFY_SOURCE",
         "-D_FILE_OFFSET_BITS=64",
         "-D_LARGEFILE_SOURCE",

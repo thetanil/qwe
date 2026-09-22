@@ -2,10 +2,12 @@
 build --copt=-std=c99 --copt=-Wall --copt=-Wextra --copt=-Werror
 build --host_copt=-std=c99
 
-# The release build: optimised, with debug info kept (qwe-debug keeps its DWARF;
-# the strip rule still strips qwe). release.yml's build and the smoke workflow's
-# build both use this; the full suite runs under it too (05).
-build:release --compilation_mode=opt
+# The release build: same codegen as the fastbuild default (no --compilation_mode=opt --
+# -O2 miscompiled LuaJIT's unwind path on the CI runner in a way that never reproduced
+# locally and three targeted fixes did not resolve; see ticket 18's comments and
+# third_party/luajit/BUILD), with debug info kept (qwe-debug keeps its DWARF; the strip
+# rule still strips qwe). release.yml's build and the smoke workflow's build both use
+# this; the full suite runs under it too (05).
 build:release --copt=-g
 
 test --test_output=errors
