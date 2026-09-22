@@ -43,7 +43,11 @@ an artifact. On a green push to main it is also deployed to GitHub Pages (`https
 
 Valgrind takes 23 minutes on a runner, so `valgrind.yml` runs only from `workflow_dispatch` and
 from `nightly.yml` and `release.yml` (by `workflow_call`), never on a push. `workflows_test` checks these commands too.
+`release.yml` builds the shipped binaries with the release config (optimised, debug info kept for
+`qwe-debug`; the strip rule still strips `qwe`) rather than the fastbuild default.
 
+```
+bazel build --config=release //src/cli:qwe //src/cli:qwe-debug
 ```
 
 ## How CI reaches ssh

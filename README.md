@@ -89,8 +89,9 @@ qwe is Linux x86_64 only. Each [release](https://github.com/thetanil/qwe/release
 (the version is pinned in `.bazelversion`); every dependency is vendored in the repository.
 
 ```
-bazel build //src/cli:qwe //src/cli:qwe-debug    # bazel-bin/src/cli/
-bazel test //...                                 # the unit, plugin and e2e suites
+bazel build //src/cli:qwe //src/cli:qwe-debug              # bazel-bin/src/cli/
+bazel build --config=release //src/cli:qwe //src/cli:qwe-debug  # the same, optimised: what ships
+bazel test //...                                            # the unit, plugin and e2e suites
 ```
 
 ## Where to read next
@@ -240,6 +241,10 @@ same report covers the C; `docs/coverage.md` has the per-file numbers and how th
 `qwe-debug`, the same build with its symbols. The sanitizer (`--config=asan`, `ubsan`) and
 valgrind builds link dynamically, because a sanitizer runtime cannot be linked statically and
 valgrind cannot intercept `malloc` in a static binary; `qwe` keeps its symbols there.
+
+Add `--config=release` for the build that ships: optimised (`-c opt`), with `qwe-debug` still
+keeping its DWARF (`qwe` is stripped regardless). `release.yml` and the smoke workflow's build
+both use it, and the full test suite runs under it too.
 
 ## Keeping coverage from dropping
 

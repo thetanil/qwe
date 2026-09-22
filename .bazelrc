@@ -2,6 +2,12 @@
 build --copt=-std=c99 --copt=-Wall --copt=-Wextra --copt=-Werror
 build --host_copt=-std=c99
 
+# The release build: optimised, with debug info kept (qwe-debug keeps its DWARF;
+# the strip rule still strips qwe). release.yml's build and the smoke workflow's
+# build both use this; the full suite runs under it too (05).
+build:release --compilation_mode=opt
+build:release --copt=-g
+
 test --test_output=errors
 # ssh e2e tests need the devcontainer's key agent (spec, "Test strategy").
 test --test_env=REMOTE_CONTAINERS

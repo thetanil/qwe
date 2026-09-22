@@ -16,13 +16,14 @@ static char *slurp(const char *path)
 	FILE *fp = fopen(path, "r");
 	char *buf;
 	long len;
+	size_t got;
 
 	fseek(fp, 0, SEEK_END);
 	len = ftell(fp);
 	rewind(fp);
 	buf = malloc((size_t)len + 1);
-	fread(buf, 1, (size_t)len, fp);
-	buf[len] = '\0';
+	got = fread(buf, 1, (size_t)len, fp);
+	buf[got] = '\0';
 	fclose(fp);
 	return buf;
 }

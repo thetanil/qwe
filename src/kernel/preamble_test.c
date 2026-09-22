@@ -19,9 +19,11 @@ static size_t run(const char *script, const char *input, size_t input_len, int u
 	ssize_t got;
 	FILE *tmp;
 
-	pipe(o);
+	if (pipe(o) < 0)
+		abort();
 	if (use_pipe) {
-		pipe(in);
+		if (pipe(in) < 0)
+			abort();
 	} else {
 		tmp = tmpfile();
 		fwrite(input, 1, input_len, tmp);
@@ -46,7 +48,8 @@ static size_t run(const char *script, const char *input, size_t input_len, int u
 	close(in[0]);
 	if (use_pipe) {
 		/* small enough to fit the pipe: the test does not need a writer thread */
-		write(in[1], input, input_len);
+		if (write(in[1], input, input_len) < 0)
+			abort();
 		close(in[1]);
 	}
 	while ((got = read(o[0], out + n, cap - n)) > 0)

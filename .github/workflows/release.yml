@@ -41,7 +41,7 @@ jobs:
         with:
           cache-key: release
       - name: Build
-        run: bazel build //src/cli:qwe //src/cli:qwe-debug
+        run: bazel build --config=release //src/cli:qwe //src/cli:qwe-debug
       - name: The version matches the tag
         run: tools/release/check_version.sh "$TAG" bazel-bin/src/cli/qwe
       - name: Package
