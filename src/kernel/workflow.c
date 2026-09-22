@@ -461,7 +461,8 @@ static int load_inventory(lua_State *L, const char *cmd, const char *wf_path, co
 	qwe_positions_free(pos);
 	if (errors > 0)
 		goto fail;
-	/* qwe.inventory.use(inventory) */
+	/* qwe.inventory.use(inventory): fully-vendored bootstrap Lua (src/kernel/lua/
+	 * inventory.lua), never project-supplied -- lua_call, not lua_pcall (ticket 18). */
 	lua_getglobal(L, "require");
 	lua_pushstring(L, "qwe.inventory");
 	lua_call(L, 1, 1);
@@ -870,6 +871,8 @@ static int remote_ensure(struct job *job, char *msg, size_t msg_size, int *refus
 	const char *host;
 
 	*refused = 0;
+	/* qwe.inventory.host(target): fully-vendored bootstrap Lua, never
+	 * project-supplied -- lua_call, not lua_pcall (ticket 18). */
 	lua_getglobal(L, "require");
 	lua_pushstring(L, "qwe.inventory");
 	lua_call(L, 1, 1);
@@ -1419,6 +1422,8 @@ static long target_max_sessions(lua_State *L, const char *target)
 	int top = lua_gettop(L);
 	long cap = 8;
 
+	/* qwe.inventory.max_sessions(target): fully-vendored bootstrap Lua, never
+	 * project-supplied -- lua_call, not lua_pcall (ticket 18). */
 	lua_getglobal(L, "require");
 	lua_pushstring(L, "qwe.inventory");
 	lua_call(L, 1, 1);
@@ -1439,6 +1444,8 @@ static char *target_disabled_note(lua_State *L, const char *target)
 
 	if (strcmp(target, "local") == 0)
 		return NULL;
+	/* qwe.inventory.disabled(target): fully-vendored bootstrap Lua, never
+	 * project-supplied -- lua_call, not lua_pcall (ticket 18). */
 	lua_getglobal(L, "require");
 	lua_pushstring(L, "qwe.inventory");
 	lua_call(L, 1, 1);
@@ -1517,6 +1524,8 @@ static void preconnect(struct run_ctx *ctx)
 				break;
 		if (k < i)
 			continue;
+		/* qwe.inventory.host(target): fully-vendored bootstrap Lua, never
+		 * project-supplied -- lua_call, not lua_pcall (ticket 18). */
 		lua_getglobal(L, "require");
 		lua_pushstring(L, "qwe.inventory");
 		lua_call(L, 1, 1);

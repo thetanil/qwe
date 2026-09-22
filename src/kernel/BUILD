@@ -186,6 +186,17 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "luavm_test",
+    size = "small",
+    srcs = ["luavm_test.c"],
+    deps = [
+        ":luavm",
+        "//third_party/greatest",
+        "//third_party/luajit",
+    ],
+)
+
 cc_library(
     name = "dag",
     srcs = ["dag.c"],

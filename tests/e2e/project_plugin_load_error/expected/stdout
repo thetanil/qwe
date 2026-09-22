@@ -1,0 +1,3 @@
+[a] qwe: plugin failed: .qwe/plugins/missingmod/plugin.lua:10: module 'definitely_not_a_real_module' not found:
+[a] 	no field package.preload['definitely_not_a_real_module']
+[b] b runs normally

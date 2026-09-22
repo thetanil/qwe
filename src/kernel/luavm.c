@@ -65,6 +65,20 @@ void qwe_lua_coverage_flush(lua_State *L)
 	lua_pop(L, 1);
 }
 
+/* Replaces LuaJIT's default lua_atpanic handler, which prints raw
+ * "PANIC: unprotected error in call to Lua API" text and exits: any Lua error
+ * that escapes every pcall between it and the C API (a bug in our own
+ * bootstrap Lua, a bad project plugin, third-party Lua miscompiled underneath
+ * us -- see ticket 18) becomes one readable, scriptable qwe error line
+ * instead of panic noise. */
+static int lua_panic(lua_State *L)
+{
+	const char *msg = lua_tostring(L, -1);
+
+	fprintf(stderr, "qwe: internal error: %s\n", msg ? msg : "unknown error");
+	exit(1); /* QWE_EXIT_FAILED (src/kernel/qwe.h): luavm sits below :kernel and can't include it */
+}
+
 lua_State *qwe_lua_new(void)
 {
 	lua_State *L = luaL_newstate();
@@ -72,6 +86,7 @@ lua_State *qwe_lua_new(void)
 
 	if (!L)
 		return NULL;
+	lua_atpanic(L, lua_panic);
 	luaL_openlibs(L);
 	lua_getglobal(L, "package");
 	/* Nothing loads from disk: require() finds only the built-in modules, so

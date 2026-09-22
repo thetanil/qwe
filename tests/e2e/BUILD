@@ -101,6 +101,8 @@ e2e_test(name = "project_plugin_loads")
 
 e2e_test(name = "project_plugin_no_shadowing")
 
+e2e_test(name = "project_plugin_load_error")
+
 e2e_test(name = "strict_globals_write")
 
 e2e_test(name = "strict_globals_read")

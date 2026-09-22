@@ -1,0 +1,52 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "a": {
+      "outcome": "failed",
+      "reason": "plugin-error",
+      "started": "TIME",
+      "ended": "TIME",
+      "duration_ms": DURATION,
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "broken",
+          "outcome": "failed",
+          "reason": "plugin-error",
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        },
+        {
+          "id": null,
+          "outcome": "skipped",
+          "reason": null,
+          "changed": false,
+          "started": null,
+          "ended": null,
+          "duration_ms": null
+        }
+      ]
+    },
+    "b": {
+      "outcome": "success",
+      "reason": null,
+      "started": "TIME",
+      "ended": "TIME",
+      "duration_ms": DURATION,
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": null,
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        }
+      ]
+    }
+  }
+}
