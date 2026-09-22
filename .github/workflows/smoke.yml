@@ -35,6 +35,7 @@ jobs:
         id: neg_file_ensure_denied
         continue-on-error: true
         run: |
+          set -o pipefail
           bazel-bin/src/cli/qwe validate tests/smoke/neg_file_ensure_denied.yml
           bazel-bin/src/cli/qwe run tests/smoke/neg_file_ensure_denied.yml --debug 2>&1 | tee "$RUNNER_TEMP/neg_file_ensure_denied.out"
       - name: neg_file_ensure_denied must fail with a helpful message
@@ -72,7 +73,7 @@ jobs:
       - name: bazel test --config=release //...
         id: release_tests
         continue-on-error: true
-        run: bazel test --config=release //... 2>&1 | tee "$RUNNER_TEMP/release-tests.log"
+        run: set -o pipefail; bazel test --config=release //... 2>&1 | tee "$RUNNER_TEMP/release-tests.log"
       # Standing infrastructure, not a one-off diagnostic to add and remove: whenever a test
       # crashes under --config=release, this re-runs its already-built binary directly under gdb
       # and keeps the backtrace as an artifact, every time, automatically. A crashed binary
@@ -143,6 +144,7 @@ jobs:
         id: neg_file_ensure_denied
         continue-on-error: true
         run: |
+          set -o pipefail
           ./qwe validate tests/smoke/neg_file_ensure_denied.yml
           ./qwe run tests/smoke/neg_file_ensure_denied.yml 2>&1 | tee "$RUNNER_TEMP/neg_file_ensure_denied.out"
       - name: neg_file_ensure_denied must fail with a helpful message
