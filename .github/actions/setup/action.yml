@@ -61,13 +61,19 @@ runs:
         ssh -o BatchMode=yes 172.18.0.1 true
         # ssh_become_denied assumes the target user has no passwordless sudo, as zeta does.
         # The runner user has it. Drop the rule wherever it is defined: find NOPASSWD grants
-        # in sudoers.d (the file name differs between runner images) and remove those files,
-        # then require that `sudo -n` no longer works. Nothing after this step may use sudo.
+        # in sudoers.d (there can be more than one file, and their names differ between runner
+        # images) and remove them all in one sudo call, then require that `sudo -n` no longer
+        # works. Nothing after this step may use sudo.
+        # One call matters: some images grant NOPASSWD from more than one file (for example
+        # both runner and 90-cloud-init-users), and removing the first in its own `sudo rm`
+        # revokes the very access a second, separate `sudo rm` would need.
         if sudo -n true 2>/dev/null; then
-          sudo grep -rlE '^[^#]*NOPASSWD' /etc/sudoers.d 2>/dev/null | while read -r f; do
-            echo "removing passwordless sudo rule file $f"
-            sudo rm -f "$f"
-          done
+          files=$(sudo grep -rlE '^[^#]*NOPASSWD' /etc/sudoers.d 2>/dev/null || true)
+          if [ -n "$files" ]; then
+            echo "removing passwordless sudo rule file(s):"
+            echo "$files"
+            echo "$files" | sudo xargs -r rm -f
+          fi
         fi
         if sudo -n true 2>/dev/null; then
           echo "the runner user still has passwordless sudo (a rule outside /etc/sudoers.d?):" >&2
