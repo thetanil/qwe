@@ -22,6 +22,10 @@
 #                     is skipped (prints SKIP, passes) unless REMOTE_CONTAINERS is set
 #                     and `ssh -o BatchMode=yes 172.18.0.1 true` works
 #                     With QWE_E2E_REQUIRE_SSH=1 (CI) an unreachable target fails the case instead.
+#   needs-non-root    optional marker: the case relies on a permission check (chmod'd-away
+#                     access, say) that root ignores. Skipped (passes) as root.
+#   needs-sudo        optional marker: setup.sh needs passwordless sudo (to make a root-owned
+#                     fixture, say). Skipped (passes) unless `sudo -n true` works.
 #   setup.sh          optional: run in the work dir before qwe (chmod a key file, say)
 #   stdin             optional: qwe's standard input (a file; setup.sh may create or replace
 #                     it, and a directory there makes reading stdin fail with EISDIR)
@@ -61,6 +65,14 @@ if [ -f "$case_dir/needs-ssh" ]; then
 		echo "SKIP: $(basename "$case_dir"): needs ssh to 172.18.0.1 (REMOTE_CONTAINERS unset, or the host is not reachable)" >&2
 		exit 0
 	fi
+fi
+if [ -f "$case_dir/needs-non-root" ] && [ "$(id -u)" = 0 ]; then
+	echo "SKIP: $(basename "$case_dir"): needs a non-root user (root ignores the permission check)" >&2
+	exit 0
+fi
+if [ -f "$case_dir/needs-sudo" ] && ! sudo -n true 2>/dev/null; then
+	echo "SKIP: $(basename "$case_dir"): needs passwordless sudo (unavailable here)" >&2
+	exit 0
 fi
 work=$(mktemp -d) || exit 3
 trap 'rm -rf "$work"' EXIT

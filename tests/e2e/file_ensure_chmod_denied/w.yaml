@@ -1,0 +1,9 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: file.ensure
+        with:
+          path: owned-by-root.txt
+          content: hi
+          mode: "0644"

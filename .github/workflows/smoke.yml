@@ -52,3 +52,23 @@ jobs:
         run: |
           ./qwe validate tests/smoke/smoke_run.yml &&
           ./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"
+      # The negative-case pattern (06), repeated by later tickets: the workflow step is
+      # continue-on-error and tees qwe's output to a file; the assertion step right after it
+      # fails the job unless the step's outcome was failure and the file has the expected
+      # message. neg_file_ensure_denied.yml: file.ensure writing into a chmod 555 directory.
+      - name: neg_file_ensure_denied
+        id: neg_file_ensure_denied
+        continue-on-error: true
+        run: |
+          ./qwe validate tests/smoke/neg_file_ensure_denied.yml
+          ./qwe run tests/smoke/neg_file_ensure_denied.yml 2>&1 | tee "$RUNNER_TEMP/neg_file_ensure_denied.out"
+      - name: neg_file_ensure_denied must fail with a helpful message
+        run: |
+          if [ "${{ steps.neg_file_ensure_denied.outcome }}" != "failure" ]; then
+            echo "neg_file_ensure_denied: expected the step to fail, outcome was '${{ steps.neg_file_ensure_denied.outcome }}'" >&2
+            exit 1
+          fi
+          grep -F "file.ensure: cannot write roDir/f.txt: Permission denied" "$RUNNER_TEMP/neg_file_ensure_denied.out" || {
+            echo "neg_file_ensure_denied: expected message not found in the step's output" >&2
+            exit 1
+          }

@@ -1,0 +1,15 @@
+# smoke: negative case. file.ensure writing into a read-only directory must fail with a
+# clean, helpful message (06's I/O-error work). The GitHub step that runs this is
+# continue-on-error, and the step after it asserts the failure and the message (see smoke.yml).
+# The runner user is not root, so the permission applies.
+jobs:
+  j:
+    target: local
+    steps:
+      - run: |
+          mkdir roDir
+          chmod 555 roDir
+      - uses: file.ensure
+        with:
+          path: roDir/f.txt
+          content: hi

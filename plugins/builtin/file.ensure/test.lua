@@ -65,6 +65,30 @@ case("content_via_stdin", function()
   eq(secret, rec.calls[3].stdin, "the write's stdin")
 end)
 
+-- clean_reason() strips shell noise (the part of stderr up to and including the last
+-- ": "), trims whitespace including a trailing newline, and falls back to the whole
+-- trimmed stderr when there is no ": " to split on.
+case("error_message_clean", function()
+  local function write_fails(stderr)
+    local rec = recording.new({
+      { expect = STAT, code = 1 },
+      { expect = STAT, code = 1 },
+      { match = "^cat > ", code = 1, stderr = stderr },
+    })
+    local ok, msg = pcall(checkapply.run, plugin, { path = PATH, content = "hi" }, { backend = rec })
+    eq(false, ok, "pcall ok for stderr " .. string.format("%q", stderr))
+    return msg
+  end
+
+  eq("file.ensure: cannot write " .. PATH .. ": Permission denied",
+    write_fails("sh: 1: cannot create " .. PATH .. ": Permission denied"), "shell noise stripped")
+  eq("file.ensure: cannot write " .. PATH .. ": Permission denied",
+    write_fails("Permission denied\n"), "trailing newline trimmed")
+  eq("file.ensure: cannot write " .. PATH .. ": Permission denied",
+    write_fails("Permission denied"), "no colon: the whole trimmed stderr")
+  eq("file.ensure: cannot write " .. PATH .. ": ", write_fails(""), "empty stderr")
+end)
+
 case("quotes_the_path", function()
   local stat = "stat -c %a -- '/tmp/it'\\''s'"
   local rec = recording.new({ { expect = stat, code = 1 }, { expect = stat, code = 1 } })

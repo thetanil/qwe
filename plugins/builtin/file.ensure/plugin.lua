@@ -7,6 +7,14 @@ local function quote(s)
   return "'" .. s:gsub("'", "'\\''") .. "'"
 end
 
+-- The OS reason from a failed command's stderr, with shell noise (like "sh: 1: cannot
+-- create x: ") stripped: the text after the last ": ", trimmed. Falls back to the whole
+-- trimmed stderr if there is no ": ".
+local function clean_reason(stderr)
+  local trimmed = stderr:gsub("^%s+", ""):gsub("%s+$", "")
+  return trimmed:match(".*: (.*)$") or trimmed
+end
+
 -- "644" or "0644" -> "0644"; nil if it is not an octal mode.
 local function normalize_mode(text)
   if not text:match("^[0-7][0-7][0-7]?[0-7]?$") then return nil end
@@ -30,7 +38,7 @@ local function inspect(with, ctx)
   local state = { mode = mode }
   if with.content ~= nil then
     local cat = ctx.backend:run("cat -- " .. path)
-    if cat.code ~= 0 then error("file.ensure: cannot read " .. with.path .. ": " .. cat.stderr, 0) end
+    if cat.code ~= 0 then error("file.ensure: cannot read " .. with.path .. ": " .. clean_reason(cat.stderr), 0) end
     state.content = cat.stdout
   end
   return state
@@ -51,11 +59,11 @@ function M.apply(with, ctx)
   local path = quote(with.path)
   if not state or (with.content ~= nil and state.content ~= with.content) then
     local write = ctx.backend:run("cat > " .. path, with.content or "")
-    if write.code ~= 0 then error("file.ensure: cannot write " .. with.path .. ": " .. write.stderr, 0) end
+    if write.code ~= 0 then error("file.ensure: cannot write " .. with.path .. ": " .. clean_reason(write.stderr), 0) end
   end
   if want_mode ~= nil and (not state or state.mode ~= want_mode) then
     local chmod = ctx.backend:run("chmod " .. want_mode .. " " .. path)
-    if chmod.code ~= 0 then error("file.ensure: cannot chmod " .. with.path .. ": " .. chmod.stderr, 0) end
+    if chmod.code ~= 0 then error("file.ensure: cannot chmod " .. with.path .. ": " .. clean_reason(chmod.stderr), 0) end
   end
 end
 

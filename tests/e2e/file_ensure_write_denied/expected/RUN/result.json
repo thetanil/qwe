@@ -1,0 +1,24 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "j": {
+      "outcome": "failed",
+      "reason": "plugin-error",
+      "started": "TIME",
+      "ended": "TIME",
+      "duration_ms": DURATION,
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": null,
+          "outcome": "failed",
+          "reason": "plugin-error",
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        }
+      ]
+    }
+  }
+}
