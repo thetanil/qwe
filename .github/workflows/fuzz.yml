@@ -42,7 +42,7 @@ jobs:
           nproc
           echo 'int LLVMFuzzerTestOneInput(const unsigned char *d, unsigned long n) { return 0; }' |
             clang -x c -fsanitize=fuzzer,address -o /dev/null -
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: ${{ env.QWE_FUZZ_DIR }}
           key: fuzz-corpus-${{ github.run_id }}
@@ -66,7 +66,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       # Caches are immutable per key, hence one key per run. Crashes stay out: they are
       # reported once as an artifact, then belong in src/edge/yaml/corpus/.
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: always()
         with:
           path: |
@@ -80,4 +80,4 @@ jobs:
           path: |
             ${{ env.QWE_FUZZ_DIR }}/*-crashes/
             ${{ env.QWE_FUZZ_DIR }}/*.log
-          if-no-files-found: warn
+          if-no-files-found: ignore
