@@ -298,7 +298,8 @@ what each one fails on.
   The job summary lists each process's executions, corpus and coverage. The corpus persists between
   runs in the Actions cache. See `docs/fuzzing.md`.
 - **Drift.** `//tools/ci:workflows_test` (part of `bazel test //...`) fails if a workflow has no badge, a
-  command in `docs/ci-checks.md` is in no workflow, or the nightly or release stops calling a gate.
+  command in `docs/ci-checks.md` is in no workflow, or the nightly or release stops calling a gate or
+  the smoke workflow.
 
 To check a change before pushing, run the same commands locally (`docs/ci-checks.md`); the workflows run
 nothing else.
@@ -319,10 +320,11 @@ never tags, so a tag that was only created locally does nothing.
    ```
    (Instead, you can write the release in the GitHub web UI with the tag `v<version>` and publish it;
    the tag it creates starts the same run.)
-4. Watch `release` in the Actions tab. It runs all five gates (valgrind included, about 25 minutes),
-   builds `qwe` and `qwe-debug`, checks that the tag, `QWE_VERSION` and `qwe --version` agree, then
-   attaches the binaries and `SHA256SUMS`, and adds the commit hash to the notes. A tag with a `-`
-   (`v0.3.0-rc1`) is marked a pre-release.
+4. Watch `release` in the Actions tab. It runs all five gates (valgrind included, about 25 minutes) and
+   `smoke` (the release binary's own smoke workflows on a clean runner, then `perf`'s A/B timing
+   against the newest eligible release), builds `qwe` and `qwe-debug`, checks that the tag,
+   `QWE_VERSION` and `qwe --version` agree, then attaches the binaries and `SHA256SUMS`, and adds the
+   commit hash to the notes. A tag with a `-` (`v0.3.0-rc1`) is marked a pre-release.
 5. If a gate or the version check fails, a release you wrote in the web UI goes back to a draft. Fix
    `main`, then move the tag: `git tag -d v0.2.0 && git push origin :refs/tags/v0.2.0`, tag the fixed
    commit and push it again.

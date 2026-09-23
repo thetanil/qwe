@@ -85,16 +85,21 @@ hardcoded in their `inventory.yaml` files. `.github/actions/setup` with `ssh-tar
 
 `nightly.yml` runs at 02:17 UTC and on demand. It first deletes every `setup-bazel-*` cache (a saved
 cache key is never rewritten, so the gates' caches go stale), then calls all five gate workflows:
-tests, asan, ubsan, valgrind and coverage. They run cold and save fresh caches, which pushes to main
-then restore. It also calls `fuzz.yml` for 3600 seconds (release does not). `workflows_test` fails if it stops calling one of the five gates or the fuzzer.
+tests, asan, ubsan, valgrind and coverage, and `smoke.yml` (build, smoke and the perf A/B job, all at
+their defaults). They run cold and save fresh caches, which pushes to main then restore. It also calls
+`fuzz.yml` for 3600 seconds (release does not). `workflows_test` fails if it stops calling one of the
+five gates, smoke, or the fuzzer.
 
 `release.yml` runs on a pushed tag `v*`. Write the release in the GitHub web UI (its notes, and the tag it
-creates on publish), or push the tag yourself. All five gates run again at the tagged commit (not the
-fuzzer); then `qwe` and `qwe-debug` are built, `tools/release/check_version.sh` checks that the tag,
-`QWE_VERSION` in `src/kernel/qwe.h` and `qwe --version` agree, and the two binaries and `SHA256SUMS` are
-attached to the release. The full commit hash is appended to the release notes (a release created by the
-workflow is titled `<tag> (<short sha>)`). A release made in the web UI is public while the gates run; if a
-gate or the version check fails, the workflow turns it back into a draft. A pre-release tag
+creates on publish), or push the tag yourself. All five gates and `smoke.yml` run again at the tagged
+commit (not the fuzzer); `smoke.yml` is called with `exclude-tag` set to the tag being released, so its
+perf job's "newest eligible release" search never finds this release as its own baseline (the web-UI
+flow publishes the tag before the gates run). Then `qwe` and `qwe-debug` are built,
+`tools/release/check_version.sh` checks that the tag, `QWE_VERSION` in `src/kernel/qwe.h` and
+`qwe --version` agree, and the two binaries and `SHA256SUMS` are attached to the release. The full
+commit hash is appended to the release notes (a release created by the workflow is titled
+`<tag> (<short sha>)`). A release made in the web UI is public while the gates run; if a gate (smoke
+included) or the version check fails, the workflow turns it back into a draft. A pre-release tag
 (`v0.2.0-rc1`) is published as a pre-release. Bump `QWE_VERSION` first, or the version check fails.
 bazel test --config=valgrind //...
 bazel test --config=valgrind //tests/e2e:valgrind_e2e

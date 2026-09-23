@@ -27,8 +27,15 @@ jobs:
       contents: read
       pages: write
       id-token: write
+  smoke:
+    # exclude-tag: the web-UI release flow publishes this tag before the gates run, so
+    # smoke's own perf job's "latest release" search would otherwise find this release
+    # itself as the baseline.
+    uses: ./.github/workflows/smoke.yml
+    with:
+      exclude-tag: ${{ github.ref_name }}
   publish:
-    needs: [tests, asan, ubsan, valgrind, coverage]
+    needs: [tests, asan, ubsan, valgrind, coverage, smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -71,7 +78,7 @@ jobs:
           fi
   draft-on-failure:
     # A release published in the web UI is already public when the gates start.
-    needs: [tests, asan, ubsan, valgrind, coverage, publish]
+    needs: [tests, asan, ubsan, valgrind, coverage, smoke, publish]
     if: failure()
     runs-on: ubuntu-24.04
     permissions:

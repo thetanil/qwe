@@ -1,7 +1,7 @@
 #!/bin/bash
 # usage: workflows_test.sh [case...]     (no argument: every case)
 #
-# Cases: badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge fuzz_manual_only repo_is_consistent.
+# Cases: badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge fuzz_manual_only release_calls_smoke nightly_calls_smoke repo_is_consistent.
 # The first four build a copy of the repo's CI files, break one thing, and expect
 # check_repo to fail; repo_is_consistent runs check_repo on the files as committed.
 #
@@ -13,6 +13,7 @@
 #  5. fuzz.yml never starts on a push or a schedule of its own; nightly.yml calls it and release.yml does not
 #  3. every workflow but fuzz.yml, release.yml and nightly.yml runs on workflow_call, and on push to main
 #     (valgrind.yml is on demand and must not run on push)
+#  6. nightly.yml and release.yml both call smoke.yml
 here=$(cd "$(dirname "$0")/../.." && pwd)
 
 check_repo() {
@@ -44,6 +45,12 @@ check_repo() {
 				bad=1
 			fi
 		done
+	done
+	for caller in nightly release; do
+		if ! grep -q "uses: ./.github/workflows/smoke.yml" ".github/workflows/$caller.yml" 2>/dev/null; then
+			echo "rule 6: $caller.yml does not call smoke.yml" >&2
+			bad=1
+		fi
 	done
 	grep -q "uses: ./.github/workflows/fuzz.yml" .github/workflows/nightly.yml 2>/dev/null || { echo "rule 5: nightly.yml does not call fuzz.yml" >&2; bad=1; }
 	! grep -q "uses: ./.github/workflows/fuzz.yml" .github/workflows/release.yml 2>/dev/null || { echo "rule 5: release.yml must not call fuzz.yml" >&2; bad=1; }
@@ -115,9 +122,11 @@ case_fuzz_manual_only() {
 		expect_fail nightly_drops_fuzz 'sed -i "/fuzz.yml/d" .github/workflows/nightly.yml' &&
 		expect_fail release_calls_fuzz 'printf "  fuzz:\n    uses: ./.github/workflows/fuzz.yml\n" >> .github/workflows/release.yml'
 }
+case_release_calls_smoke() { expect_fail release_calls_smoke 'sed -i "/smoke.yml/d" .github/workflows/release.yml'; }
+case_nightly_calls_smoke() { expect_fail nightly_calls_smoke 'sed -i "/smoke.yml/d" .github/workflows/nightly.yml'; }
 case_repo_is_consistent() { (check_repo "$here"); }
 
-cases=${*:-badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge fuzz_manual_only repo_is_consistent}
+cases=${*:-badge_missing badge_dangling command_unwired trigger_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge fuzz_manual_only release_calls_smoke nightly_calls_smoke repo_is_consistent}
 rc=0
 for c in $cases; do
 	if "case_$c"; then echo "PASS: $c"; else echo "FAIL: $c" >&2; rc=1; fi
