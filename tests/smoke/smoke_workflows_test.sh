@@ -36,8 +36,7 @@ fail=0
 # its own (callers do, from its exit status).
 expect_fail() {
 	work=$1 name=$2 label=$3 message=$4
-	(cd "$work" && "$qwe" validate "$name") >"$work/out" 2>&1
-	if [ $? -ne 0 ]; then
+	if ! (cd "$work" && "$qwe" validate "$name") >"$work/out" 2>&1; then
 		if grep -qF "$message" "$work/out"; then
 			echo "PASS: $label (validate)"
 			return 0

@@ -50,6 +50,18 @@ Or just run the whole suite the way CI does:
 bazel test //tests/smoke:smoke_workflows_test --test_output=all
 ```
 
+## Navigating from a run's summary back to the test code
+
+Every named smoke step in `smoke.yml` starts with a call to
+`.github/scripts/summary-link.sh <path>...` before `qwe run --summary`, which appends a
+`Source: [...](...)` line to `$GITHUB_STEP_SUMMARY` linking each path (a file or a
+directory) at the exact commit the run built from (`$GITHUB_SHA`, not a branch, so the
+link keeps working even after the file is later renamed or removed on `main`). No line
+numbers: those would need updating on every edit, but a path stays put. Adding a new
+named step means adding this call too, pointed at whatever file (or files, for a
+generated workflow like `smoke_secrets.yml`, where the link should go to the template and
+its generator instead) actually holds the test code for that step.
+
 ## The negative-case pattern
 
 Two different things "negative" can mean here, and most negatives are only the first:
