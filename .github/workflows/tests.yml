@@ -18,7 +18,16 @@ jobs:
         with:
           cache-key: tests
           ssh-target: "true"
-      - run: bazel test //...
+      - name: bazel test //...
+        run: |
+          set -o pipefail
+          bazel test //... 2>&1 | tee "$RUNNER_TEMP/bazel-test.log"
+      # A table in the run summary, one row per tests/e2e case, linking back to its
+      # directory (same idea as smoke.yml's summary-link.sh): always, not just on failure,
+      # so it is there to browse either way.
+      - name: e2e summary
+        if: always()
+        run: .github/scripts/e2e-summary.sh "$RUNNER_TEMP/bazel-test.log"
       - if: failure()
         uses: ./.github/actions/collect-logs
         with:
