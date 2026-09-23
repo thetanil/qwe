@@ -85,13 +85,16 @@ function sign_crit(n, a,    c, i, cum, total, k, best) {
 	}
 	return best
 }
-# A glob (only "*" is special) as an anchored ERE.
-function glob_re(g,    r, i, c) {
+# A glob (only "*" is special) as an anchored ERE. ERE metacharacters are escaped by table
+# lookup (index()), not a bracket-expression regex literal: awk dialects disagree on how
+# "]" and "\\" may appear inside a bracket expression, and this is safer than guessing.
+function glob_re(g,    r, i, c, special) {
+	special = "\\.^$()|+?{}[]"
 	r = ""
 	for (i = 1; i <= length(g); i++) {
 		c = substr(g, i, 1)
 		if (c == "*") r = r ".*"
-		else if (c ~ /[][.^$()|+?{}\\]/) r = r "\\" c
+		else if (index(special, c) > 0) r = r "\\" c
 		else r = r c
 	}
 	return "^" r "$"
