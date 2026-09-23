@@ -1,0 +1,6 @@
+jobs:
+  a:
+    target: local
+    needs: [nope]
+    steps:
+      - run: "true"

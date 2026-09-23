@@ -154,6 +154,27 @@ that cannot make pipes or fork) and `limits_test` (a key longer than the path bu
 | target and plan errors (1472-1476, 1572-1576, 1614, 1671-1672, 1712-1713) | | the dispatch-time errors after `validate` has passed (an unresolvable target, a DAG with unresolved needs, `--job` allocation): validation refuses each first, so they are the second line of defence. |
 | shutdown (1763, 1777, 1786) | | `PR_SET_CHILD_SUBREAPER` failing, `realpath` failing, `run_all` returning an error: none can be made to happen without a broken kernel. |
 
+## After the static-analysis gate and sca-findings (2026-09-23)
+
+The coverage floor failed on every push from `acb416d` (static-analysis/01) through
+`sca-findings/07`. Nothing that had been tested lost its test. The analyzer's fixes add
+error branches for failures a test cannot cause, and `floor.txt` counts every new
+uncovered line. The floor was raised on purpose (`check -- --update`) for these lines:
+
+| file | floor | the new misses |
+|---|---|---|
+| `kernel/summary.c` | 6 → 8 | `log_tail`'s branch for `fseek`/`ftell` failing on a log file qwe just wrote (`acb416d`'s `ftell` fix, sca-findings/04 and 06). |
+| `kernel/workflow.c` | 121 → 127 | `child_argv` freeing its argv on the status-pipe and stdin-setup failures (`acb416d`, reached by `oom_test`, which the report cannot see). The child's `fflush(stdout)` failing (04). `fmt_run_id`'s fallback for a clock `gmtime` cannot break down (04). `result.json`'s `fclose` failing (04). |
+| `kernel/clock.h` | new, 1 | `qwe_mono_now`'s `abort()`: `clock_gettime(CLOCK_MONOTONIC)` cannot fail on Linux. |
+| `kernel/fmt.h` | new, 2 | `qwe_xfmt`'s message and `abort()` on truncation. Every caller sizes its buffer to fit, and an aborted process writes no gcov data anyway. |
+
+`kernel/validate.c` went the other way, from 37 to 26. `acb416d` split a declaration in
+`escape_token` into four lines, and the table above (quality/09) had written that
+function off as reached "only for a clean schema". That was a missing test, not a
+defensive path: a clean schema with a bad `needs` is an ordinary user error. The e2e
+cases `validate_needs_unknown` and `validate_needs_cycle` now reach `check_dag`'s
+error branch and `escape_token`.
+
 ## Lua
 
 The same command measures the Lua qwe ships (`src/kernel/lua/*.lua`, `plugins/builtin/**`):

@@ -295,6 +295,8 @@ e2e_test(name = "validate_become_value")
 e2e_test(name = "inventory_bad_names")
 e2e_test(name = "plugin_files_malformed")
 e2e_test(name = "validate_unknown_target")
+e2e_test(name = "validate_needs_unknown")
+e2e_test(name = "validate_needs_cycle")
 e2e_test(name = "validate_step_run_and_uses")
 e2e_test(name = "plugin_shape_and_array_args")
 

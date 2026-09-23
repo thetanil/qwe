@@ -1,0 +1,1 @@
+qwe validate: w.yaml:4:13: job "a" needs "nope", which is not a job

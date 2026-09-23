@@ -1,0 +1,11 @@
+jobs:
+  a:
+    target: local
+    needs: [b]
+    steps:
+      - run: "true"
+  b:
+    target: local
+    needs: [a]
+    steps:
+      - run: "true"
