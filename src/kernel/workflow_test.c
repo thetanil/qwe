@@ -29,6 +29,8 @@ static void write_file(const char *name, const char *body)
 
 	snprintf(path, sizeof path, "%s/%s", dir, name);
 	fp = fopen(path, "w");
+	if (!fp)
+		abort();
 	fputs(body, fp);
 	fclose(fp);
 }

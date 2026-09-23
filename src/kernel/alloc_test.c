@@ -2,6 +2,7 @@
 #include "greatest.h"
 #include "src/kernel/alloc.h"
 #include "src/kernel/oom_shim.h"
+#include "src/testing/owned.h"
 
 #include <signal.h>
 #include <stdlib.h>
@@ -85,8 +86,8 @@ TEST shim_fails_the_nth_call(void)
 		case 2: p = malloc(8); break;
 		default: p = realloc(NULL, 8); break;
 		}
+		qwe_own(p);
 		ASSERT_EQ_FMT(i != 3, p != NULL, "%d");
-		free(p);
 	}
 	ASSERT_EQ(5, qwe_oom_count());
 	ASSERT(qwe_oom_fired());
@@ -105,6 +106,7 @@ GREATEST_MAIN_DEFS();
 int main(int argc, char **argv)
 {
 	GREATEST_MAIN_BEGIN();
+	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(helper_aborts_and_names_the_site);
 	RUN_TEST(helper_returns_the_block_when_memory_is_available);
 	RUN_TEST(shim_fails_the_nth_call);

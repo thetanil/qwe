@@ -25,6 +25,7 @@ cc_library(
     srcs = [name + "_test.c"],
     deps = [
         ":yaml",
+        "//src/testing:owned",
         "//third_party/greatest",
         "//third_party/tinycbor",
     ],

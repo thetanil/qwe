@@ -58,6 +58,8 @@ int main(int argc, char **argv)
 	mkdir(path, 0700);
 	strncat(path, "/secret", sizeof path - strlen(path) - 1);
 	fp = fopen(path, "wb");
+	if (!fp)
+		abort();
 	fwrite("0123456789abcdef0123456789abcdef", 1, 32, fp);
 	fclose(fp);
 	chmod(path, 0600);

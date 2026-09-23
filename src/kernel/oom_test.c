@@ -23,6 +23,8 @@ static void write_file(const char *path, const char *body)
 {
 	FILE *fp = fopen(path, "w");
 
+	if (!fp)
+		abort();
 	fputs(body, fp);
 	fclose(fp);
 }
@@ -237,6 +239,8 @@ static void fresh_select_case(char *dir, size_t cap)
 	fresh_case(dir, cap);
 	snprintf(path, sizeof path, "%s/w.yaml", dir);
 	fp = fopen(path, "a");
+	if (!fp)
+		abort();
 	for (i = 0; i < 80; i++)
 		fputs("# padding, so that the file is longer than the reader's first buffer, and then some\n", fp);
 	fclose(fp);

@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
 #include "src/kernel/summary.h"
+#include "src/testing/owned.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -10,7 +11,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-/* Reads a whole file's content (caller frees). */
+/* Reads a whole file's content (caller frees). A failure here is the test's
+ * own setup failing, so it aborts rather than hand back a bad buffer. */
 static char *slurp(const char *path)
 {
 	FILE *fp = fopen(path, "r");
@@ -18,10 +20,16 @@ static char *slurp(const char *path)
 	long len;
 	size_t got;
 
+	if (!fp)
+		abort();
 	fseek(fp, 0, SEEK_END);
 	len = ftell(fp);
+	if (len < 0)
+		abort();
 	rewind(fp);
 	buf = malloc((size_t)len + 1);
+	if (!buf)
+		abort();
 	got = fread(buf, 1, (size_t)len, fp);
 	buf[got] = '\0';
 	fclose(fp);
@@ -57,13 +65,12 @@ TEST heading_jobs_and_steps(void)
 	struct qwe_job_result job = {
 		.id = "j", .outcome = "success", .duration_ms = 34, .steps = &step, .nsteps = 1,
 	};
-	char *out = written("w.yaml", "success", 100, &job, 1);
+	char *out = qwe_own(written("w.yaml", "success", 100, &job, 1));
 
 	ASSERT(strstr(out, "### w.yaml: \xE2\x9C\x85 success (100 ms)"));
 	ASSERT(strstr(out, "| j | \xE2\x9C\x85 success |  | 34 |"));
 	ASSERT(strstr(out, "#### j"));
 	ASSERT(strstr(out, "| 1 | s1 | run | \xE2\x9C\x85 success | changed |  | 12 |"));
-	free(out);
 	PASS();
 }
 
@@ -73,11 +80,10 @@ TEST skipped_job_has_no_steps_table(void)
 	struct qwe_job_result job = {
 		.id = "b", .outcome = "skipped", .reason = "dependency-failed", .duration_ms = -1, .nsteps = 0,
 	};
-	char *out = written("w.yaml", "failed", 5, &job, 1);
+	char *out = qwe_own(written("w.yaml", "failed", 5, &job, 1));
 
 	ASSERT(strstr(out, "| b | \xE2\x8F\xAD\xEF\xB8\x8F skipped | dependency-failed |  |"));
 	ASSERT_EQ(NULL, strstr(out, "#### b"));
-	free(out);
 	PASS();
 }
 
@@ -91,11 +97,10 @@ TEST changed_column(void)
 	struct qwe_job_result job = {
 		.id = "j", .outcome = "failed", .duration_ms = 3, .steps = steps, .nsteps = 2,
 	};
-	char *out = written("w.yaml", "failed", 3, &job, 1);
+	char *out = qwe_own(written("w.yaml", "failed", 3, &job, 1));
 
 	ASSERT(strstr(out, "| 1 | a | run | \xE2\x9C\x85 success | unchanged |  | 1 |"));
 	ASSERT(strstr(out, "| 2 | b | run | \xE2\x9D\x8C failed |  | exit-code | 2 |"));
-	free(out);
 	PASS();
 }
 
@@ -110,12 +115,11 @@ TEST appends(void)
 	close(fd);
 	ASSERT_EQ(0, qwe_summary_write(path, NULL, "one.yaml", "success", 1, &job, 1));
 	ASSERT_EQ(0, qwe_summary_write(path, NULL, "two.yaml", "success", 1, &job, 1));
-	buf = slurp(path);
+	buf = qwe_own(slurp(path));
 	unlink(path);
 	first = strstr(buf, "one.yaml");
 	second = strstr(buf, "two.yaml");
 	ASSERT(first && second && first < second);
-	free(buf);
 	PASS();
 }
 
@@ -135,14 +139,12 @@ TEST every_outcome_marker(void)
 	struct qwe_job_result weird_job = {.id = "j", .outcome = "weird", .duration_ms = -1};
 	char *out;
 
-	out = written("w.yaml", "cancelled", -1, &cancelled_job, 1);
+	out = qwe_own(written("w.yaml", "cancelled", -1, &cancelled_job, 1));
 	ASSERT(strstr(out, "\xE2\x8F\xB9\xEF\xB8\x8F cancelled"));
-	free(out);
 
-	out = written("w.yaml", "weird", -1, &weird_job, 1);
+	out = qwe_own(written("w.yaml", "weird", -1, &weird_job, 1));
 	ASSERT(strstr(out, "### w.yaml: weird ("));
 	ASSERT(strstr(out, "| j | weird |  |  |"));
-	free(out);
 	PASS();
 }
 
@@ -182,16 +184,14 @@ TEST cell_escaping(void)
 	long_id[sizeof long_id - 1] = '\0';
 	step = (struct qwe_step_result){.id = long_id, .outcome = "success", .duration_ms = 1};
 	job = (struct qwe_job_result){.id = "j", .outcome = "success", .steps = &step, .nsteps = 1};
-	out = written("w.yaml", "success", 1, &job, 1);
+	out = qwe_own(written("w.yaml", "success", 1, &job, 1));
 	ASSERT(strstr(out, "\xE2\x80\xA6")); /* the cut cell's ellipsis */
 	ASSERT_EQ(NULL, strstr(out, long_id)); /* the full, uncut id never appears */
-	free(out);
 
 	step = (struct qwe_step_result){.id = "a|b\nc", .outcome = "success", .duration_ms = 1};
 	job = (struct qwe_job_result){.id = "j", .outcome = "success", .steps = &step, .nsteps = 1};
-	out = written("w.yaml", "success", 1, &job, 1);
+	out = qwe_own(written("w.yaml", "success", 1, &job, 1));
 	ASSERT(strstr(out, "| a\\|b c | run |"));
-	free(out);
 	PASS();
 }
 
@@ -212,6 +212,7 @@ TEST log_tail_block(void)
 	ASSERT(mkdtemp(dir) != NULL);
 	snprintf(logpath, sizeof logpath, "%s/j.log", dir);
 	fp = fopen(logpath, "w");
+	ASSERT(fp != NULL);
 	for (i = 0; i < 25; i++)
 		fprintf(fp, "line %d\n", i);
 	fputs("a ``` run\n", fp); /* a 3-backtick run: the fence must beat it */
@@ -219,7 +220,7 @@ TEST log_tail_block(void)
 
 	jobs[0] = (struct qwe_job_result){.id = "j", .outcome = "failed", .steps = &step, .nsteps = 1};
 	jobs[1] = (struct qwe_job_result){.id = "ok", .outcome = "success", .steps = &ok_step, .nsteps = 1};
-	out = written_in(dir, "w.yaml", "failed", 1, jobs, 2);
+	out = qwe_own(written_in(dir, "w.yaml", "failed", 1, jobs, 2));
 
 	ASSERT(strstr(out, "<details>"));
 	ASSERT_EQ(NULL, strstr(out, "line 5\n")); /* only the last 20 of 26 lines survive */
@@ -232,7 +233,6 @@ TEST log_tail_block(void)
 
 		ASSERT(first && strstr(first + 1, "<details>") == NULL);
 	}
-	free(out);
 	unlink(logpath);
 	rmdir(dir);
 	PASS();
@@ -248,9 +248,8 @@ TEST log_tail_missing_file_is_silent(void)
 	char *out;
 
 	ASSERT(mkdtemp(dir) != NULL);
-	out = written_in(dir, "w.yaml", "failed", 1, &job, 1);
+	out = qwe_own(written_in(dir, "w.yaml", "failed", 1, &job, 1));
 	ASSERT_EQ(NULL, strstr(out, "<details>"));
-	free(out);
 	rmdir(dir);
 	PASS();
 }
@@ -269,12 +268,12 @@ TEST log_tail_without_trailing_newline(void)
 	ASSERT(mkdtemp(dir) != NULL);
 	snprintf(logpath, sizeof logpath, "%s/j.log", dir);
 	fp = fopen(logpath, "w");
+	ASSERT(fp != NULL);
 	fputs("no newline at the end", fp);
 	fclose(fp);
 
-	out = written_in(dir, "w.yaml", "failed", 1, &job, 1);
+	out = qwe_own(written_in(dir, "w.yaml", "failed", 1, &job, 1));
 	ASSERT(strstr(out, "no newline at the end\n```"));
-	free(out);
 	unlink(logpath);
 	rmdir(dir);
 	PASS();
@@ -282,6 +281,7 @@ TEST log_tail_without_trailing_newline(void)
 
 SUITE(summary)
 {
+	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(heading_jobs_and_steps);
 	RUN_TEST(skipped_job_has_no_steps_table);
 	RUN_TEST(changed_column);

@@ -80,6 +80,7 @@ cc_test(
         ":luavm",
         "//third_party/luajit",
         ":timer",
+        "//src/testing:owned",
         "//third_party/greatest",
     ],
 )
@@ -150,6 +151,7 @@ cc_test(
     srcs = ["summary_test.c"],
     deps = [
         ":summary",
+        "//src/testing:owned",
         "//third_party/greatest",
     ],
 )
@@ -301,6 +303,7 @@ cc_test(
     deps = [
         ":lifecycle",
         ":trace",
+        "//src/testing:owned",
         "//third_party/greatest",
     ],
 )
@@ -319,6 +322,7 @@ cc_test(
     srcs = ["trace_test.c"],
     deps = [
         ":trace",
+        "//src/testing:owned",
         "//third_party/greatest",
     ],
 )
@@ -336,6 +340,7 @@ cc_test(
     srcs = ["preamble_test.c"],
     deps = [
         ":preamble",
+        "//src/testing:owned",
         "//third_party/greatest",
     ],
 )
@@ -392,6 +397,7 @@ cc_test(
     deps = [
         ":alloc",
         ":oom_shim",
+        "//src/testing:owned",
         "//third_party/greatest",
     ],
 )

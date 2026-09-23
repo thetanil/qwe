@@ -2,6 +2,7 @@
 #include "greatest.h"
 #include "src/kernel/proc.h"
 #include "src/kernel/luavm.h"
+#include "src/testing/owned.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -99,10 +100,9 @@ TEST master_outside_step_groups(void)
 	waitpid(step.pid, &st, 0);
 	close(step.out_fd);
 	lua_close(L);
-	fp = fopen(path, "r");
+	fp = qwe_own_file(fopen(path, "r"));
 	ASSERT(fp != NULL);
 	ASSERT(fgets(line, sizeof line, fp) != NULL);
-	fclose(fp);
 	unlink(path);
 	ASSERT_EQ(0, stat_group_session(line, &master_pg, &master_sid));
 	ASSERT(master_pg != step.pid);
@@ -350,6 +350,7 @@ GREATEST_MAIN_DEFS();
 int main(int argc, char **argv)
 {
 	GREATEST_MAIN_BEGIN();
+	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(child_is_group_leader);
 	RUN_TEST(group_kill_no_orphans);
 	RUN_TEST(subreaper_reaps_orphans);

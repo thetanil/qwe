@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "greatest.h"
 #include "src/kernel/trace.h"
+#include "src/testing/owned.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,12 +32,11 @@ TEST long_line_is_truncated(void)
 	qwe_trace_record(&t, "job", 1, QWE_LC_READY, "next", "success", "transition", NULL, NULL);
 	qwe_trace_close(&t);
 
-	fp = fopen(path, "r");
+	fp = qwe_own_file(fopen(path, "r"));
 	ASSERT(fp != NULL);
 	ASSERT(fgets(l1, sizeof l1, fp) != NULL);
 	ASSERT(fgets(l2, sizeof l2, fp) != NULL);
 	ASSERT_EQ(NULL, fgets(l1 + 0, 2, fp)); /* nothing else: no third line, no leftover */
-	fclose(fp);
 	unlink(path);
 
 	/* the long record was cut, and is still one whole line */
@@ -52,6 +52,7 @@ TEST long_line_is_truncated(void)
 
 SUITE(trace)
 {
+	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(long_line_is_truncated);
 }
 

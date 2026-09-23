@@ -2,6 +2,7 @@
 #include "greatest.h"
 #include "src/secrets/envelope.h"
 #include "src/secrets/keyfile.h"
+#include "src/testing/owned.h"
 
 #include <sodium.h>
 #include <stdlib.h>
@@ -45,25 +46,25 @@ TEST fresh_nonce_each_time(void)
 
 TEST tamper_detected(void)
 {
-	char *env = qwe_envelope_seal(key, (const uint8_t *)"secret", 6), *copy;
+	char *env = qwe_own(qwe_envelope_seal(key, (const uint8_t *)"secret", 6)), *copy;
 	uint8_t *back = NULL, other[QWE_KEY_BYTES];
 	size_t n, i, len;
 	const char *why = NULL;
 
 	ASSERT(env != NULL);
 	len = strlen(env);
+	copy = qwe_own(malloc(len + 1));
+	ASSERT(copy != NULL);
 	/* every single-character change of the base64 part is refused */
 	for (i = 24; i < len; i++) {
-		copy = strdup(env);
+		memcpy(copy, env, len + 1);
 		copy[i] = copy[i] == 'A' ? 'B' : 'A';
 		ASSERT(qwe_envelope_open(key, copy, &back, &n, &why) != 0 || strcmp(copy, env) == 0);
-		free(copy);
 	}
 	/* the version and algorithm id are authenticated too */
-	copy = strdup(env);
+	memcpy(copy, env, len + 1);
 	copy[4] = '2';
 	ASSERT(qwe_envelope_open(key, copy, &back, &n, &why) != 0);
-	free(copy);
 	/* a different key */
 	memcpy(other, key, sizeof other);
 	other[0] ^= 1;
@@ -72,7 +73,6 @@ TEST tamper_detected(void)
 	/* not an envelope at all */
 	ASSERT(qwe_envelope_check("plain text", &why) != 0);
 	ASSERT(qwe_envelope_check("qwe:1:xchacha20poly1305:AAAA", &why) != 0);
-	free(env);
 	PASS();
 }
 
@@ -108,6 +108,7 @@ GREATEST_MAIN_DEFS();
 int main(int argc, char **argv)
 {
 	GREATEST_MAIN_BEGIN();
+	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(roundtrip);
 	RUN_TEST(fresh_nonce_each_time);
 	RUN_TEST(tamper_detected);

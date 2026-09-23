@@ -45,12 +45,11 @@ tools/clang-tidy/run.sh --raw
 The default mode is a pass/fail gate, and its `--quiet` output ("N warnings
 generated", about 1,000 of them) is just what the exclusions below and system
 headers suppressed: it says nothing about which checks. `--raw` runs every group
-`.clang-tidy` enables with none of its exclusions and no test narrowing, and
-prints a per-check tally split into `src/`+`tools/` and `*_test.c`. A header
-finding is counted once, not once per file that includes it. It is a
-measurement, not a gate: it exits 0 whatever it finds. At `acb416d` it counted
-619 findings, none in a header; `.scratch/sca-findings/spec.md` works through
-them one class at a time.
+`.clang-tidy` enables with none of its exclusions, and prints a per-check
+tally split into `src/`+`tools/` and `*_test.c`. A header finding is counted
+once, not once per file that includes it. It is a measurement, not a gate: it
+exits 0 whatever it finds. At `acb416d` it counted 619 findings, none in a
+header; `.scratch/sca-findings/spec.md` works through them one class at a time.
 
 ## No compile_commands.json, no Python
 
@@ -95,17 +94,24 @@ specific, checked reason:
 | `clang-analyzer-security.insecureAPI.strcpy` | Name-based (bans `strcpy`/`strcat` outright); every call site in this tree is bounded by explicit buffer-size arithmetic checked by hand (`src/kernel/workflow.c`'s `load_inventory` and its run-directory path). |
 | `clang-analyzer-unix.Errno` | Its one hit (`src/kernel/summary.c`) traced into an unrelated loop in a different function with no `errno` in the flagged file at all — an inter-procedural false positive. |
 
-`run.sh` additionally narrows `clang-analyzer-unix.Malloc`, `clang-analyzer-unix.Stream`,
-`clang-analyzer-core.NonNullParamChecker`, `clang-analyzer-unix.StdCLibraryFunctions`
-and `clang-analyzer-optin.portability.UnixAPI` for `*_test.c` files only (an extra
-`--checks=` argument, appended to `.clang-tidy`'s, `--dump-config` confirms the two
-merge rather than one replacing the other). Every one of those checkers reads a
-`greatest.h` `ASSERT`/`FAIL` early return — deliberate, so the harness moves on to
-the next test instead of running more code past a proven-wrong state — as a leak,
-a null deref, or an unclosed stream. A real bug of that shape in a test still fails
-under valgrind and the sanitizers, which run the test rather than only read it.
-The same checkers keep full value in `src/` and `tools/`, which is where they
-found what this ticket actually fixed (below).
+### Test code: same checks, two idioms
+
+`*_test.c` files get exactly the checks every other file gets. greatest's
+`ASSERT`/`FAIL` return out of a test on the first failure, past any `free()` or
+`fclose()` below them, so the analyzer's leak and stream checkers would flag
+any test that frees after asserting. Tests follow two rules instead:
+
+- **A test does not free or close what it asserts across.** It hands the pointer
+  to `qwe_own()` (or a `FILE *` to `qwe_own_file()`) from `src/testing/owned.h`
+  (`//src/testing:owned`), and the teardown callback `qwe_release_owned` frees
+  and closes everything after each test, pass or fail. Install it with
+  `SET_TEARDOWN(qwe_release_owned, NULL);` at the top of `main` and of every
+  `SUITE`, because greatest clears the teardown when a suite ends.
+- **A setup helper aborts on failure.** A helper that writes a fixture file or
+  reads one back (`write_file`, `slurp`, `with_preamble`, `run`) calls `abort()`
+  if its `fopen`/`open`/`tmpfile`/`ftell`/`malloc` fails. It does not carry on
+  with NULL or -1. An abort fails the test binary outright, which is the right
+  outcome for a broken fixture.
 
 A single-line false positive is a `// NOLINTNEXTLINE(<check>)` with a comment
 explaining why (one exists in `read_file`, `src/kernel/workflow.c`); a
@@ -151,3 +157,19 @@ Real bugs behind checks that had been excluded as false positives, found by
   a `qwe_preamble_build` failure became a `write()` of an uninitialized length
   from a null pointer, not a test failure. It now aborts, as `run()` already
   does on its own setup failures. Found by `clang-analyzer-core.CallAndMessage`.
+- **Test fixture helpers ignored their own failures.** `write_file` in
+  `src/cli/validate/oom_test.c`, `src/kernel/load_oom_test.c`,
+  `src/kernel/oom_test.c` and `src/kernel/workflow_test.c` passed an unchecked
+  `fopen` to `fputs`. So did `oom_test.c`'s `fresh_select_case`, and
+  `src/cli/encrypt/oom_test.c`'s `main` did the same with `fwrite`.
+  `load_oom_test.c`'s `validate_failing` passed an unchecked `open` to `dup2`,
+  and `preamble_test.c`'s `run` passed an unchecked `tmpfile`/`dup` to `fwrite`
+  and `lseek`. `summary_test.c`'s `slurp` checked neither `fopen` nor `ftell`,
+  so a failed `ftell` became `malloc(0)` followed by a write one byte before
+  the block (the same bug the first run fixed in `summary.c`'s `log_tail`).
+  `envelope_test.c` wrote into an unchecked `strdup`. Each of these would crash
+  inside libc instead of failing the test. The helpers now abort. Found by
+  `clang-analyzer-core.NonNullParamChecker`,
+  `clang-analyzer-unix.StdCLibraryFunctions` and
+  `clang-analyzer-optin.portability.UnixAPI` once `run.sh` stopped narrowing
+  them out of test files.

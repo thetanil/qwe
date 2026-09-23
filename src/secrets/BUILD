@@ -22,6 +22,7 @@ cc_test(
     srcs = ["envelope_test.c"],
     deps = [
         ":secrets",
+        "//src/testing:owned",
         "//third_party/greatest",
         "//third_party/libsodium",
     ],

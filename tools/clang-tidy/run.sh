@@ -3,8 +3,8 @@
 #
 # Default: the pass/fail gate, .clang-tidy as written.
 # --raw:   the backlog, not a gate. Every check group .clang-tidy turns on, with
-#          none of its exclusions and no test narrowing, tallied per check and
-#          split into src/+tools/ and *_test.c. Always exits 0 once it has run.
+#          none of its exclusions, tallied per check and split into
+#          src/+tools/ and *_test.c. Always exits 0 once it has run.
 #
 # The LLVM Static Analyzer (clang-analyzer-*, run through clang-tidy) plus a
 # popular bugprone/cert/performance/portability ruleset for C -- see
@@ -70,16 +70,6 @@ flags_for_file() {
   ' <<<"$aquery_json"
 }
 
-# greatest.h's ASSERT/FAIL macros return out of a test on the first failure,
-# skipping whatever cleanup follows -- deliberately: the harness moves on to
-# the next test rather than run more code in a state a failed assertion just
-# proved wrong. The analyzer's cross-function leak/null/resource checkers read
-# every one of those early returns as a defect, which would flag most of the
-# test suite for a pattern that is the test framework working as designed. A
-# genuine bug of this shape in a test still fails under valgrind and the
-# sanitizers, which run the test rather than just read it.
-test_only_checks=-clang-analyzer-unix.Malloc,-clang-analyzer-unix.Stream,-clang-analyzer-core.NonNullParamChecker,-clang-analyzer-unix.StdCLibraryFunctions,-clang-analyzer-optin.portability.UnixAPI
-
 if [ "$raw" = 1 ]; then
 	# The groups .clang-tidy enables (its un-negated Checks lines), after a
 	# reset: --checks appends to the config's list, so '-*' drops every
@@ -114,11 +104,7 @@ fi
 fail=0
 for file in "${files[@]}"; do
 	mapfile -t flags < <(flags_for_file "$file")
-	extra_checks=()
-	case "$file" in
-	*_test.c) extra_checks=(--checks="$test_only_checks") ;;
-	esac
-	if ! "$CLANG_TIDY" --quiet "${extra_checks[@]}" "$file" -- "${flags[@]}"; then
+	if ! "$CLANG_TIDY" --quiet "$file" -- "${flags[@]}"; then
 		fail=1
 	fi
 done

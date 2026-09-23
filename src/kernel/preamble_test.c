@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "greatest.h"
 #include "src/kernel/preamble.h"
+#include "src/testing/owned.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -26,9 +27,13 @@ static size_t run(const char *script, const char *input, size_t input_len, int u
 			abort();
 	} else {
 		tmp = tmpfile();
+		if (!tmp)
+			abort();
 		fwrite(input, 1, input_len, tmp);
 		fflush(tmp);
 		in[0] = dup(fileno(tmp));
+		if (in[0] < 0)
+			abort();
 		lseek(in[0], 0, SEEK_SET);
 		fclose(tmp);
 	}
@@ -86,7 +91,7 @@ TEST stdin_passthrough_exact(void)
 	const char *values[] = {"one", "two\nlines\\n"};
 	char out[64];
 	size_t total, n;
-	char *all = with_preamble(names, values, 2, data, sizeof data, &total);
+	char *all = qwe_own(with_preamble(names, values, 2, data, sizeof data, &total));
 	int use_pipe;
 
 	for (use_pipe = 0; use_pipe <= 1; use_pipe++) {
@@ -94,7 +99,6 @@ TEST stdin_passthrough_exact(void)
 		ASSERT_EQ(sizeof data, n);
 		ASSERT_MEM_EQ(data, out, sizeof data);
 	}
-	free(all);
 	PASS();
 }
 
@@ -103,16 +107,14 @@ TEST stdin_passthrough_empty_and_starting_with_newline(void)
 	static const char data[] = "\n\nstarts with blank lines";
 	char out[64];
 	size_t total, n;
-	char *all = with_preamble(NULL, NULL, 0, data, sizeof data - 1, &total);
+	char *all = qwe_own(with_preamble(NULL, NULL, 0, data, sizeof data - 1, &total));
 
 	n = run("cat", all, total, 1, out, sizeof out);
 	ASSERT_EQ(sizeof data - 1, n);
 	ASSERT_MEM_EQ(data, out, n);
-	free(all);
-	all = with_preamble(NULL, NULL, 0, "", 0, &total);
+	all = qwe_own(with_preamble(NULL, NULL, 0, "", 0, &total));
 	n = run("cat", all, total, 1, out, sizeof out);
 	ASSERT_EQ(0, n);
-	free(all);
 	PASS();
 }
 
@@ -129,9 +131,8 @@ TEST values_arrive_exactly(void)
 		char want[64];
 
 		snprintf(script, sizeof script, "printf %%s \"$%s\"", names[i]);
-		all = with_preamble(names, values, 7, "", 0, &total);
+		all = qwe_own(with_preamble(names, values, 7, "", 0, &total));
 		n = run(script, all, total, 1, out, sizeof out);
-		free(all);
 		snprintf(want, sizeof want, "%s", values[i]);
 		ASSERT_EQ(strlen(want), n);
 		ASSERT_MEM_EQ(want, out, n);
@@ -156,6 +157,7 @@ GREATEST_MAIN_DEFS();
 int main(int argc, char **argv)
 {
 	GREATEST_MAIN_BEGIN();
+	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(stdin_passthrough_exact);
 	RUN_TEST(stdin_passthrough_empty_and_starting_with_newline);
 	RUN_TEST(values_arrive_exactly);

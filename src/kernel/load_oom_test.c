@@ -44,6 +44,8 @@ static void write_file(const char *name, const char *body)
 
 	snprintf(path, sizeof path, "%s/%s", dir, name);
 	fp = fopen(path, "w");
+	if (!fp)
+		abort();
 	fputs(body, fp);
 	fclose(fp);
 }
@@ -59,6 +61,8 @@ static int validate_failing(int at, const char *workflow, char *err, size_t errc
 	snprintf(path, sizeof path, "%s/%s", dir, workflow);
 	snprintf(errpath, sizeof errpath, "%s/stderr", dir);
 	fd = open(errpath, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+	if (saved < 0 || fd < 0)
+		abort();
 	dup2(fd, 2);
 	close(fd);
 	fail_at = at;
@@ -68,6 +72,8 @@ static int validate_failing(int at, const char *workflow, char *err, size_t errc
 	dup2(saved, 2);
 	close(saved);
 	fd = open(errpath, O_RDONLY);
+	if (fd < 0)
+		abort();
 	got = read(fd, err, errcap - 1);
 	close(fd);
 	err[got < 0 ? 0 : got] = 0;

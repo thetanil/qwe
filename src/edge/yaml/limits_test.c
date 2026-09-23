@@ -1,5 +1,6 @@
 #include "greatest.h"
 #include "src/edge/yaml/transcode.h"
+#include "src/testing/owned.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +36,7 @@ TEST size_limit(void)
 	size_t n;
 	char err[128];
 	size_t len = QWE_YAML_MAX_SIZE + 1;
-	char *big = malloc(len + 1);
+	char *big = qwe_own(malloc(len + 1));
 
 	ASSERT(big != NULL);
 	memset(big, 'a', len);
@@ -46,7 +47,6 @@ TEST size_limit(void)
 	/* At the limit it is accepted (one long plain scalar). */
 	ASSERT_EQ(0, qwe_yaml_to_cbor(big, QWE_YAML_MAX_SIZE, &buf, &n, NULL, err, sizeof err));
 	free(buf);
-	free(big);
 	PASS();
 }
 
@@ -69,6 +69,7 @@ TEST long_keys_grow_the_path(void)
 
 SUITE(limits)
 {
+	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(depth_limit);
 	RUN_TEST(size_limit);
 	RUN_TEST(long_keys_grow_the_path);

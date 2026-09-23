@@ -3,6 +3,7 @@
 #include "src/kernel/lifecycle.h"
 #include "src/kernel/lifecycle_model.h"
 #include "src/kernel/trace.h"
+#include "src/testing/owned.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -447,10 +448,9 @@ TEST impossible_cell_aborts(void)
 	ASSERT(WIFSIGNALED(st));
 	ASSERT_EQ(SIGABRT, WTERMSIG(st));
 
-	fp = fopen(path, "r");
+	fp = qwe_own_file(fopen(path, "r"));
 	ASSERTm("the trace file was not written", fp != NULL);
 	ASSERT(fgets(line, sizeof line, fp) != NULL);
-	fclose(fp);
 	unlink(path);
 	ASSERTm(line, strstr(line, " j 2 pending grace-expired - impossible -\n") != NULL);
 	PASS();
@@ -461,6 +461,7 @@ GREATEST_MAIN_DEFS();
 int main(int argc, char **argv)
 {
 	GREATEST_MAIN_BEGIN();
+	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(every_cell_classified);
 	RUN_TEST(rules_hold_in_every_cell);
 	RUN_TEST(impossible_cells_unreachable);
