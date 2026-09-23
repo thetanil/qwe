@@ -14,6 +14,7 @@
 #include <string.h>
 
 int luaopen_lpeg(lua_State *L);
+int luaopen_rex_pcre2(lua_State *L);
 
 /* Turns on Lua line coverage when QWE_LUA_COVERAGE and COVERAGE_DIR are set (bazel coverage sets the latter). */
 static void coverage_enable(lua_State *L)
@@ -99,6 +100,8 @@ lua_State *qwe_lua_new(void)
 	lua_getfield(L, -1, "preload");
 	lua_pushcfunction(L, luaopen_lpeg);
 	lua_setfield(L, -2, "lpeg");
+	lua_pushcfunction(L, luaopen_rex_pcre2);
+	lua_setfield(L, -2, "rex_pcre2");
 	lua_pushcfunction(L, luaopen_qwe_cbor);
 	lua_setfield(L, -2, "qwe.cbor");
 	lua_pushcfunction(L, luaopen_qwe_fs);

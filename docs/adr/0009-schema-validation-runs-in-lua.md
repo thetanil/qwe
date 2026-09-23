@@ -9,5 +9,5 @@ We chose this because no usable pure-C99 validator exists. WJElement lacks `cons
 - LuaJIT is required for validation, not only for plugins. `qwe validate` can't run without the embedded Lua runtime.
 - The transcoder's position table is keyed by JSON Pointer and records key positions, because `additionalProperties` errors point at the unknown key.
 - Plugin input unions are composed as `allOf` of `if: {uses: const X} then: {$ref: X}`, not `oneOf`. lua-schema reports errors from every `oneOf` branch mixed together, so only the matching branch should produce errors.
-- `pattern`, `patternProperties` and `format` are removed from the strict metaschema until a real regex engine (PCRE2) is added. They're rejected, never silently ignored.
+- `pattern`, `patternProperties` and `format` were removed from the strict metaschema until a real regex engine existed. PCRE2 (`rex_pcre2`) was added in ticket 17, and `pattern`/`patternProperties` are back; `format` stays removed. An unsupported keyword is rejected, never silently ignored.
 - lua-schema is beta and has a single maintainer, pinned to an unreleased commit (`1a14a04`). The upstream JSON-Schema-Test-Suite for draft-07 runs as a Bazel test to guard against regressions. QCBOR is the fallback CBOR library, and lua-ConciseSerialization the fallback Lua CBOR library.

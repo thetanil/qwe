@@ -15,8 +15,6 @@ schema.json.null = cbor.null
 -- Whole files that test keywords qwe's strict metaschema rejects or that need
 -- something we do not have (a regex engine, remote documents).
 local excluded_files = {
-  ["pattern.json"] = "pattern: rejected until PCRE2 is added",
-  ["patternProperties.json"] = "patternProperties: rejected until PCRE2 is added",
   ["format.json"] = "format: rejected by the strict metaschema",
   ["refRemote.json"] = "remote $ref: no network, no remote documents",
 }
@@ -40,9 +38,7 @@ end
 
 -- A group that mentions a keyword we exclude, or a remote document, is skipped.
 local function skipped(group_text)
-  return group_text:find('"pattern"', 1, true)
-      or group_text:find('"patternProperties"', 1, true)
-      or group_text:find('"format"', 1, true)
+  return group_text:find('"format"', 1, true)
       or group_text:find("localhost:1234", 1, true)
       or group_text:find("http://json-schema.org/draft-07/schema#", 1, true) -- a remote $ref to the metaschema
 end

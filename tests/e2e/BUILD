@@ -30,6 +30,11 @@ e2e_test(name = "validate_unknown_key")
 
 e2e_test(name = "validate_with_schema")
 
+# ticket 17: a schema's `pattern:` runs a real PCRE2 regex, and a mismatch's
+# message names the pattern instead of "rex_pcre2 missing". The matching
+# side of the same schema (mode: "0644") is already exercised by validate_ok.
+e2e_test(name = "validate_pattern_mismatch")
+
 e2e_test(name = "validate_union_single_error")
 
 e2e_test(name = "validate_duplicate_step_id")

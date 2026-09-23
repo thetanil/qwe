@@ -315,6 +315,24 @@ static void print_problems(struct problems *ps, const char *cmd, const char *pat
 		fprintf(stderr, "%s: %s: out of memory while checking the workflow\n", cmd, path);
 }
 
+/* A Lua error that escaped the validator's own pcalls: a real bug, unless the
+ * message is shaped like a real allocator failure (lrexlib's "malloc failed",
+ * a PCRE2 error string that mentions memory, or LuaJIT's own "not enough
+ * memory"), in which case it is reported the same way as every other
+ * out-of-memory path here rather than as "internal error" -- schema
+ * compilation (kernel_validator, ADR-0009) now runs every plugin's
+ * `pattern:` through PCRE2 on every call, so this is reachable, not just
+ * theoretical. */
+static void report_internal_error(lua_State *L, const char *cmd, const char *label, const char *path)
+{
+	const char *msg = lua_tostring(L, -1);
+
+	if (msg && (strstr(msg, "malloc failed") || strstr(msg, "memory")))
+		fprintf(stderr, "%s: %s: out of memory while checking the workflow\n", cmd, path);
+	else
+		fprintf(stderr, "%s: %s: internal error in the %s: %s\n", cmd, path, label, msg ? msg : "unknown error");
+}
+
 int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const struct qwe_positions *pos)
 {
 	struct problems ps = {0};
@@ -353,7 +371,7 @@ int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const stru
 	return (int)(n + nplugin);
 
 internal:
-	fprintf(stderr, "%s: internal error in the validator: %s\n", cmd, lua_tostring(L, -1));
+	report_internal_error(L, cmd, "validator", path);
 	lua_settop(L, doc);
 	return 1;
 }
@@ -380,7 +398,7 @@ int qwe_validate_inventory(lua_State *L, const char *cmd, const char *path, cons
 	return (int)n;
 
 internal:
-	fprintf(stderr, "%s: internal error in the inventory reader: %s\n", cmd, lua_tostring(L, -1));
+	report_internal_error(L, cmd, "inventory reader", path);
 	lua_settop(L, inv);
 	return 1;
 }

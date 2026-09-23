@@ -8,7 +8,7 @@
     "properties": {
       "path": {"type": "string", "minLength": 1},
       "content": {"type": "string"},
-      "mode": {"type": "string", "minLength": 1}
+      "mode": {"type": "string", "pattern": "^[0-7]{2,4}$"}
     }
   },
   "outputs": {

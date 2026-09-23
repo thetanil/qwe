@@ -1,5 +1,6 @@
--- The qwe strict metaschema: draft-07's, with typos rejected, pattern removed
--- and secret added (ADR-0009).
+-- The qwe strict metaschema: draft-07's, with typos rejected, pattern and
+-- patternProperties allowed (ticket 17), format still removed, and secret
+-- added (ADR-0009).
 local plugins = require("qwe.plugins")
 local plugincheck = require("qwe.plugincheck")
 
@@ -43,10 +44,15 @@ test("property_named_like_keyword_ok", function()
   if #list ~= 0 then error("unexpected: " .. list[1].pointer .. " " .. list[1].message, 0) end
 end)
 
-test("pattern_rejected", function()
-  expect(errors_of('{"type":"string","pattern":"^a"}'), "/pattern", "key")
-  expect(errors_of('{"patternProperties":{"^a":{}}}'), "/patternProperties", "key")
+test("format_rejected", function()
   expect(errors_of('{"type":"string","format":"uri"}'), "/format", "key")
+end)
+
+test("pattern_and_pattern_properties_allowed", function()
+  local list = errors_of('{"type":"string","pattern":"^a"}')
+  if #list ~= 0 then error("pattern: rejected: " .. list[1].pointer .. " " .. list[1].message, 0) end
+  list = errors_of('{"patternProperties":{"^a":{}}}')
+  if #list ~= 0 then error("patternProperties: rejected: " .. list[1].pointer .. " " .. list[1].message, 0) end
 end)
 
 test("secret_allowed_and_typed", function()

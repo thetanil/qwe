@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://qwe.invalid/strict-metaschema",
   "title": "qwe strict metaschema",
-  "$comment": "draft-07's metaschema with additionalProperties: false at every level (each subschema is a $ref to the root), pattern, patternProperties and format removed until a regex engine exists (ADR-0009), secret added for output schemas, and $schema pinned to draft-07.",
+  "$comment": "draft-07's metaschema with additionalProperties: false at every level (each subschema is a $ref to the root), format still removed (ADR-0009), pattern and patternProperties restored now that PCRE2 backs them (ticket 17), secret added for output schemas, and $schema pinned to draft-07.",
   "definitions": {
     "schemaArray": {"type": "array", "minItems": 1, "items": {"$ref": "#"}},
     "nonNegativeInteger": {"type": "integer", "minimum": 0},
@@ -29,6 +29,7 @@
     "exclusiveMinimum": {"type": "number"},
     "maxLength": {"$ref": "#/definitions/nonNegativeInteger"},
     "minLength": {"$ref": "#/definitions/nonNegativeIntegerDefault0"},
+    "pattern": {"type": "string"},
     "additionalItems": {"$ref": "#"},
     "items": {"anyOf": [{"$ref": "#"}, {"$ref": "#/definitions/schemaArray"}], "default": true},
     "maxItems": {"$ref": "#/definitions/nonNegativeInteger"},
@@ -41,6 +42,7 @@
     "additionalProperties": {"$ref": "#"},
     "definitions": {"type": "object", "additionalProperties": {"$ref": "#"}, "default": {}},
     "properties": {"type": "object", "additionalProperties": {"$ref": "#"}, "default": {}},
+    "patternProperties": {"type": "object", "additionalProperties": {"$ref": "#"}, "default": {}},
     "dependencies": {
       "type": "object",
       "additionalProperties": {"anyOf": [{"$ref": "#"}, {"$ref": "#/definitions/stringArray"}]}

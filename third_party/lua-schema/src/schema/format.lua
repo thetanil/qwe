@@ -458,8 +458,18 @@ end
 
 format.regex = function (data)
     if type(data) == 'string' and pcre_new then
-        local ok = pcall(pcre_new, data)
+        local ok, err = pcall(pcre_new, data)
         if not ok then
+            -- rex_pcre2/PCRE2 raise the same way for a syntactically bad pattern and for
+            -- a failed allocation ("malloc failed" from rex_pcre2's own checks, "failed to
+            -- allocate heap memory" or similar from PCRE2's own error text). The first is
+            -- what this pcall is for (report it as a soft format failure); the second must
+            -- not be swallowed as one -- qwe's validator treats every allocation failure as
+            -- fatal (ticket 17; see src/kernel/validate.c's report_internal_error), never a
+            -- degraded result.
+            if type(err) == 'string' and (err:find('malloc failed', 1, true) or err:find('memory', 1, true)) then
+                error(err, 0)
+            end
             return false, 'invalid regex'
         end
     end

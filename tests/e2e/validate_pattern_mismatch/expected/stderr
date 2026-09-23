@@ -1,0 +1,1 @@
+qwe validate: w.yaml:8:17: must match pattern ^[0-7]{2,4}$

@@ -1,0 +1,8 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: file.ensure
+        with:
+          path: /tmp/x
+          mode: "abc"

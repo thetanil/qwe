@@ -182,6 +182,7 @@ cc_library(
         ":preamble",
         "//src/kernel/lua:modules",
         "//third_party/lpeg",
+        "//third_party/lrexlib:rex_pcre2",
         "//third_party/luajit",
     ],
 )
