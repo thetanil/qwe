@@ -15,5 +15,9 @@ sh_test(
         "$(location //src/cli:qwe)",
         package_name(),
     ],
-    data = ["//src/cli:qwe", "gen_secrets.sh", "smoke_secrets.yml.in"] + glob(["*.yml"]),
+    data = ["//src/cli:qwe", "gen_secrets.sh", "smoke_secrets.yml.in"] + glob([
+        "*.yml",
+        ".qwe/plugins/**",
+        "neg_plugin_top_level/**",
+    ]),
 )

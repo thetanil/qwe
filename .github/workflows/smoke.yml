@@ -46,6 +46,16 @@ jobs:
       # a fresh per-run encrypted value, runs it, and asserts the value leaked nowhere.
       - name: smoke_secrets
         run: tests/smoke/gen_secrets.sh bazel-bin/src/cli/qwe tests/smoke
+      # smoke_graph.yml itself (the diamond, the rendezvous, a's own output, d's files) is
+      # covered generically by tests/smoke:smoke_workflows_test in the build job below; these
+      # two steps are only to prove --job selection (12) for real: --job d runs the full
+      # needs closure, --job b only a and b (no c or d in the summary).
+      - name: smoke_graph --job d
+        run: |
+          bazel-bin/src/cli/qwe validate tests/smoke/smoke_graph.yml &&
+          bazel-bin/src/cli/qwe run tests/smoke/smoke_graph.yml --job d --debug --summary "$GITHUB_STEP_SUMMARY"
+      - name: smoke_graph --job b (only a and b run)
+        run: bazel-bin/src/cli/qwe run tests/smoke/smoke_graph.yml --job b --debug --summary "$GITHUB_STEP_SUMMARY"
       # Same negative-case pattern as the smoke job below (06).
       - name: neg_file_ensure_denied
         id: neg_file_ensure_denied
@@ -258,6 +268,15 @@ jobs:
       # a fresh per-run encrypted value, runs it, and asserts the value leaked nowhere.
       - name: smoke_secrets
         run: tests/smoke/gen_secrets.sh ./qwe tests/smoke
+      # smoke_graph.yml itself is covered generically by tests/smoke:smoke_workflows_test in
+      # the build job; these two steps prove --job selection (12) against the shipped
+      # binary: --job d runs the full needs closure, --job b only a and b.
+      - name: smoke_graph --job d
+        run: |
+          ./qwe validate tests/smoke/smoke_graph.yml &&
+          ./qwe run tests/smoke/smoke_graph.yml --job d --summary "$GITHUB_STEP_SUMMARY"
+      - name: smoke_graph --job b (only a and b run)
+        run: ./qwe run tests/smoke/smoke_graph.yml --job b --summary "$GITHUB_STEP_SUMMARY"
       # The negative-case pattern (06), repeated by later tickets: the workflow step is
       # continue-on-error and tees qwe's output to a file; the assertion step right after it
       # fails the job unless the step's outcome was failure and the file has the expected

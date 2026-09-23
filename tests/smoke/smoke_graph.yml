@@ -1,0 +1,38 @@
+# smoke: the job graph (needs:, max-parallel:, --job). A diamond a -> {b, c} -> d: b and c
+# rendezvous through files to prove they really ran in parallel, a's own later step reads
+# an earlier step's output, and d checks what it needs through files since outputs are
+# job-scoped. smoke.yml also runs this with --job d (the full needs closure) and --job b
+# (only a and b) to prove job selection.
+name: smoke graph
+max-parallel: 2
+jobs:
+  a:
+    target: local
+    steps:
+      - id: gen
+        run: echo "greeting=hello from a" >> "$QWE_OUTPUT"
+      - run: echo "a saw ${{ steps.gen.outputs.greeting }}"
+  b:
+    target: local
+    needs: [a]
+    steps:
+      - timeout-seconds: 10
+        run: |
+          touch b.mark
+          i=0; while [ ! -e c.mark ] && [ $i -lt 200 ]; do sleep 0.05; i=$((i+1)); done
+          [ -e c.mark ]
+  c:
+    target: local
+    needs: [a]
+    steps:
+      - timeout-seconds: 10
+        run: |
+          touch c.mark
+          i=0; while [ ! -e b.mark ] && [ $i -lt 200 ]; do sleep 0.05; i=$((i+1)); done
+          [ -e b.mark ]
+  d:
+    target: local
+    needs: [b, c]
+    steps:
+      - run: |
+          [ -e b.mark ] && [ -e c.mark ]

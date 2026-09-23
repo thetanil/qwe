@@ -1,0 +1,26 @@
+# smoke: a project plugin (12), loaded from .qwe/plugins/smoke.touch/ next to this
+# workflow, not built into the binary. Runs it, runs it again in a second job (unchanged),
+# and file.read + assert confirm the file it created.
+name: smoke project plugin
+jobs:
+  first:
+    target: local
+    steps:
+      - id: touch
+        uses: smoke.touch
+        with:
+          path: touched.txt
+  second:
+    target: local
+    needs: [first]
+    steps:
+      - id: touch-again
+        uses: smoke.touch
+        with:
+          path: touched.txt
+      - id: read
+        uses: file.read
+        with:
+          path: touched.txt
+      - uses: assert
+        with: {actual: "${{ steps.read.outputs.exists }}", equals: "true"}

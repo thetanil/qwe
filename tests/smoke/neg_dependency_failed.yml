@@ -1,0 +1,18 @@
+# smoke: negative case. A failed job's dependants are skipped with reason
+# dependency-failed, not silently run.
+# smoke: expect-fail: dependency-failed
+jobs:
+  broken:
+    target: local
+    steps:
+      - run: exit 1
+  dependant-one:
+    target: local
+    needs: [broken]
+    steps:
+      - run: echo NEVER
+  dependant-two:
+    target: local
+    needs: [broken]
+    steps:
+      - run: echo NEVER

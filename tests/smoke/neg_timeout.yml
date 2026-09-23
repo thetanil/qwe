@@ -1,0 +1,9 @@
+# smoke: negative case. timeout-seconds: 1 on a step that sleeps much longer must fail
+# fast, with reason timeout in the summary, not wait out the sleep.
+# smoke: expect-fail: timeout
+jobs:
+  j:
+    target: local
+    steps:
+      - timeout-seconds: 1
+        run: sleep 30

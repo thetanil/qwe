@@ -1,0 +1,9 @@
+# smoke: negative case. An unknown key on a step must fail qwe validate, naming the key
+# and its path.
+# smoke: expect-fail: unknown key "colour"
+jobs:
+  j:
+    target: local
+    steps:
+      - run: echo hi
+        colour: red

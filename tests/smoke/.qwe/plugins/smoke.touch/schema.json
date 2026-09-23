@@ -1,0 +1,12 @@
+{
+  "with": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "description": "with: inputs of the smoke.touch project plugin",
+    "type": "object",
+    "required": ["path"],
+    "additionalProperties": false,
+    "properties": {
+      "path": {"type": "string", "minLength": 1}
+    }
+  }
+}

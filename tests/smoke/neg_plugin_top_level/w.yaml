@@ -1,0 +1,8 @@
+# smoke: negative case. A project plugin with top-level code must fail qwe validate with
+# a plugin.lua:<line>:<col> message, before anything of it runs.
+# smoke: expect-fail: plugin.lua:3:1: top-level code is not allowed
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: bad
