@@ -1,37 +1,40 @@
 #!/bin/sh
 # usage: bazel run //tools/credits:gen [-- --update]
 #
-# A markdown table of every vendored third_party/ dependency that is actually linked
-# into the shipped binary (//src/cli:qwe) -- name, upstream, version, license -- for
-# the README's Credits section.
+# A markdown table of every vendored third_party/ dependency -- name, upstream,
+# version, license -- for the README's Credits section.
 #
 #   (no argument)  prints the table to stdout
 #   --update       rewrites it in place in README.md, between the
 #                  <!-- credits:start --> / <!-- credits:end --> markers
 #
-# The package list comes from `bazel query 'deps(//src/cli:qwe)'`, restricted to
-# //third_party/..., so a vendored dependency that is not actually shipped (a
-# test-only one, like greatest or json-schema-test-suite) never appears here: it is
-# never linked into //src/cli:qwe in the first place.
+# The package list is every directory directly under third_party/ that bazel
+# recognises as a package (has a BUILD file) -- `bazel query '//third_party/...'`
+# alone under-counts: a package whose BUILD is only `exports_files(...)`, like
+# dkjson's, defines no target the `...`/`:all` wildcards match, so it never shows up
+# in that query. Listing the directories and confirming each has a BUILD file next
+# to it is the complete, dialect-independent way to get all of them, dependency of
+# the shipped binary or not (a test-only one, like greatest or
+# json-schema-test-suite, belongs in the credits too -- it is still vendored code).
 #
 # Each package's name, version, upstream reference and license come from its own
 # third_party/<pkg>/VERSION file -- one line, in the format every vendored package
 # already uses in its BUILD file's header comment:
 #   <Name> <version> (<upstream ref>)[, <extra>], <License>[. <notes>]
 # <upstream ref> is "owner/repo" (assumed GitHub) or a bare domain. Add a VERSION
-# file (copy the wording already in the package's BUILD comment) for any shipped
-# dependency this script reports missing one; the check is deliberately loud rather
-# than silently skipping a dependency's credit.
+# file (copy the wording already in the package's BUILD comment) for any package
+# this script reports missing one; the check is deliberately loud rather than
+# silently skipping a dependency's credit.
 set -eu
 root=${BUILD_WORKSPACE_DIRECTORY:-$(cd "$(dirname "$0")/../.." && pwd)}
 cd "$root"
 
-pkgs=$(bazel query 'deps(//src/cli:qwe)' 2>/dev/null | grep '^//third_party/' | sed -E 's#^//third_party/([^:/]+).*#\1#' | sort -u)
+pkgs=$(for d in third_party/*/; do [ -f "$d/BUILD" ] && basename "$d"; done | sort)
 
 rows=$(
 	for pkg in $pkgs; do
 		f="third_party/$pkg/VERSION"
-		[ -f "$f" ] || { echo "credits: $pkg is linked into //src/cli:qwe but has no $f" >&2; exit 3; }
+		[ -f "$f" ] || { echo "credits: $pkg has no $f" >&2; exit 3; }
 		head -1 "$f"
 	done | awk -F'\t' '
 	{

@@ -332,14 +332,16 @@ never tags, so a tag that was only created locally does nothing.
 
 Implemented with Claude using [Matt Pocock's skills](https://github.com/mattpocock/skills).
 
-Every dependency actually linked into the shipped binary, vendored under `third_party/`
-(`bazel run //tools/credits:gen -- --update` refreshes this table from each package's
-`VERSION` file):
+Every dependency vendored under `third_party/`, shipped in the binary or used only to
+build and test it (`bazel run //tools/credits:gen -- --update` refreshes this table from
+each package's `VERSION` file):
 
 <!-- credits:start -->
 | Name | Upstream | Version | License |
 |---|---|---|---|
 | dkjson | [dkolf.de](https://dkolf.de) | 2.8 | MIT |
+| greatest | [silentbicycle/greatest](https://github.com/silentbicycle/greatest) | 1.5.0 | ISC |
+| JSON-Schema-Test-Suite | [json-schema-org/JSON-Schema-Test-Suite](https://github.com/json-schema-org/JSON-Schema-Test-Suite) | commit ab079cc2bace029fdbb483be28a6ade526bcfbc2 | MIT |
 | libsodium | [jedisct1/libsodium](https://github.com/jedisct1/libsodium) | 1.0.20 | ISC |
 | libyaml | [yaml/libyaml](https://github.com/yaml/libyaml) | 0.2.5 | MIT |
 | LPeg | [lpeg.org](https://lpeg.org) | 1.1.0 | MIT |
