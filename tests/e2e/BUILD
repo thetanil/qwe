@@ -359,6 +359,12 @@ e2e_test(name = "file_ensure_write_denied")
 
 e2e_test(name = "file_ensure_chmod_denied")
 
+e2e_test(name = "file_read_outputs")
+
+e2e_test(name = "file_read_missing")
+
+e2e_test(name = "file_read_denied")
+
 # QWE_E2E_REQUIRE_SSH=1: an unreachable needs-ssh case fails instead of skipping.
 sh_test(
     name = "require_ssh_test",

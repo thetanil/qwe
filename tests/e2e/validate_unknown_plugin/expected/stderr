@@ -1,1 +1,1 @@
-qwe validate: w.yaml:5:15: unknown plugin "no.such.plugin" (built-in: file.ensure)
+qwe validate: w.yaml:5:15: unknown plugin "no.such.plugin" (built-in: file.ensure, file.read)

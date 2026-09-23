@@ -1,6 +1,7 @@
 plugins/builtin/backend_local/local.lua 0
 plugins/builtin/backend-ssh/ssh.lua 2
 plugins/builtin/file.ensure/plugin.lua 0
+plugins/builtin/file.read/plugin.lua 0
 plugins/builtin/recording/recording.lua 2
 plugins/builtin/run/plugin.lua 0
 src/cli/dispatch.c 0
@@ -74,11 +75,12 @@ src/kernel/sched.h 0
 src/kernel/sink.c 2
 src/kernel/sink.h 0
 src/kernel/summary.c 6
+src/kernel/summary.h 0
 src/kernel/timer.c 1
 src/kernel/timer.h 0
 src/kernel/trace.c 9
 src/kernel/trace.h 0
-src/kernel/validate.c 41
+src/kernel/validate.c 37
 src/kernel/validate.h 0
 src/kernel/workflow.c 121
 src/secrets/envelope.c 13

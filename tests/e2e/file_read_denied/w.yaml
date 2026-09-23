@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: file.read
+        with:
+          path: secret.txt

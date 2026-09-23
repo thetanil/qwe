@@ -11,6 +11,7 @@ local strict = require("qwe.strict")
 local BUILTIN = {
   { name = "run", uses = false },
   { name = "file.ensure", uses = true },
+  { name = "file.read", uses = true },
 }
 
 local M = {}

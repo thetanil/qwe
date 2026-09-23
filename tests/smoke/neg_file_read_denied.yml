@@ -1,0 +1,14 @@
+# smoke: negative case. file.read on a file it cannot read must fail with a clean,
+# helpful message (06's I/O-error work, reused by file.read (07)). The GitHub step that
+# runs this is continue-on-error, and the step after it asserts the failure and the
+# message (see smoke.yml). The runner user is not root, so the permission applies.
+jobs:
+  j:
+    target: local
+    steps:
+      - run: |
+          printf secret > secret.txt
+          chmod 000 secret.txt
+      - uses: file.read
+        with:
+          path: secret.txt

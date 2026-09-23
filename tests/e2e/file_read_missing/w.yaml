@@ -1,0 +1,13 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: read
+        uses: file.read
+        with: {path: "nope.txt"}
+      - run: |
+          printf 'exists=%s\n' "${{ steps.read.outputs.exists }}" > out.env
+          printf 'content=%s\n' "${{ steps.read.outputs.content }}" >> out.env
+          printf 'sha256=%s\n' "${{ steps.read.outputs.sha256 }}" >> out.env
+          printf 'mode=%s\n' "${{ steps.read.outputs.mode }}" >> out.env
+          printf 'owner=%s\n' "${{ steps.read.outputs.owner }}" >> out.env
