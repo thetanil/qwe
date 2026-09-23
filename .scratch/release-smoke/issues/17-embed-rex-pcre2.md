@@ -81,3 +81,16 @@ table (`src/kernel/luavm.c`), the same way `lpeg`, `qwe.cbor`, `qwe.fs`, `qwe.ex
   `internal:` fallbacks, so any such error that still escapes (a real bug) is reported
   as `<file>: out of memory ...` -- naming the file, like every other OOM path here --
   instead of a bare, fileless "internal error in the validator".
+- **Follow-up, found by CI's asan job** (`src/edge/yaml:corpus_test` failing under
+  `--config=asan`): the same `pattern:`-triggered PCRE2 allocations (a compile context, a
+  match-data block and the compiled pattern itself, all real `malloc`, freed via
+  `rex_pcre2`'s own `__gc`) are also compiled every time `qwe_fuzz_chain`
+  (`src/edge/yaml/fuzz_harness.c`) calls `qwe_validate_doc` against the persistent Lua state
+  the fuzz harness deliberately keeps for the process's life. `corpus_test.c` never closed
+  that state, so LeakSanitizer -- which can't see into LuaJIT's own memory arena to find the
+  reachable path from the still-live state back to PCRE2's blocks -- reported them as
+  leaked. Before this ticket nothing reachable from that state was ever backed by a real
+  `malloc()`, so this never fired. Fixed by giving `fuzz_harness.c` a
+  `qwe_fuzz_chain_close()` (calls `lua_close()`, which runs every live userdata's `__gc`)
+  that only `corpus_test.c` calls, once, after its replay finishes; the fuzz binaries
+  (`chain_fuzz`, real fuzzing runs) never call it and keep the state exactly as before.

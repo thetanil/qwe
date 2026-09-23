@@ -54,5 +54,6 @@ int main(int argc, char **argv)
 	nfiles = argc - 1;
 	files = argv + 1;
 	RUN_TEST(replay_regression_corpus);
+	qwe_fuzz_chain_close();
 	GREATEST_MAIN_END();
 }

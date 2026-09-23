@@ -16,4 +16,9 @@ void qwe_fuzz_transcode(const uint8_t *data, size_t len);
  * /dev/null. */
 void qwe_fuzz_chain(const uint8_t *data, size_t len);
 
+/* Closes qwe_fuzz_chain's Lua state early. The fuzz binaries never call this
+ * (see fuzz_harness.c); corpus_test.c calls it once, after its replay is
+ * done, so nothing it allocated outlives the process as an apparent leak. */
+void qwe_fuzz_chain_close(void);
+
 #endif

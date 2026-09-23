@@ -52,9 +52,11 @@ void qwe_fuzz_transcode(const uint8_t *data, size_t len)
 	qwe_positions_free(pos);
 }
 
+static lua_State *chain_L;
+
 void qwe_fuzz_chain(const uint8_t *data, size_t len)
 {
-	static lua_State *L;
+	lua_State *L = chain_L;
 	uint8_t *cbor;
 	size_t n;
 	struct qwe_positions *pos;
@@ -63,7 +65,7 @@ void qwe_fuzz_chain(const uint8_t *data, size_t len)
 
 	if (!L) {
 		stderr = fopen("/dev/null", "w");
-		L = qwe_lua_new();
+		L = chain_L = qwe_lua_new();
 		if (!L || !stderr)
 			abort();
 	}
@@ -78,4 +80,19 @@ void qwe_fuzz_chain(const uint8_t *data, size_t len)
 	}
 	free(cbor);
 	qwe_positions_free(pos);
+}
+
+/* Not used by the fuzz binaries, which keep chain_L for the process's life on
+ * purpose (recreating a Lua state per iteration would dominate fuzzing time).
+ * corpus_test.c is a finite, one-shot replay, so it calls this once at the end
+ * to close chain_L -- lua_close() runs every live userdata's __gc, including
+ * rex_pcre2's, which frees the PCRE2 objects a `pattern:` keyword now
+ * allocates (ticket 17); left open, they are indistinguishable from a leak to
+ * LeakSanitizer, which cannot see into LuaJIT's own memory arena to find the
+ * reachable path back to them through chain_L. */
+void qwe_fuzz_chain_close(void)
+{
+	if (chain_L)
+		lua_close(chain_L);
+	chain_L = NULL;
 }
