@@ -70,3 +70,8 @@ item: add a smoke workflow.
 `bazel test //...` and `bazel run //tools/coverage:check` both green (246 tests pass, 3
 sanitizer/valgrind smoke tests skipped as usual locally; no plugin.lua changes, so the
 coverage floor is untouched).
+
+**Pushed and confirmed** (2026-09-23): all five gates green on [run 35865874382 and its
+siblings](https://github.com/thetanil/qwe/actions/runs/35865874382) (tests, asan, ubsan,
+coverage, smoke), including `tests/smoke:coverage_test` (`PASSED` in the `build` job's
+`bazel test --config=release //...`).

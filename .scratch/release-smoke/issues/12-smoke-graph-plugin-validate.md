@@ -1,6 +1,6 @@
 # 12: Smoke: job graph, project plugin, and validation negatives
 
-Status: ready-for-human
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 05, 08
@@ -32,7 +32,7 @@ Blocked by: 05, 08
 
 - [x] `smoke_graph.yml` and `smoke_project_plugin.yml` pass in the Bazel suite: `e2e: tests/smoke:smoke_workflows_test`
 - [x] All four negatives fail with their expected messages in the Bazel suite too (the smoke test runs `neg_*` expecting failure and greps the message kept in a comment line at the top of each file): `e2e: tests/smoke:smoke_workflows_test`
-- [ ] On the runner: all green, the negatives orange and asserted, `--job` summaries show the right jobs: `manual: push; check the run and its summary` — not done; needs a real push (see 09/10/11's comments on this project's no-push rule)
+- [x] On the runner: all green, the negatives orange and asserted, `--job` summaries show the right jobs: `manual: push; check the run and its summary` — confirmed on the real runner, see comments
 - [x] `bazel test //...` green
 
 ## Comments
@@ -82,3 +82,19 @@ selection).
 `bazel test //...` and `bazel run //tools/coverage:check` both green (245 tests pass, 3
 sanitizer/valgrind smoke tests skipped as usual locally; no new plugin code, so the
 coverage floor is untouched by this ticket).
+
+**Pushed and confirmed on the real runner** (2026-09-23), [run 35865874382](
+https://github.com/thetanil/qwe/actions/runs/35865874382): both `debug-smoke` and `smoke`
+green, `smoke_graph --job d` and `smoke_graph --job b (only a and b run)` both passed as
+their own steps in each
+([`debug-smoke`](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107197180374),
+[`smoke`](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432)), and
+`bazel test --config=release //...` (the `build` job) passed, which is what actually
+exercises `neg_timeout.yml`, `neg_malformed.yml`, `neg_dependency_failed.yml` and
+`neg_plugin_top_level/` for real via `tests/smoke:coverage_test` and
+`tests/smoke:smoke_workflows_test` (`gh`'s job-log API doesn't expose per-Bazel-test
+output on a passing `bazel test` step, only `PASSED`/`FAILED` lines — confirmed both
+targets show `PASSED`). The six GitHub-only negatives (05-11's, `continue-on-error`) each
+show as a failed-but-continued step (GitHub's own "orange" — an `X Process completed with
+exit code 1` annotation on a step that didn't fail the job) followed by a passing
+assertion step, in both jobs, matching the design exactly.

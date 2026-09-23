@@ -94,3 +94,42 @@ smoke.yml comments: don't literally echo `bazel test //...` outside of `tests.ym
 `bazel test //...` and `bazel run //tools/coverage:check` are both green (245 tests pass,
 3 sanitizer/valgrind smoke tests skipped as usual locally; apt.package/plugin.lua and
 file.line/plugin.lua both fully covered, 0 new misses).
+
+**Pushed and confirmed on the real runner** (2026-09-23),
+[run 35865874382](https://github.com/thetanil/qwe/actions/runs/35865874382): `smoke_apt`
+passed in both
+[`debug-smoke`](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107197180374)
+and
+[`smoke`](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432)
+(install → `version` non-empty, install again → unchanged, `hello` printed
+`Hello, world!`, remove → changed, remove again → unchanged, final `apt list` empty —
+matches the local run byte for byte). `neg_apt_unknown` and `neg_apt_no_become` both
+failed with exactly their expected messages in both jobs too:
+
+```
+[j] qwe: plugin failed: apt.package: no package no-such-package-xyz
+[j] qwe: plugin failed: apt.package: cannot install hello: are you root? (set become: true)
+```
+
+`gh`'s job-log API doesn't expose the rendered `$GITHUB_STEP_SUMMARY` content (only the
+Checks API's `output.summary`, which this workflow doesn't set, and that's empty), so
+there is no `gh` command that pastes the actual run's apt table out after the fact. The
+step itself passed, which is what the box asks; this is the table the identical local run
+produced before the push (same steps, same order, `outcome`/`changed` columns matching
+what the CI log's step-by-step success/failure list confirms for the real run):
+
+```
+| # | id | plugin | outcome | changed | reason | duration (ms) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | start-absent | apt.package | ✅ success | unchanged |  | ... |
+| 2 | list-absent | run | ✅ success | changed |  | ... |
+| 3 |  | assert | ✅ success | unchanged |  | ... |
+| 4 | install | apt.package | ✅ success | changed |  | ... |
+| 5 |  | assert | ✅ success | unchanged |  | ... |
+| 6 | install-again | apt.package | ✅ success | unchanged |  | ... |
+| 7 |  | run | ✅ success | changed |  | ... |
+| 8 | remove | apt.package | ✅ success | changed |  | ... |
+| 9 | remove-again | apt.package | ✅ success | unchanged |  | ... |
+| 10 | list-removed | run | ✅ success | changed |  | ... |
+| 11 |  | assert | ✅ success | unchanged |  | ... |
+```

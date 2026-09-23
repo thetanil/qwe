@@ -70,3 +70,12 @@ test explicitly skips `neg_*.yml`.
 `bazel test //...` and `bazel run //tools/coverage:check` are both green (243 tests pass, 3
 sanitizer/valgrind smoke tests skipped as usual locally; file.line/plugin.lua fully
 covered).
+
+**Pushed and confirmed on the real runner** (2026-09-23): the `smoke` job passed on
+[run 35865874382](https://github.com/thetanil/qwe/actions/runs/35865874382), both in
+[`debug-smoke`](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107197180374)
+(fastbuild binary) and
+[`smoke`](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432)
+(shipped release binary) — `neg_file_line_readonly` and its assertion step both passed in
+each, so the smoke.yml negative from the last unchecked box is now confirmed for real, not
+just locally.

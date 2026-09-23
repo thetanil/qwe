@@ -27,25 +27,42 @@ Two more smoke workflows, run by smoke.yml with `--summary`:
 
 ## Acceptance criteria
 
-- [x] `smoke_become.yml` passes on the runner: `manual: push; check the run` — verified locally instead (see comments); still needs a real push to close out
-- [x] `smoke_secrets.yml` passes, and the leak assertions pass: `manual: same run; paste the assertion step log into a comment` — verified locally instead (see comments); still needs a real push, and someone to paste the log
-- [ ] The leak assertion can fail: on a scratch branch, the generator also writes the plaintext into a `run: echo` line (not a secret, so qwe cannot know to redact it), and the assertion step fails: `manual: workflow_dispatch on a scratch branch; record the run URL` — not done; see comments, including a finding that complicates this criterion's premise
+- [x] `smoke_become.yml` passes on the runner: `manual: push; check the run` — confirmed on the real runner, see comments
+- [x] `smoke_secrets.yml` passes, and the leak assertions pass: `manual: same run; paste the assertion step log into a comment` — confirmed on the real runner, log pasted in comments
+- [ ] The leak assertion can fail: on a scratch branch, the generator also writes the plaintext into a `run: echo` line (not a secret, so qwe cannot know to redact it), and the assertion step fails: `manual: workflow_dispatch on a scratch branch; record the run URL` — still not done; no scratch-branch `workflow_dispatch` run exists yet, and see comments for a finding that complicates this criterion's premise before anyone spends a run on it
 - [x] The secrets template and its generator step are covered in the Bazel suite by the same generator script run with the fastbuild binary: `e2e: tests/smoke:smoke_workflows_test`
 - [x] `bazel test //...` green
 
 ## Comments
 
-This project's CLAUDE.md says **never push** ("Once bazel test //... is green and the
-ticket file is updated, commit... Never push."), and three of this ticket's five criteria
-are `manual: push` / `manual: workflow_dispatch on a scratch branch`. I implemented and
-committed everything, and went beyond the ticket's own bar by actually exercising
-smoke_become.yml and the secrets generator for real in this devcontainer (which has
-passwordless sudo) — but I cannot push or trigger the GitHub Actions run those two
-criteria ultimately want, and criterion 3 explicitly wants a recorded run URL from a
-`workflow_dispatch` on a scratch branch, which only a human can produce. Setting this
-ticket `ready-for-human`: someone needs to push, watch the `smoke` job (both
-`debug-smoke` and `smoke`), and close out the three remaining boxes (the third may also
-need the design note below revisited first).
+This project's CLAUDE.md says **never push**, so this ticket was left `ready-for-human`
+after implementation. The user has since pushed (commit `2b48ab1`, [run 35865874382](
+https://github.com/thetanil/qwe/actions/runs/35865874382)), and both `debug-smoke` and
+`smoke` are green — `smoke_become` and `smoke_secrets` both passed in each:
+[`debug-smoke`](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107197180374),
+[`smoke`](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432).
+That closes the first two boxes for real, not just from this devcontainer's local
+verification. The `smoke_secrets` step's actual log from `debug-smoke` (identical in
+`smoke`):
+
+```
+qwe keygen: wrote a new key to /tmp/tmp.Nn51vs5HVt/home/.config/qwe/secret (mode 0600)
+[secrets] env says ***
+[secrets] ***
+PASS: smoke_secrets.yml (no leak found)
+```
+
+Both the `env:`-sourced and the `with:`-sourced secret paths show `***`, matching the
+local run and the design. `smoke_become`'s steps have no stdout of their own (everything
+goes through `$QWE_OUTPUT` or files, never `echo`), so its log is empty; its ten steps all
+show as passed in the job's step list, which is the only signal a `run:`-step-free job has
+to show.
+
+Still open: criterion 3, the intentional-leak sanity check. It needs a deliberate,
+temporary change to `gen_secrets.sh` on a scratch branch and a `workflow_dispatch` run,
+which is a genuinely separate, exploratory action from "push what's already committed" —
+see the finding below before spending that run on it, since the most literal reading of
+the ticket's leak ("the same value, echoed raw") does not actually demonstrate a gap.
 
 **smoke_become.yml**: `become: true` (root) worked as expected for both a `run:` step
 writing `$QWE_OUTPUT` and for `file.ensure`, but `become: nobody` combined with
