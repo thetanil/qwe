@@ -22,6 +22,36 @@ sanitizers (`docs/sanitizers.md`) — `third_party/` is vendored and excluded.
 target (the libFuzzer binaries) is never linted: Bazel's own wildcard
 expansion skips it, the same rule that keeps it out of `bazel build //...`.
 
+## Headers
+
+`.clang-tidy` sets `HeaderFilterRegex: '.*'` with
+`ExcludeHeaderFilterRegex: '(^|/)(third_party|bazel-out|external)/'`: every
+header of ours is checked, vendored and Bazel-generated ones are not, and
+system headers are skipped by clang-tidy's own default. clang-tidy matches the
+filter against the path the header resolved to, which for Bazel's `-iquote .`
+is `./src/...` (or absolute), so the earlier `'^(src|tools)/.*'` never matched
+and a finding in any of our headers was silently dropped. A narrower
+`'/(src|tools)/'` is no fix either: `third_party/luajit/src/*.h` matches it.
+Proven by a throwaway `atoi` in `src/kernel/redact.h` and another in
+`third_party/greatest/greatest.h` with `cert-err34-c` on: the gate failed on
+the first and ignored the second.
+
+## The backlog: `--raw`
+
+```
+tools/clang-tidy/run.sh --raw
+```
+
+The default mode is a pass/fail gate, and its `--quiet` output ("N warnings
+generated", about 1,000 of them) is just what the exclusions below and system
+headers suppressed: it says nothing about which checks. `--raw` runs every group
+`.clang-tidy` enables with none of its exclusions and no test narrowing, and
+prints a per-check tally split into `src/`+`tools/` and `*_test.c`. A header
+finding is counted once, not once per file that includes it. It is a
+measurement, not a gate: it exits 0 whatever it finds. At `acb416d` it counted
+619 findings, none in a header; `.scratch/sca-findings/spec.md` works through
+them one class at a time.
+
 ## No compile_commands.json, no Python
 
 Every other way to feed Bazel-built flags to `clang-tidy` goes through a tool

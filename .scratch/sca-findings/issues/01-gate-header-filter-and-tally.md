@@ -1,6 +1,6 @@
 # 01: Fix the gate's header filter and make the excluded backlog visible
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 
@@ -32,10 +32,14 @@ feature use it to measure progress. The default mode stays a pass/fail gate.
 
 ## Acceptance criteria
 
-- [ ] A finding in a `src/` header fails the gate, and a finding in `third_party/` does not. `manual: add a throwaway static inline int f(const char *s){ return atoi(s); } to a src/kernel/*.h header included by a .c file and temporarily enable cert-err34-c; CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh must exit non-zero naming that header; revert`
-- [ ] `run.sh` still exits 0 on the tree. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
-- [ ] `run.sh --raw` prints the per-check tally, and its total matches `spec.md` (619 at `acb416d`, or the count after any intervening fixes, with the difference explained). `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh --raw`
-- [ ] `docs/static-analysis.md` documents the header filter and `--raw`. `manual: docs/static-analysis.md`
-- [ ] `bazel test //...` is green. `unit: bazel test //...`
+- [x] A finding in a `src/` header fails the gate, and a finding in `third_party/` does not. `manual: add a throwaway static inline int f(const char *s){ return atoi(s); } to a src/kernel/*.h header included by a .c file and temporarily enable cert-err34-c; CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh must exit non-zero naming that header; revert`
+- [x] `run.sh` still exits 0 on the tree. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
+- [x] `run.sh --raw` prints the per-check tally, and its total matches `spec.md` (619 at `acb416d`, or the count after any intervening fixes, with the difference explained). `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh --raw`
+- [x] `docs/static-analysis.md` documents the header filter and `--raw`. `manual: docs/static-analysis.md`
+- [x] `bazel test //...` is green. `unit: bazel test //...`
 
 ## Comments
+
+- Filter: `HeaderFilterRegex: '.*'` plus `ExcludeHeaderFilterRegex: '(^|/)(third_party|bazel-out|external)/'`. The header path clang-tidy matches against turned out to be `./src/kernel/redact.h` (the `-iquote .` spelling), not absolute; either way `^src/` misses it. Reproduced on `luasecrets.c` with a throwaway `atoi` in `redact.h`: 0 `cert-err34-c` hits under the old regex, 1 under `.*`.
+- Proven on the full gate: throwaway `atoi` in `src/kernel/redact.h` and in `third_party/greatest/greatest.h`, `-cert-err34-c` dropped from `.clang-tidy`. Gate exit 1, naming `./src/kernel/redact.h` (plus the 6 existing `cert-err34-c` sites); nothing named `greatest.h`. Reverted; clean tree exits 0.
+- `run.sh --raw` total: 619 (345 src+tools, 274 `*_test.c`), the same as spec.md's count at `acb416d`. Nothing was fixed in between. It reads the enabled groups from `.clang-tidy`'s un-negated `Checks` lines, so the two cannot drift apart. It counts each `file:line:col:check` once, so a header finding is not multiplied by its includers. Aliases are tallied under the name clang-tidy reports (e.g. `cert-dcl37-c` hits show as `bugprone-reserved-identifier`).

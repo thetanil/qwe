@@ -38,5 +38,9 @@ Checks: >
   -clang-analyzer-security.insecureAPI.strcpy,
   -clang-analyzer-unix.Errno
 WarningsAsErrors: '*'
-HeaderFilterRegex: '^(src|tools)/.*'
+# clang-tidy matches these against the header's path as it resolved it, which is
+# './src/...' for Bazel's `-iquote .` includes -- an anchored '^src/' never matches.
+# So: every header, minus vendored and Bazel-generated ones (docs/static-analysis.md).
+HeaderFilterRegex: '.*'
+ExcludeHeaderFilterRegex: '(^|/)(third_party|bazel-out|external)/'
 FormatStyle: none

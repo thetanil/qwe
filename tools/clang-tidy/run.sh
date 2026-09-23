@@ -1,5 +1,10 @@
 #!/bin/bash
-# usage: tools/clang-tidy/run.sh
+# usage: tools/clang-tidy/run.sh [--raw]
+#
+# Default: the pass/fail gate, .clang-tidy as written.
+# --raw:   the backlog, not a gate. Every check group .clang-tidy turns on, with
+#          none of its exclusions and no test narrowing, tallied per check and
+#          split into src/+tools/ and *_test.c. Always exits 0 once it has run.
 #
 # The LLVM Static Analyzer (clang-analyzer-*, run through clang-tidy) plus a
 # popular bugprone/cert/performance/portability ruleset for C -- see
@@ -17,6 +22,16 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$here"
+
+raw=0
+case "${1-}" in
+--raw) raw=1 ;;
+"") ;;
+*)
+	echo "usage: tools/clang-tidy/run.sh [--raw]" >&2
+	exit 2
+	;;
+esac
 
 : "${CLANG_TIDY:=clang-tidy}"
 command -v "$CLANG_TIDY" >/dev/null 2>&1 || {
@@ -64,6 +79,37 @@ flags_for_file() {
 # genuine bug of this shape in a test still fails under valgrind and the
 # sanitizers, which run the test rather than just read it.
 test_only_checks=-clang-analyzer-unix.Malloc,-clang-analyzer-unix.Stream,-clang-analyzer-core.NonNullParamChecker,-clang-analyzer-unix.StdCLibraryFunctions,-clang-analyzer-optin.portability.UnixAPI
+
+if [ "$raw" = 1 ]; then
+	# The groups .clang-tidy enables (its un-negated Checks lines), after a
+	# reset: --checks appends to the config's list, so '-*' drops every
+	# exclusion and the groups come back whole.
+	groups=$(sed -n '/^Checks:/,/^[A-Za-z]/{/^  [a-z]/p}' .clang-tidy | tr -d ' \n')
+	out=$(mktemp)
+	trap 'rm -f "$out"' EXIT
+	for file in "${files[@]}"; do
+		mapfile -t flags < <(flags_for_file "$file")
+		"$CLANG_TIDY" --quiet --checks="-*,${groups%,}" --warnings-as-errors='-*' \
+			"$file" -- "${flags[@]}" 2>/dev/null >>"$out" || true
+	done
+	# A header finding repeats once per file that includes it: count each
+	# file:line:col:check once. Paths are made repo-relative first (headers
+	# come back absolute).
+	grep -E '^[^ ]+:[0-9]+:[0-9]+: (warning|error): .* \[[^]]+\]$' "$out" |
+		sed -E "s|^$here/||; s|^\./||" |
+		sed -E 's/^([^:]+:[0-9]+:[0-9]+):.*\[([^],]+)[^]]*\]$/\1 \2/' |
+		sort -u |
+		awk '
+		{ split($1, loc, ":"); bucket = (loc[1] ~ /_test\.c$/) ? "test" : "src"
+		  n[$2, bucket]++; seen[$2] = 1; total[bucket]++ }
+		END {
+			printf "%-60s %8s %8s\n", "check", "src+tools", "*_test.c"
+			for (c in seen) printf "%-60s %8d %8d\n", c, n[c, "src"], n[c, "test"] | "sort"
+			close("sort")
+			printf "%-60s %8d %8d\n", "total (" total["src"] + total["test"] ")", total["src"], total["test"]
+		}'
+	exit 0
+fi
 
 fail=0
 for file in "${files[@]}"; do
