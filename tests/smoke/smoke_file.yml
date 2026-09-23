@@ -1,0 +1,42 @@
+# smoke: file.ensure, file.read, assert (07, 08). Writes a file, reads it back, and checks
+# every output assert knows how to check; then does it all again to prove file.ensure and
+# file.read agree the second time that nothing changed.
+name: smoke file
+jobs:
+  file:
+    target: local
+    steps:
+      - id: ensure
+        uses: file.ensure
+        with:
+          path: smoke-file.txt
+          content: "hello from qwe smoke\n"
+          mode: "0644"
+      - id: read
+        uses: file.read
+        with:
+          path: smoke-file.txt
+      - uses: assert
+        with: {actual: "${{ steps.read.outputs.exists }}", equals: "true"}
+      - uses: assert
+        with: {actual: "${{ steps.read.outputs.content }}", equals: "hello from qwe smoke\n"}
+      - uses: assert
+        with: {actual: "${{ steps.read.outputs.mode }}", equals: "0644"}
+      - uses: assert
+        with:
+          actual: "${{ steps.read.outputs.sha256 }}"
+          equals: "14de508bc3110b812b8aad58806327e6c8509b6a92ca7ac13c35a0b9d8b60377"
+      - id: ensure-again
+        uses: file.ensure
+        with:
+          path: smoke-file.txt
+          content: "hello from qwe smoke\n"
+          mode: "0644"
+      - id: read-again
+        uses: file.read
+        with:
+          path: smoke-file.txt
+      - uses: assert
+        with: {actual: "${{ steps.read-again.outputs.content }}", equals: "hello from qwe smoke\n"}
+      - uses: assert
+        with: {actual: "${{ steps.read-again.outputs.mode }}", equals: "0644"}

@@ -1,0 +1,12 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: assert
+        with:
+          actual: "hi"
+      - uses: assert
+        with:
+          actual: "hi"
+          equals: "hi"
+          contains: "h"

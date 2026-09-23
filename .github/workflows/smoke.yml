@@ -66,6 +66,24 @@ jobs:
             echo "neg_file_read_denied: expected message not found in the step's output" >&2
             exit 1
           }
+      # Same negative-case pattern, for assert (08).
+      - name: neg_assert_mismatch
+        id: neg_assert_mismatch
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          bazel-bin/src/cli/qwe validate tests/smoke/neg_assert_mismatch.yml
+          bazel-bin/src/cli/qwe run tests/smoke/neg_assert_mismatch.yml --debug 2>&1 | tee "$RUNNER_TEMP/neg_assert_mismatch.out"
+      - name: neg_assert_mismatch must fail with a helpful message
+        run: |
+          if [ "${{ steps.neg_assert_mismatch.outcome }}" != "failure" ]; then
+            echo "neg_assert_mismatch: expected the step to fail, outcome was '${{ steps.neg_assert_mismatch.outcome }}'" >&2
+            exit 1
+          fi
+          grep -F "assert: values differ: expected equals what we wanted, actual not what we wanted" "$RUNNER_TEMP/neg_assert_mismatch.out" || {
+            echo "neg_assert_mismatch: expected message not found in the step's output" >&2
+            exit 1
+          }
       - if: failure()
         uses: ./.github/actions/collect-logs
         with:
@@ -191,5 +209,23 @@ jobs:
           fi
           grep -F "file.read: cannot read secret.txt: Permission denied" "$RUNNER_TEMP/neg_file_read_denied.out" || {
             echo "neg_file_read_denied: expected message not found in the step's output" >&2
+            exit 1
+          }
+      # Same negative-case pattern, for assert (08).
+      - name: neg_assert_mismatch
+        id: neg_assert_mismatch
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./qwe validate tests/smoke/neg_assert_mismatch.yml
+          ./qwe run tests/smoke/neg_assert_mismatch.yml 2>&1 | tee "$RUNNER_TEMP/neg_assert_mismatch.out"
+      - name: neg_assert_mismatch must fail with a helpful message
+        run: |
+          if [ "${{ steps.neg_assert_mismatch.outcome }}" != "failure" ]; then
+            echo "neg_assert_mismatch: expected the step to fail, outcome was '${{ steps.neg_assert_mismatch.outcome }}'" >&2
+            exit 1
+          fi
+          grep -F "assert: values differ: expected equals what we wanted, actual not what we wanted" "$RUNNER_TEMP/neg_assert_mismatch.out" || {
+            echo "neg_assert_mismatch: expected message not found in the step's output" >&2
             exit 1
           }

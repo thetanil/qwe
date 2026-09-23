@@ -1,0 +1,11 @@
+# smoke: negative case. assert on a mismatch must fail the job with the message form from
+# 08. The GitHub step that runs this is continue-on-error, and the step after it asserts the
+# failure and the message (see smoke.yml).
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: assert
+        with:
+          actual: "not what we wanted"
+          equals: "what we wanted"

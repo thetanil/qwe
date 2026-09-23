@@ -1,7 +1,9 @@
 # smoke: run. Proves the default step kind (run:) and its plumbing: multi-line scripts,
 # workflow/job/step env: precedence, and a $QWE_OUTPUT step output read by a later step.
 # Runs both against the shipped binary in the smoke GitHub job and against the fastbuild
-# binary in `bazel test //...` (tests/smoke:smoke_workflows_test).
+# binary in `bazel test //...` (tests/smoke:smoke_workflows_test). The precedence and output
+# checks are assert (08) steps rather than `run: test ... = ...`: assert fails with a message
+# that names what was expected and what it actually got, instead of a bare exit 1.
 name: smoke run
 env:
   LEVEL: workflow
@@ -19,12 +21,21 @@ jobs:
           echo "line two"
           echo "line three"
       - id: job-env-wins-over-workflow
-        run: test "$LEVEL" = "job"
+        uses: assert
+        with:
+          actual: "${{ env.LEVEL }}"
+          equals: "job"
       - id: step-env-wins-over-job
-        run: test "$LEVEL" = "step"
+        uses: assert
+        with:
+          actual: "${{ env.LEVEL }}"
+          equals: "step"
         env:
           LEVEL: step
       - id: produce
         run: echo "greeting=hello smoke" >> "$QWE_OUTPUT"
       - id: consume
-        run: test "${{ steps.produce.outputs.greeting }}" = "hello smoke"
+        uses: assert
+        with:
+          actual: "${{ steps.produce.outputs.greeting }}"
+          equals: "hello smoke"

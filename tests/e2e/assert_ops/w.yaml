@@ -1,0 +1,11 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: assert
+        with: {actual: "hi", equals: "hi"}
+      - uses: assert
+        with: {actual: "hello world", contains: "wor"}
+      - uses: assert
+        with: {actual: "build-42", matches: "^build%-%d+$"}
+      - run: echo all three passed

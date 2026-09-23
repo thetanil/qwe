@@ -1,0 +1,6 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: assert
+        with: {actual: "bye", equals: "hi"}

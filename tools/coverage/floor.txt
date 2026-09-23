@@ -1,3 +1,4 @@
+plugins/builtin/assert/plugin.lua 0
 plugins/builtin/backend_local/local.lua 0
 plugins/builtin/backend-ssh/ssh.lua 2
 plugins/builtin/file.ensure/plugin.lua 0

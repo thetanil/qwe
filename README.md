@@ -14,8 +14,8 @@ a plugin. The design is written up in `docs/workflow-kernel-design.md` and the v
 
 It began as the engine for managing a small fleet of physical devices (power, flashing, VLAN
 placement, probing) from CI, and that is still the intended use. The device plugins are not written
-yet; what exists is the engine and its first plugins (`run`, `file.ensure`, `file.read`, the `local`
-and `ssh` backends).
+yet; what exists is the engine and its first plugins (`run`, `file.ensure`, `file.read`, `assert`, the
+`local` and `ssh` backends).
 
 ## A first workflow
 

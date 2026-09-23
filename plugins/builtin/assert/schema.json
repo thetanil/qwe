@@ -1,0 +1,21 @@
+{
+  "with": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "description": "with: inputs of the assert step plugin",
+    "type": "object",
+    "required": ["actual"],
+    "additionalProperties": false,
+    "properties": {
+      "actual": {"type": "string"},
+      "equals": {"type": "string"},
+      "contains": {"type": "string"},
+      "matches": {"type": "string"},
+      "message": {"type": "string"}
+    },
+    "oneOf": [
+      {"required": ["equals"]},
+      {"required": ["contains"]},
+      {"required": ["matches"]}
+    ]
+  }
+}

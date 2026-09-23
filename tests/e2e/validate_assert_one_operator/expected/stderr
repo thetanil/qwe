@@ -1,0 +1,6 @@
+qwe validate: w.yaml:7:11: must have required property contains
+qwe validate: w.yaml:7:11: must have required property equals
+qwe validate: w.yaml:7:11: must have required property matches
+qwe validate: w.yaml:7:11: must match exactly one schema in oneOf
+qwe validate: w.yaml:10:11: must have required property matches
+qwe validate: w.yaml:10:11: must match exactly one schema in oneOf

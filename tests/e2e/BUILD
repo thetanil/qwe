@@ -365,6 +365,14 @@ e2e_test(name = "file_read_missing")
 
 e2e_test(name = "file_read_denied")
 
+e2e_test(name = "assert_ops")
+
+e2e_test(name = "assert_mismatch")
+
+e2e_test(name = "validate_assert_one_operator")
+
+e2e_test(name = "assert_secret_redacted")
+
 # QWE_E2E_REQUIRE_SSH=1: an unreachable needs-ssh case fails instead of skipping.
 sh_test(
     name = "require_ssh_test",

@@ -1,0 +1,11 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - id: mk
+        run: echo "tok=out-canary-77x" >> "$QWE_OUTPUT"
+        secret-outputs: [tok]
+      - uses: assert
+        with:
+          actual: "${{ steps.mk.outputs.tok }}"
+          equals: "something-else"
