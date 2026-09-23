@@ -49,14 +49,52 @@ TEST child_is_group_leader(void)
 	PASS();
 }
 
+/* s as a whole number: digits, then nothing but an optional newline. Returns 0,
+ * or -1 if it is not one (sscanf and atoi would accept "12abc" or give 0). */
+static int whole_number(const char *s, long *out)
+{
+	char *end;
+
+	errno = 0;
+	*out = strtol(s, &end, 10);
+	if (end == s || errno == ERANGE)
+		return -1;
+	return *end == '\0' || (*end == '\n' && end[1] == '\0') ? 0 : -1;
+}
+
+/* From a /proc/<pid>/stat line: the state (field 3) and the n numbers after
+ * it (fields 4 on) into f. Returns 0, or -1 if the line is not that shape. */
+static int stat_fields(const char *line, char *state, long *f, int n)
+{
+	const char *p = strrchr(line, ')');
+	char *end;
+	int i;
+
+	if (!p || p[1] != ' ' || p[2] == '\0' || p[3] != ' ')
+		return -1;
+	*state = p[2];
+	p += 3;
+	for (i = 0; i < n; i++) {
+		errno = 0;
+		f[i] = strtol(p, &end, 10);
+		if (end == p || errno == ERANGE || (*end != ' ' && *end != '\n' && *end != '\0'))
+			return -1;
+		p = end;
+	}
+	return 0;
+}
+
 /* Fields 5 and 6 (pgrp, session) of a /proc/<pid>/stat line. */
 static int stat_group_session(const char *line, long *pgrp, long *sid)
 {
-	const char *p = strrchr(line, ')');
-	long ppid;
+	long f[3]; /* ppid, pgrp, session */
 	char state;
 
-	return p && sscanf(p + 1, " %c %ld %ld %ld", &state, &ppid, pgrp, sid) == 4 ? 0 : -1;
+	if (stat_fields(line, &state, f, 3) < 0)
+		return -1;
+	*pgrp = f[1];
+	*sid = f[2];
+	return 0;
 }
 
 static char **argv_sleep_long(void *arg, int result_fd)
@@ -129,19 +167,20 @@ static int live_in_group(pid_t pgid)
 	int n = 0;
 
 	while (d && (e = readdir(d)) != NULL) {
-		char path[64], buf[512], *p;
+		char path[64], buf[512];
 		FILE *fp;
-		int pid;
+		long pid;
 
-		if (sscanf(e->d_name, "%d", &pid) != 1)
+		if (whole_number(e->d_name, &pid) < 0)
 			continue;
-		qwe_xfmt(path, sizeof path, "/proc/%d/stat", pid);
+		qwe_xfmt(path, sizeof path, "/proc/%ld/stat", pid);
 		if (!(fp = fopen(path, "r")))
 			continue;
-		if (fgets(buf, sizeof buf, fp) && (p = strrchr(buf, ')')) != NULL) {
+		if (fgets(buf, sizeof buf, fp)) {
 			char state;
-			int ppid, pg;
-			if (sscanf(p + 1, " %c %d %d", &state, &ppid, &pg) == 3 && pg == (int)pgid && state != 'Z')
+			long f[2]; /* ppid, pgrp */
+
+			if (stat_fields(buf, &state, f, 2) == 0 && f[1] == (long)pgid && state != 'Z')
 				n++;
 		}
 		(void)fclose(fp); /* read-only */
@@ -192,22 +231,22 @@ TEST group_kill_no_orphans(void)
 /* The parent pid of pid, from /proc/<pid>/stat (field 4, after the comm in parentheses), or -1. */
 static pid_t getppid_of(pid_t pid)
 {
-	char path[64], buf[512], *p;
+	char path[64], buf[512];
 	FILE *f;
-	int ppid = -1;
+	long ppid = -1;
 
 	qwe_xfmt(path, sizeof path, "/proc/%d/stat", (int)pid);
 	f = fopen(path, "r");
 	if (!f)
 		return -1;
-	if (fgets(buf, sizeof buf, f) && (p = strrchr(buf, ')')) != NULL) {
+	if (fgets(buf, sizeof buf, f)) {
 		char state;
 
-		if (sscanf(p + 1, " %c %d", &state, &ppid) != 2)
+		if (stat_fields(buf, &state, &ppid, 1) < 0)
 			ppid = -1;
 	}
 	(void)fclose(f); /* read-only */
-	return ppid;
+	return (pid_t)ppid;
 }
 
 static char **argv_orphan(void *arg, int result_fd)
@@ -226,6 +265,7 @@ TEST subreaper_reaps_orphans(void)
 	sigset_t set, old;
 	char buf[32] = "";
 	pid_t orphan;
+	long orphan_l;
 	int st, i;
 	ssize_t n = 0;
 
@@ -241,7 +281,8 @@ TEST subreaper_reaps_orphans(void)
 			sleep_ms(10);
 	}
 	ASSERT(n > 0);
-	orphan = (pid_t)atoi(buf);
+	ASSERT_EQ(0, whole_number(buf, &orphan_l));
+	orphan = (pid_t)orphan_l;
 	ASSERT(orphan > 0);
 	ASSERT_EQ(p.pid, waitpid(p.pid, &st, 0));
 	ASSERT(WIFEXITED(st) && WEXITSTATUS(st) == 0);

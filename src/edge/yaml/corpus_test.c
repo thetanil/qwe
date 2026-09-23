@@ -20,11 +20,10 @@ static int replay(const char *path)
 		return -1;
 	/* f is read-only: a failed fclose loses nothing */
 	n = fseek(f, 0, SEEK_END) == 0 ? ftell(f) : -1;
-	if (n < 0) {
+	if (n < 0 || fseek(f, 0, SEEK_SET) != 0) {
 		(void)fclose(f);
 		return -1;
 	}
-	rewind(f);
 	buf = malloc(n ? (size_t)n : 1);
 	if (!buf || fread(buf, 1, (size_t)n, f) != (size_t)n) {
 		(void)fclose(f);

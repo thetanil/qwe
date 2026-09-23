@@ -24,9 +24,8 @@ static char *slurp(const char *path)
 	if (!fp)
 		abort();
 	len = fseek(fp, 0, SEEK_END) == 0 ? ftell(fp) : -1;
-	if (len < 0)
+	if (len < 0 || fseek(fp, 0, SEEK_SET) != 0)
 		abort();
-	rewind(fp);
 	buf = malloc((size_t)len + 1);
 	if (!buf)
 		abort();

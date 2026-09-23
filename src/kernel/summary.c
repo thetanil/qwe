@@ -114,11 +114,11 @@ static char *log_tail(const char *run_dir, const char *job_id, int n)
 		return NULL;
 	/* fp is read-only throughout: a failed fclose loses nothing. */
 	len = fseek(fp, 0, SEEK_END) == 0 ? ftell(fp) : -1;
-	if (len < 0) {
+	/* not rewind(): it has no return, so a failure would go unseen */
+	if (len < 0 || fseek(fp, 0, SEEK_SET) != 0) {
 		(void)fclose(fp);
 		return NULL;
 	}
-	rewind(fp);
 	buf = malloc((size_t)len + 1);
 	if (!buf) {
 		(void)fclose(fp);

@@ -63,6 +63,8 @@ e2e_test(name = "job_timeout_cancels")
 
 e2e_test(name = "grace_then_sigkill")
 
+e2e_test(name = "grace_env_malformed")
+
 e2e_test(name = "operator_cancel")
 
 e2e_test(name = "parallel_rendezvous")

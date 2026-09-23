@@ -1,6 +1,6 @@
 # 06: String-to-number conversion and errno
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: 01
@@ -25,10 +25,17 @@ function 'malloc'" after an `ftell`/`fseek`. Re-read it with the full
 
 ## Acceptance criteria
 
-- [ ] A malformed `QWE_TEST_GRACE_MS` is rejected or ignored with a diagnostic, never parsed as 0. `unit: <name the test added>` or `e2e: tests/e2e/<case>/`
-- [ ] `.clang-tidy` no longer excludes `cert-err34-c` or `clang-analyzer-unix.Errno`, and the gate exits 0. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
-- [ ] The `summary.c:122` verdict (real bug, or a `NOLINTNEXTLINE` with the traced reason) is recorded in the comments. `manual: this ticket's ## Comments`
-- [ ] Both rows are gone from the exclusion table, and real bugs are listed under "What the gate found". `manual: docs/static-analysis.md`
-- [ ] `bazel test //...` is green. `unit: bazel test //...`
+- [x] A malformed `QWE_TEST_GRACE_MS` is rejected or ignored with a diagnostic, never parsed as 0. `e2e: tests/e2e/grace_env_malformed/`
+- [x] `.clang-tidy` no longer excludes `cert-err34-c` or `clang-analyzer-unix.Errno`, and the gate exits 0. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
+- [x] The `summary.c:122` verdict (real bug, or a `NOLINTNEXTLINE` with the traced reason) is recorded in the comments. `manual: this ticket's ## Comments`
+- [x] Both rows are gone from the exclusion table, and real bugs are listed under "What the gate found". `manual: docs/static-analysis.md`
+- [x] `bazel test //...` is green. `unit: bazel test //...`
 
 ## Comments
+
+- **`summary.c:122`: real bug.** The earlier "unrelated loop" explanation was wrong. With `clang-analyzer-*` on, the path is `qwe_summary_write` → `log_tail`, and the note says: "After calling 'rewind' reading 'errno' is required to find out if the call has failed". `rewind` returns nothing, so a failed rewind went unseen and the `fread` that followed read from wherever the stream was. The hit is the same at `acb416d`, `0eb7f1c` and after ticket 04. Fix: `rewind` is replaced with a checked `fseek(fp, 0, SEEK_SET)`. The other two hits, `summary_test.c`'s `slurp` and `corpus_test.c`'s `replay`, were the same `rewind` and got the same fix. No `NOLINT`.
+- Why a single-check run finds nothing: `unix.Errno` depends on `unix.StdCLibraryFunctions` to model which calls set `errno`. `--checks='-*,clang-analyzer-unix.Errno'` reports 0 hits. The gate runs all of `clang-analyzer-*`, so it sees them.
+- `cert-err34-c`: `workflow.c`'s `atol(QWE_TEST_GRACE_MS)` is now `strtol` with end-pointer, `ERANGE` and negative checks. A bad value prints `qwe run: warning: ignoring QWE_TEST_GRACE_MS=<v>: not a whole number of milliseconds` and keeps the 10 s default. The e2e case `grace_env_malformed` (`3OO`) was red before the fix and green after. `grace_then_sigkill` and `grace_outlives_leader` still pass.
+- `proc_test.c`: its five `sscanf`/`atoi` calls now go through `whole_number` (a strict `strtol` of a whole string, optionally ending in a newline) and `stat_fields` (the state and n numeric fields after the last `)` of a `/proc/<pid>/stat` line). A line of the wrong shape is -1, not a partly-filled result.
+- Side effect for the next feature: there is now no `rewind` in `src/` or `tools/`, so the `bugprone-unsafe-functions`/`cert-msc24-c`/`cert-msc33-c` row, whose justification is "only ever `rewind()`", should have nothing left to flag.
+- Gate exits 0. `bazel test //...` is green (252 pass, 3 skipped).

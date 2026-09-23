@@ -1862,7 +1862,20 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	ctx.chld_fd = signalfd(-1, &ctx.chld_mask, SFD_CLOEXEC | SFD_NONBLOCK);
 	/* The grace period is fixed at 10 seconds; the override is for tests only. */
 	grace_env = getenv("QWE_TEST_GRACE_MS");
-	ctx.grace_ms = grace_env ? atol(grace_env) : 10000;
+	ctx.grace_ms = 10000;
+	if (grace_env) {
+		char *end;
+		long ms;
+
+		errno = 0;
+		ms = strtol(grace_env, &end, 10);
+		/* a typo must not become 0 ms of grace: say so and keep the default */
+		if (end == grace_env || *end != '\0' || errno == ERANGE || ms < 0)
+			fprintf(stderr, "qwe run: warning: ignoring QWE_TEST_GRACE_MS=%s: not a whole number of milliseconds\n",
+				grace_env);
+		else
+			ctx.grace_ms = ms;
+	}
 	ctx.jobs = jobs;
 	ctx.njobs = (size_t)n;
 	ctx.run_dir = run_dir;

@@ -88,11 +88,9 @@ specific, checked reason:
 | `bugprone-misplaced-widening-cast` | Its only hits are test-only `rlim_t` fd-limit setup with values nowhere near overflow. |
 | `bugprone-unsafe-functions`, `cert-msc24-c`, `cert-msc33-c` | Only ever `rewind()` (no `gets()` anywhere in the tree) — a `fseek`-has-error-detection style preference, not a defect. |
 | `cert-msc30-c`, `cert-msc32-c`, `cert-msc50-cpp`, `cert-msc51-cpp` | `rand()`'s "insufficient randomness" — only used for test-only scheduling-jitter simulation; the actual crypto (`src/secrets`) is libsodium's, not `rand()`'s. |
-| `cert-err34-c` | `sscanf`/`atoi` reading kernel-produced `/proc/<pid>/stat` text or a test's own child output — trusted input, not attacker-controlled. |
 | `clang-analyzer-optin.performance.Padding` | A performance-only field-order suggestion, not a bug; opt-in for a reason. |
 | `clang-analyzer-optin.taint.TaintedAlloc` | False positive for `tools/bcembed.c`, a local, single-user, build-time-only tool — its argv is the build's own module list, not attacker-controlled. |
 | `clang-analyzer-security.insecureAPI.strcpy` | Name-based (bans `strcpy`/`strcat` outright); every call site in this tree is bounded by explicit buffer-size arithmetic checked by hand (`src/kernel/workflow.c`'s `load_inventory` and its run-directory path). |
-| `clang-analyzer-unix.Errno` | Its one hit (`src/kernel/summary.c`) traced into an unrelated loop in a different function with no `errno` in the flagged file at all — an inter-procedural false positive. |
 
 ### snprintf: say what a cut means
 
@@ -234,3 +232,22 @@ Real bugs behind checks that had been excluded as false positives, found by
   allocation arithmetic kept next to them by hand. They are now `qwe_xfmt`
   with the size passed in, so a future mismatch aborts instead of
   overflowing.
+- **`QWE_TEST_GRACE_MS` was parsed with `atol`**, so a typo (`3OO`) gave the
+  run 0 ms of grace between SIGTERM and SIGKILL. It is now parsed with
+  `strtol` and checked. A value that is not a whole, non-negative number is
+  ignored with a warning, and the 10 s default stands
+  (`tests/e2e/grace_env_malformed`). `proc_test.c`'s `sscanf`/`atoi` reads of
+  `/proc/<pid>/stat` and child output go through two strict parsers, so a
+  misparse fails the test instead of passing with a wrong value. Found by
+  `cert-err34-c`.
+- **`log_tail` (`summary.c`) went on after an unchecked `rewind()`.** The
+  `clang-analyzer-unix.Errno` hit had been written off as an
+  "inter-procedural false positive" that traced into an unrelated loop. With
+  the analyzer's full path (`qwe_summary_write` → `log_tail`), the flagged
+  call is `rewind`. It returns nothing, so `errno` is the only report of a
+  failure, and nothing read it before `malloc` could overwrite it. The
+  earlier `ftell` fix sat on the line above. `rewind` is replaced by a checked
+  `fseek(..., SEEK_SET)` there and in `summary_test.c` and `corpus_test.c`,
+  the other two hits. The check only fires with `unix.StdCLibraryFunctions`
+  on, because that checker models which calls set `errno`, so running it
+  alone finds nothing.
