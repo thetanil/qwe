@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "src/kernel/sink.h"
 #include "src/kernel/alloc.h"
+#include "src/kernel/fmt.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -30,7 +31,7 @@ int qwe_sink_open(struct qwe_sink *s, const char *job, const char *dir, int term
 	memset(s, 0, sizeof *s);
 	if (!path)
 		return -1;
-	snprintf(path, n, "%s/%s.log", dir, job);
+	qwe_xfmt(path, n, "%s/%s.log", dir, job);
 	s->log_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
 	free(path);
 	if (s->log_fd < 0)
@@ -43,9 +44,10 @@ int qwe_sink_open(struct qwe_sink *s, const char *job, const char *dir, int term
 static void emit_line(struct qwe_sink *s)
 {
 	/* the log is the source of truth: a line that cannot be assembled stops the run (alloc.h, rule 2) */
-	char *out = qwe_xmalloc(strlen(s->job) + s->line_len + 4);
-	size_t n = (size_t)sprintf(out, "[%s] ", s->job);
+	size_t n = strlen(s->job) + 3; /* "[<job>] " */
+	char *out = qwe_xmalloc(n + s->line_len + 1);
 
+	qwe_xfmt(out, n + 1, "[%s] ", s->job);
 	memcpy(out + n, s->line, s->line_len);
 	n += s->line_len;
 	out[n++] = '\n';

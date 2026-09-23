@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "src/kernel/validate.h"
+#include "src/kernel/fmt.h"
 
 #include "src/kernel/dag.h"
 
@@ -121,7 +122,7 @@ static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, st
 {
 	char **ids = NULL;
 	struct qwe_dag_job *jobs = NULL;
-	size_t n = 0, cap = 0, i, k;
+	size_t n = 0, cap = 0, i, k, ptr_size;
 	struct qwe_dag_error err;
 	enum qwe_dag_status st;
 	int base = lua_gettop(L);
@@ -183,15 +184,16 @@ static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, st
 		tok = st == QWE_DAG_NO_MEMORY ? strdup("") : escape_token(jobs[err.job].id);
 		if (!tok)
 			goto nomem;
-		ptr = malloc(strlen(tok) + 64);
+		ptr_size = strlen(tok) + 64; /* "/jobs/", "/needs/" and 20 digits */
+		ptr = malloc(ptr_size);
 		if (!ptr)
 			goto nomem;
 		if (st == QWE_DAG_NO_MEMORY)
-			sprintf(ptr, "/jobs");
+			qwe_xfmt(ptr, ptr_size, "/jobs");
 		else if (st == QWE_DAG_UNKNOWN_NEED)
-			sprintf(ptr, "/jobs/%s/needs/%lu", tok, (unsigned long)err.need);
+			qwe_xfmt(ptr, ptr_size, "/jobs/%s/needs/%lu", tok, (unsigned long)err.need);
 		else
-			sprintf(ptr, "/jobs/%s", tok);
+			qwe_xfmt(ptr, ptr_size, "/jobs/%s", tok);
 		add(ps, locate(pos, ptr, st == QWE_DAG_CYCLE, ps), err.message);
 	}
 	goto out;
@@ -293,7 +295,7 @@ static void add_duplicate(const char *pointer, struct qwe_pos first, struct qwe_
 		return;
 	}
 
-	snprintf(message, sizeof message, "duplicate key \"%s\" (first at line %u)", key, first.line);
+	qwe_msg(message, sizeof message, "duplicate key \"%s\" (first at line %u)", key, first.line);
 	free(key);
 	add(ud, second, message);
 }

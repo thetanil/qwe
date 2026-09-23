@@ -1,5 +1,6 @@
 #include "cbor.h"
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/edge/yaml/transcode.h"
 #include "src/edge/yaml/transcode_hooks.h"
 
@@ -70,7 +71,7 @@ TEST floats_resolve(void)
 	/* Each of these is a float. */
 	for (i = 0; i < sizeof yes / sizeof yes[0]; i++) {
 		char doc[32];
-		snprintf(doc, sizeof doc, "[%s]", yes[i]);
+		qwe_xfmt(doc, sizeof doc, "[%s]", yes[i]);
 		ASSERT_EQ(0, to_cbor(doc, &buf, &n, err));
 		ASSERT_EQ(CborNoError, cbor_parser_init(buf, n, 0, &parser, &it));
 		ASSERT_EQ(CborNoError, cbor_value_enter_container(&it, &arr));
@@ -82,7 +83,7 @@ TEST floats_resolve(void)
 	/* And these are plain strings. */
 	for (i = 0; i < sizeof no / sizeof no[0]; i++) {
 		char doc[32];
-		snprintf(doc, sizeof doc, "[%s]", no[i]);
+		qwe_xfmt(doc, sizeof doc, "[%s]", no[i]);
 		ASSERT_EQ(0, to_cbor(doc, &buf, &n, err));
 		ASSERT_EQ(CborNoError, cbor_parser_init(buf, n, 0, &parser, &it));
 		ASSERT_EQ(CborNoError, cbor_value_enter_container(&it, &arr));

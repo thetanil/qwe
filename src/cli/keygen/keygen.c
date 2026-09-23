@@ -3,6 +3,7 @@
 #include "src/secrets/keyfile.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 int qwe_cmd_keygen(int argc, char **argv)
 {
@@ -14,7 +15,12 @@ int qwe_cmd_keygen(int argc, char **argv)
 		return QWE_EXIT_USAGE;
 	}
 	if (qwe_key_default_path(path, sizeof path) < 0) {
-		fprintf(stderr, "qwe keygen: HOME is not set, so there is nowhere to put ~/.config/qwe/secret\n");
+		const char *home = getenv("HOME");
+
+		if (home && *home)
+			fprintf(stderr, "qwe keygen: HOME is too long for ~/.config/qwe/secret\n");
+		else
+			fprintf(stderr, "qwe keygen: HOME is not set, so there is nowhere to put ~/.config/qwe/secret\n");
 		return QWE_EXIT_USAGE;
 	}
 	if (qwe_key_generate(path, err, sizeof err) < 0) {

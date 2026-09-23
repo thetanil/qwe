@@ -5,6 +5,7 @@
  * a success with work missing fails the test. */
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/oom_shim.h"
 #include "src/kernel/qwe.h"
 
@@ -35,15 +36,15 @@ static void fresh_case(char *dir, size_t cap)
 {
 	char path[700], body[1600];
 
-	snprintf(dir, cap, "%s/case%d", root, ++serial);
+	qwe_xfmt(dir, cap, "%s/case%d", root, ++serial);
 	mkdir(dir, 0700);
-	snprintf(body, sizeof body,
+	qwe_xfmt(body, sizeof body,
 	    "jobs:\n"
 	    "  build:\n    target: local\n    steps:\n      - run: echo built > %s/build.out\n"
 	    "  test:\n    target: local\n    needs: [build]\n"
 	    "    steps:\n      - run: test -f %s/build.out && echo tested > %s/test.out\n",
 	    dir, dir, dir);
-	snprintf(path, sizeof path, "%s/w.yaml", dir);
+	qwe_xfmt(path, sizeof path, "%s/w.yaml", dir);
 	write_file(path, body);
 }
 
@@ -52,7 +53,7 @@ static int run_case(void *arg)
 	char path[700];
 	struct qwe_run_options opts = {0};
 
-	snprintf(path, sizeof path, "%s/w.yaml", (const char *)arg);
+	qwe_xfmt(path, sizeof path, "%s/w.yaml", (const char *)arg);
 	return qwe_run_workflow(path, &opts);
 }
 
@@ -61,7 +62,7 @@ static int has_file(const char *dir, const char *name, const char *want)
 	char path[700], got[64] = "";
 	FILE *fp;
 
-	snprintf(path, sizeof path, "%s/%s", dir, name);
+	qwe_xfmt(path, sizeof path, "%s/%s", dir, name);
 	fp = fopen(path, "r");
 	if (!fp)
 		return 0;
@@ -86,14 +87,14 @@ static void read_result(const char *dir, char *out, size_t cap)
 	size_t got = 0;
 
 	out[0] = 0;
-	snprintf(path, sizeof path, "%s/.qwe/runs", dir);
+	qwe_xfmt(path, sizeof path, "%s/.qwe/runs", dir);
 	d = opendir(path);
 	if (!d)
 		return;
 	while ((e = readdir(d)) && e->d_name[0] == '.')
 		;
 	if (e) {
-		snprintf(path, sizeof path, "%s/.qwe/runs/%s/result.json", dir, e->d_name);
+		qwe_xfmt(path, sizeof path, "%s/.qwe/runs/%s/result.json", dir, e->d_name);
 		fp = fopen(path, "r");
 		if (fp) {
 			got = fread(out, 1, cap - 1, fp);
@@ -238,7 +239,7 @@ static void fresh_select_case(char *dir, size_t cap)
 	int i;
 
 	fresh_case(dir, cap);
-	snprintf(path, sizeof path, "%s/w.yaml", dir);
+	qwe_xfmt(path, sizeof path, "%s/w.yaml", dir);
 	fp = fopen(path, "a");
 	if (!fp)
 		abort();
@@ -256,7 +257,7 @@ static int select_case(void *arg)
 
 	opts.jobs = only;
 	opts.njobs = 1;
-	snprintf(path, sizeof path, "%s/w.yaml", (const char *)arg);
+	qwe_xfmt(path, sizeof path, "%s/w.yaml", (const char *)arg);
 	return qwe_run_workflow(path, &opts);
 }
 
@@ -301,8 +302,8 @@ int main(int argc, char **argv)
 {
 	const char *tmp = getenv("TEST_TMPDIR");
 
-	snprintf(root, sizeof root, "%s", tmp ? tmp : "/tmp");
-	snprintf(childlog, sizeof childlog, "%s/child.log", root);
+	qwe_xfmt(root, sizeof root, "%s", tmp ? tmp : "/tmp");
+	qwe_xfmt(childlog, sizeof childlog, "%s/child.log", root);
 	/* the coverage flush allocates, which would move the injection points it is counting */
 	unsetenv("QWE_LUA_COVERAGE");
 	GREATEST_MAIN_BEGIN();

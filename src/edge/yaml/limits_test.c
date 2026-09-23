@@ -1,4 +1,5 @@
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/edge/yaml/transcode.h"
 #include "src/testing/owned.h"
 
@@ -61,7 +62,7 @@ TEST long_keys_grow_the_path(void)
 
 	memset(key, 'k', sizeof key - 1);
 	key[sizeof key - 1] = '\0';
-	snprintf(doc, sizeof doc, "%s:\n  %s:\n    %s: 1\n", key, key, key);
+	qwe_xfmt(doc, sizeof doc, "%s:\n  %s:\n    %s: 1\n", key, key, key);
 	ASSERT_EQ(0, qwe_yaml_to_cbor(doc, strlen(doc), &buf, &n, NULL, err, sizeof err));
 	free(buf);
 	PASS();

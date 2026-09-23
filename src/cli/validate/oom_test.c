@@ -5,6 +5,7 @@
  * reported valid because a check could not run (m1-review/07 was exactly
  * that), and one that is valid must not come back with a lesser verdict. */
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/cli/validate/validate.h"
 #include "src/kernel/oom_shim.h"
 #include "src/kernel/qwe.h"
@@ -21,7 +22,7 @@ static void write_file(const char *name, const char *body)
 	char path[700];
 	FILE *fp;
 
-	snprintf(path, sizeof path, "%s/%s", dir, name);
+	qwe_xfmt(path, sizeof path, "%s/%s", dir, name);
 	fp = fopen(path, "w");
 	if (!fp)
 		abort();
@@ -34,7 +35,7 @@ static void make_dir(const char *rel)
 {
 	char path[700];
 
-	snprintf(path, sizeof path, "%s/%s", dir, rel);
+	qwe_xfmt(path, sizeof path, "%s/%s", dir, rel);
 	mkdir(path, 0700);
 }
 
@@ -49,8 +50,8 @@ static int validate(void *arg)
 	char path[700], inv[700];
 	char *argv[5] = {"validate", path, "-i", inv, NULL};
 
-	snprintf(path, sizeof path, "%s/%s", dir, sc->file);
-	snprintf(inv, sizeof inv, "%s/inventory.yaml", dir);
+	qwe_xfmt(path, sizeof path, "%s/%s", dir, sc->file);
+	qwe_xfmt(inv, sizeof inv, "%s/inventory.yaml", dir);
 	return qwe_cmd_validate(4, argv);
 }
 
@@ -118,7 +119,7 @@ int main(int argc, char **argv)
 {
 	const char *tmp = getenv("TEST_TMPDIR");
 
-	snprintf(dir, sizeof dir, "%s", tmp ? tmp : "/tmp");
+	qwe_xfmt(dir, sizeof dir, "%s", tmp ? tmp : "/tmp");
 	make_dir(".qwe");
 	make_dir(".qwe/plugins");
 	make_dir(".qwe/plugins/hello");

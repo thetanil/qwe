@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/lifecycle.h"
 #include "src/kernel/lifecycle_model.h"
 #include "src/kernel/trace.h"
@@ -73,7 +74,7 @@ TEST rules_hold_in_every_cell(void)
 		const struct qwe_lc_cell *c = qwe_lc_cell(s, e);
 		enum qwe_lc_state next;
 
-		snprintf(where, sizeof where, "%s x %s", qwe_lc_state_name(s), qwe_lc_event_name(e));
+		qwe_msg(where, sizeof where, "%s x %s", qwe_lc_state_name(s), qwe_lc_event_name(e));
 		if (c->kind == QWE_LC_IMPOSSIBLE)
 			continue;
 		next = qwe_lc_next(c, 1);
@@ -251,7 +252,7 @@ static enum qwe_lc_state walk(enum qwe_lc_state s, const struct step *steps, siz
 		if (r.kind != steps[i].want_kind || r.next != steps[i].want_next ||
 		    (r.reason ? (!steps[i].want_reason || strcmp(r.reason, steps[i].want_reason) != 0)
 			      : steps[i].want_reason != NULL)) {
-			snprintf(why, whylen, "step %zu: %s x %s gave %s (reason %s), wanted %s (reason %s)", i,
+			qwe_msg(why, whylen, "step %zu: %s x %s gave %s (reason %s), wanted %s (reason %s)", i,
 				 qwe_lc_state_name(s), qwe_lc_event_name(steps[i].event), qwe_lc_state_name(r.next),
 				 r.reason ? r.reason : "none", qwe_lc_state_name(steps[i].want_next),
 				 steps[i].want_reason ? steps[i].want_reason : "none");
@@ -431,7 +432,7 @@ TEST impossible_cell_aborts(void)
 	pid_t pid;
 	int st;
 
-	snprintf(path, sizeof path, "%s/lifecycle.trace.%d", dir ? dir : "/tmp", (int)getpid());
+	qwe_xfmt(path, sizeof path, "%s/lifecycle.trace.%d", dir ? dir : "/tmp", (int)getpid());
 	pid = fork();
 	ASSERT(pid >= 0);
 	if (pid == 0) {

@@ -4,6 +4,7 @@
 #include "src/edge/yaml/transcode.h"
 #include "src/kernel/alloc.h"
 #include "src/kernel/clock.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/jobs.h"
 #include "src/kernel/lifecycle.h"
 #include "src/kernel/luacbor.h"
@@ -292,7 +293,7 @@ static void emit(struct qwe_ring *ring, struct qwe_sink *sink, const char *data,
 		qwe_sink_write(sink, out, got);
 	if (ring->dropped != before) {
 		char alarm[96];
-		snprintf(alarm, sizeof alarm, "qwe: ALARM: ring overflow, %lu bytes dropped\n", ring->dropped);
+		qwe_xfmt(alarm, sizeof alarm, "qwe: ALARM: ring overflow, %lu bytes dropped\n", ring->dropped);
 		qwe_sink_write(sink, alarm, strlen(alarm));
 	}
 }
@@ -412,6 +413,8 @@ static int poll_cancel(struct run_ctx *ctx)
 	return ctx->cancel_requested;
 }
 
+/* <UTC time>-<pid>. The caller's 64 bytes fit the longest: 20 digits of epoch
+ * seconds, "-" and an 11-character pid. */
 static void fmt_run_id(char *buf, size_t n)
 {
 	time_t now = time(NULL);
@@ -419,8 +422,8 @@ static void fmt_run_id(char *buf, size_t n)
 
 	/* A clock so far off that gmtime cannot break it down still gets a unique id. */
 	if (!gmtime_r(&now, &tm) || strftime(buf, n, "%Y%m%dT%H%M%SZ", &tm) == 0)
-		snprintf(buf, n, "%lld", (long long)now);
-	snprintf(buf + strlen(buf), n - strlen(buf), "-%d", (int)getpid());
+		qwe_xfmt(buf, n, "%lld", (long long)now);
+	qwe_xfmt(buf + strlen(buf), n - strlen(buf), "-%d", (int)getpid());
 }
 
 /* Reads, transcodes, decodes and validates the inventory (inv_path, or
@@ -865,7 +868,7 @@ static int ssh_call(struct job *job, const char *fn, const char *a, const char *
 	if (lua_pcall(L, nargs, 2, 0) != 0)
 		goto fail;
 	if (!lua_toboolean(L, -2)) {
-		snprintf(msg, msg_size, "%s", lua_isstring(L, -1) ? lua_tostring(L, -1) : "failed");
+		qwe_msg(msg, msg_size, "%s", lua_isstring(L, -1) ? lua_tostring(L, -1) : "failed");
 		rc = -1;
 	}
 	lua_settop(L, top);
@@ -907,7 +910,7 @@ static int remote_ensure(struct job *job, char *msg, size_t msg_size, int *refus
 	if (lua_pcall(L, 3, 3, 0) != 0)
 		goto fail;
 	if (!lua_toboolean(L, -3)) {
-		snprintf(msg, msg_size, "%s", lua_isstring(L, -2) ? lua_tostring(L, -2) : "failed");
+		qwe_msg(msg, msg_size, "%s", lua_isstring(L, -2) ? lua_tostring(L, -2) : "failed");
 		*refused = lua_isstring(L, -1) && strcmp(lua_tostring(L, -1), "refused") == 0;
 		rc = -1;
 	}
@@ -1169,7 +1172,7 @@ static void dispatch_one(struct run_ctx *ctx, struct job *job, enum qwe_lc_event
 	res = qwe_lc_lookup(from, ev, &pl);
 	detail[0] = '\0';
 	if (ev == QWE_LC_EV_START_FAILED)
-		snprintf(detail, sizeof detail, "op=%s errno=%s", r->fail_op ? r->fail_op : "?",
+		qwe_msg(detail, sizeof detail, "op=%s errno=%s", r->fail_op ? r->fail_op : "?",
 			 qwe_errno_name(r->fail_errno));
 	qwe_trace_record(&ctx->trace, job->id, shown, from, evname, qwe_lc_state_name(res.next),
 			 res.kind == QWE_LC_IGNORE ? "ignore" : "transition", res.reason, detail[0] ? detail : NULL);
@@ -1789,6 +1792,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	const char *slash;
 	long n, max_parallel;
 	size_t i;
+	size_t run_dir_size, trace_size;
 	int rc = QWE_EXIT_OK, all_ok = 1, trace_ok = 0, wrote;
 	FILE *fp;
 	int64_t run_mono_start;
@@ -1811,25 +1815,28 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	slash = strrchr(path, '/');
 	dir = slash ? strndup(path, (size_t)(slash - path)) : strdup(".");
 	fmt_run_id(run_id, sizeof run_id);
-	run_dir = dir ? malloc(strlen(dir) + strlen(run_id) + 32) : NULL;
+	/* 32 covers "/.qwe/runs/" and, later, "/result.json" */
+	run_dir_size = dir ? strlen(dir) + strlen(run_id) + 32 : 0;
+	run_dir = dir ? malloc(run_dir_size) : NULL;
 	if (!run_dir) {
 		fprintf(stderr, "qwe run: %s: out of memory\n", path);
 		rc = QWE_EXIT_USAGE;
 		goto out;
 	}
-	sprintf(run_dir, "%s/.qwe/runs/%s", dir, run_id);
+	qwe_xfmt(run_dir, run_dir_size, "%s/.qwe/runs/%s", dir, run_id);
 	if (mkdir_p(run_dir, 0700) < 0) {
 		fprintf(stderr, "qwe run: cannot create %s: %s\n", run_dir, strerror(errno));
 		rc = QWE_EXIT_USAGE;
 		goto out;
 	}
-	trace_path = malloc(strlen(run_dir) + 32);
+	trace_size = strlen(run_dir) + 32;
+	trace_path = malloc(trace_size);
 	if (!trace_path) {
 		fprintf(stderr, "qwe run: %s: out of memory\n", path);
 		rc = QWE_EXIT_USAGE;
 		goto out;
 	}
-	sprintf(trace_path, "%s/lifecycle.trace", run_dir);
+	qwe_xfmt(trace_path, trace_size, "%s/lifecycle.trace", run_dir);
 	if (qwe_trace_open(&ctx.trace, trace_path, opts && opts->debug) < 0) {
 		fprintf(stderr, "qwe run: cannot create %s: %s\n", trace_path, strerror(errno));
 		rc = QWE_EXIT_USAGE;

@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/secrets/envelope.h"
 #include "src/secrets/keyfile.h"
 #include "src/testing/owned.h"
@@ -83,7 +84,7 @@ TEST key_file_perms(void)
 	struct stat st;
 
 	ASSERT(mkdtemp(dir) != NULL);
-	snprintf(path, sizeof path, "%s/a/b/secret", dir);
+	qwe_xfmt(path, sizeof path, "%s/a/b/secret", dir);
 	ASSERT_EQ(0, qwe_key_generate(path, err, sizeof err));
 	ASSERT_EQ(0, stat(path, &st));
 	ASSERT_EQ(0600, st.st_mode & 0777);

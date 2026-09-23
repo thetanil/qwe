@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/proc.h"
 #include "src/kernel/luavm.h"
 #include "src/testing/owned.h"
@@ -89,7 +90,7 @@ TEST master_outside_step_groups(void)
 	ASSERT_EQ(0, qwe_proc_spawn(&step, argv_sleep_long, NULL));
 
 	/* the stand-in master records its own /proc stat, then exits */
-	snprintf(src, sizeof src,
+	qwe_xfmt(src, sizeof src,
 		"local exec = require(\"qwe.exec\")\n"
 		"local code = exec.run({ \"sh\", \"-c\", \"cat /proc/self/stat > %s\" }, nil, { detach = true })\n"
 		"assert(code == 0, code)\n",
@@ -134,7 +135,7 @@ static int live_in_group(pid_t pgid)
 
 		if (sscanf(e->d_name, "%d", &pid) != 1)
 			continue;
-		snprintf(path, sizeof path, "/proc/%d/stat", pid);
+		qwe_xfmt(path, sizeof path, "/proc/%d/stat", pid);
 		if (!(fp = fopen(path, "r")))
 			continue;
 		if (fgets(buf, sizeof buf, fp) && (p = strrchr(buf, ')')) != NULL) {
@@ -195,7 +196,7 @@ static pid_t getppid_of(pid_t pid)
 	FILE *f;
 	int ppid = -1;
 
-	snprintf(path, sizeof path, "/proc/%d/stat", (int)pid);
+	qwe_xfmt(path, sizeof path, "/proc/%d/stat", (int)pid);
 	f = fopen(path, "r");
 	if (!f)
 		return -1;

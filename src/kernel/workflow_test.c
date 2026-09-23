@@ -1,6 +1,7 @@
 /* The forked child under memory pressure: an allocation that fails after fork
  * reaches the parent as a step result with a reason. */
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/qwe.h"
 
 #include <dirent.h>
@@ -27,7 +28,7 @@ static void write_file(const char *name, const char *body)
 	char path[600];
 	FILE *fp;
 
-	snprintf(path, sizeof path, "%s/%s", dir, name);
+	qwe_xfmt(path, sizeof path, "%s/%s", dir, name);
 	fp = fopen(path, "w");
 	if (!fp)
 		abort();
@@ -45,7 +46,7 @@ static int read_result(char *out, size_t cap)
 	FILE *fp;
 	size_t got;
 
-	snprintf(path, sizeof path, "%s/.qwe/runs", dir);
+	qwe_xfmt(path, sizeof path, "%s/.qwe/runs", dir);
 	d = opendir(path);
 	if (!d)
 		return -1;
@@ -55,7 +56,7 @@ static int read_result(char *out, size_t cap)
 		closedir(d);
 		return -1;
 	}
-	snprintf(path, sizeof path, "%s/.qwe/runs/%s/result.json", dir, e->d_name);
+	qwe_xfmt(path, sizeof path, "%s/.qwe/runs/%s/result.json", dir, e->d_name);
 	closedir(d);
 	fp = fopen(path, "r");
 	if (!fp)
@@ -73,7 +74,7 @@ TEST child_oom_reports_a_reason(void)
 	int rc;
 
 	write_file("w.yaml", "jobs:\n  j:\n    target: local\n    steps:\n      - run: echo hi\n");
-	snprintf(path, sizeof path, "%s/w.yaml", dir);
+	qwe_xfmt(path, sizeof path, "%s/w.yaml", dir);
 	parent_pid = getpid();
 	rc = qwe_run_workflow(path, &opts);
 
@@ -91,7 +92,7 @@ int main(int argc, char **argv)
 {
 	const char *tmp = getenv("TEST_TMPDIR");
 
-	snprintf(dir, sizeof dir, "%s", tmp ? tmp : "/tmp");
+	qwe_xfmt(dir, sizeof dir, "%s", tmp ? tmp : "/tmp");
 	GREATEST_MAIN_BEGIN();
 	RUN_TEST(child_oom_reports_a_reason);
 	GREATEST_MAIN_END();

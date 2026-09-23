@@ -3,6 +3,7 @@
  * "out of memory"), never as a fault, and a call that did not fail must have
  * done its work: a sealed envelope that opens back to the plaintext. */
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/oom_shim.h"
 #include "src/secrets/envelope.h"
 
@@ -70,7 +71,7 @@ SUITE(oom_suite)
 {
 	char *env = qwe_envelope_seal(key, (const uint8_t *)plain, sizeof plain - 1);
 
-	snprintf(sealed, sizeof sealed, "%s", env);
+	qwe_xfmt(sealed, sizeof sealed, "%s", env);
 	free(env);
 	RUN_TEST(seal_survives_every_injection);
 	RUN_TEST(open_survives_every_injection);

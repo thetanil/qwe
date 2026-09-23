@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/sink.h"
 
 #include <fcntl.h>
@@ -14,7 +15,7 @@ static void tmpdir(void)
 {
 	const char *base = getenv("TEST_TMPDIR");
 
-	snprintf(dir, sizeof dir, "%s/sink_XXXXXX", base ? base : "/tmp");
+	qwe_xfmt(dir, sizeof dir, "%s/sink_XXXXXX", base ? base : "/tmp");
 	if (!mkdtemp(dir))
 		dir[0] = '\0';
 }
@@ -43,7 +44,7 @@ static int open_sink(struct qwe_sink *s, char *termpath, size_t termcap)
 	tmpdir();
 	if (!dir[0])
 		return -1;
-	snprintf(termpath, termcap, "%s/term", dir);
+	qwe_xfmt(termpath, termcap, "%s/term", dir);
 	term = open(termpath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if (term < 0)
 		return -1;
@@ -59,7 +60,7 @@ TEST line_splitting(void)
 
 	ASSERT_EQ(0, open_sink(&s, termpath, sizeof termpath));
 	term = s.term_fd;
-	snprintf(logpath, sizeof logpath, "%s/job.log", dir);
+	qwe_xfmt(logpath, sizeof logpath, "%s/job.log", dir);
 
 	/* whole lines, one write; a line split across two writes */
 	qwe_sink_write(&s, "one\ntwo\n", 8);
@@ -78,13 +79,13 @@ TEST line_splitting(void)
 	qwe_sink_close(&s);
 	close(term);
 
-	snprintf(expect, sizeof expect, "[job] one\n[job] two\n[job] three\n[job] \n[job] %s\n[job] tail\n", big);
+	qwe_xfmt(expect, sizeof expect, "[job] one\n[job] two\n[job] three\n[job] \n[job] %s\n[job] tail\n", big);
 	ASSERT(slurp(termpath, term_out, sizeof term_out) >= 0);
 	ASSERT_STR_EQ(expect, term_out);
 
 	/* the log is the raw bytes: no prefix, no newline added to the tail */
 	ASSERT(slurp(logpath, log_out, sizeof log_out) >= 0);
-	snprintf(expect, sizeof expect, "one\ntwo\nthree\n\n%s\ntail", big);
+	qwe_xfmt(expect, sizeof expect, "one\ntwo\nthree\n\n%s\ntail", big);
 	ASSERT_STR_EQ(expect, log_out);
 	PASS();
 }

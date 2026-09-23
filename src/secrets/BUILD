@@ -13,7 +13,7 @@ cc_library(
         "envelope.h",
         "keyfile.h",
     ],
-    deps = ["//third_party/libsodium"],
+    deps = ["//src/kernel:fmt", "//third_party/libsodium"],
 )
 
 cc_test(
@@ -21,6 +21,7 @@ cc_test(
     size = "small",
     srcs = ["envelope_test.c"],
     deps = [
+        "//src/kernel:fmt",
         ":secrets",
         "//src/testing:owned",
         "//third_party/greatest",
@@ -33,6 +34,7 @@ cc_test(
     size = "small",
     srcs = ["keyfile_test.c"],
     deps = [
+        "//src/kernel:fmt",
         ":secrets",
         "//third_party/greatest",
     ],
@@ -52,6 +54,7 @@ cc_test(
     srcs = ["oom_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
+        "//src/kernel:fmt",
         ":secrets",
         "//src/kernel:oom_shim",
         "//third_party/greatest",

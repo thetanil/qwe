@@ -1,4 +1,5 @@
 #include "src/edge/yaml/transcode.h"
+#include "src/kernel/fmt.h"
 
 #include "cbor.h"
 #include <yaml.h>
@@ -34,7 +35,7 @@ struct ctx {
 
 static void fail(struct ctx *c, const yaml_mark_t *m, const char *msg)
 {
-	snprintf(c->err, c->err_size, "%lu:%lu: %s", (unsigned long)m->line + 1,
+	qwe_msg(c->err, c->err_size, "%lu:%lu: %s", (unsigned long)m->line + 1,
 		 (unsigned long)m->column + 1, msg);
 }
 
@@ -55,7 +56,7 @@ static struct qwe_pos to_pos(const yaml_mark_t *m)
 /* Heap exhaustion: fatal, never retried. */
 static int oom(struct ctx *c)
 {
-	snprintf(c->err, c->err_size, "out of memory");
+	qwe_msg(c->err, c->err_size, "out of memory");
 	return ERR;
 }
 
@@ -270,7 +271,7 @@ static int check_props(struct ctx *c, const yaml_mark_t *m, const yaml_char_t *a
 	}
 	if (tag && !(tag_ok && !strcmp((const char *)tag, ENCRYPTED_TAG))) {
 		char msg[128];
-		snprintf(msg, sizeof msg, "unknown tag %.80s", (const char *)tag);
+		qwe_msg(msg, sizeof msg, "unknown tag %.80s", (const char *)tag);
 		fail(c, m, msg);
 		return ERR;
 	}
@@ -387,7 +388,7 @@ static int encode(const char *yaml, size_t len, uint8_t *buf, size_t cap, size_t
 	}
 	yaml_parser_delete(&p);
 	if (rc == OK && !c->have_root) {
-		snprintf(c->err, c->err_size, "1:1: empty document");
+		qwe_msg(c->err, c->err_size, "1:1: empty document");
 		return ERR;
 	}
 	if (rc == OK)
@@ -404,12 +405,12 @@ int qwe_yaml_to_cbor(const char *yaml, size_t len, uint8_t **out, size_t *out_le
 	int rc;
 
 	if (len > QWE_YAML_MAX_SIZE) {
-		snprintf(err, err_size, "1:1: document is larger than %d bytes", QWE_YAML_MAX_SIZE);
+		qwe_msg(err, err_size, "1:1: document is larger than %d bytes", QWE_YAML_MAX_SIZE);
 		return -1;
 	}
 	c = calloc(1, sizeof *c);
 	if (!c) {
-		snprintf(err, err_size, "out of memory");
+		qwe_msg(err, err_size, "out of memory");
 		return -1;
 	}
 	c->err = err;
@@ -418,7 +419,7 @@ int qwe_yaml_to_cbor(const char *yaml, size_t len, uint8_t **out, size_t *out_le
 	do {
 		uint8_t *grown = realloc(buf, cap);
 		if (!grown) {
-			snprintf(err, err_size, "out of memory");
+			qwe_msg(err, err_size, "out of memory");
 			free(buf);
 			qwe_positions_free(c->pos);
 			free(c->path);
@@ -432,7 +433,7 @@ int qwe_yaml_to_cbor(const char *yaml, size_t len, uint8_t **out, size_t *out_le
 	free(c->path);
 	if (rc != OK) {
 		if (err[0] == '\0')
-			snprintf(err, err_size, "cannot encode document");
+			qwe_msg(err, err_size, "cannot encode document");
 		free(buf);
 		qwe_positions_free(c->pos);
 		free(c);

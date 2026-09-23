@@ -83,16 +83,38 @@ int main(int argc, char **argv)
 		}
 		is_json = strlen(eq + 1) > 5 && !strcmp(eq + 1 + strlen(eq + 1) - 5, ".json");
 		if (is_json) {
-			/* return [=====[ ... ]=====] */
+			/* return [=====[ ... ]=====]: 22 bytes around the text, and a NUL */
+			int w;
+
 			chunk = malloc(len + 32);
-			n = (size_t)sprintf(chunk, "return [=====[\n%s]=====]", src);
+			w = chunk ? snprintf(chunk, len + 32, "return [=====[\n%s]=====]", src) : -1;
+			if (w < 0 || (size_t)w >= len + 32) {
+				fprintf(stderr, "bcembed: cannot wrap %s\n", eq + 1);
+				free(chunk);
+				free(src);
+				free(name);
+				(void)fclose(out); /* failing already */
+				return 1;
+			}
+			n = (size_t)w;
 		} else {
 			chunk = src;
 			n = len;
 		}
 		{
 			char chunkname[256];
-			snprintf(chunkname, sizeof chunkname, "=%s", name);
+			int w = snprintf(chunkname, sizeof chunkname, "=%s", name);
+
+			/* the chunk name is what a Lua error names the module by */
+			if (w < 0 || (size_t)w >= sizeof chunkname) {
+				fprintf(stderr, "bcembed: module name too long: %.64s...\n", name);
+				if (is_json)
+					free(src);
+				free(chunk);
+				free(name);
+				(void)fclose(out); /* failing already */
+				return 1;
+			}
 			if (luaL_loadbuffer(L, chunk, n, chunkname) != 0) {
 				fprintf(stderr, "bcembed: %s\n", lua_tostring(L, -1));
 				if (is_json)

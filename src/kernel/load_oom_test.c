@@ -3,6 +3,7 @@
  * and a message naming the file and memory, never a fault and never a verdict
  * reached by skipping the allocation. */
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/qwe.h"
 
 #include <fcntl.h>
@@ -42,7 +43,7 @@ static void write_file(const char *name, const char *body)
 	char path[600];
 	FILE *fp;
 
-	snprintf(path, sizeof path, "%s/%s", dir, name);
+	qwe_xfmt(path, sizeof path, "%s/%s", dir, name);
 	fp = fopen(path, "w");
 	if (!fp)
 		abort();
@@ -59,8 +60,8 @@ static int validate_failing(int at, const char *workflow, char *err, size_t errc
 	int saved = dup(2), fd, rc;
 	ssize_t got;
 
-	snprintf(path, sizeof path, "%s/%s", dir, workflow);
-	snprintf(errpath, sizeof errpath, "%s/stderr", dir);
+	qwe_xfmt(path, sizeof path, "%s/%s", dir, workflow);
+	qwe_xfmt(errpath, sizeof errpath, "%s/stderr", dir);
 	fd = open(errpath, O_WRONLY | O_CREAT | O_TRUNC, 0600);
 	if (saved < 0 || fd < 0)
 		abort();
@@ -122,7 +123,7 @@ int main(int argc, char **argv)
 {
 	const char *tmp = getenv("TEST_TMPDIR");
 
-	snprintf(dir, sizeof dir, "%s", tmp ? tmp : "/tmp");
+	qwe_xfmt(dir, sizeof dir, "%s", tmp ? tmp : "/tmp");
 	write_file("w.yaml",
 	    "jobs:\n"
 	    "  build:\n    target: box\n    steps:\n      - run: echo hi\n"

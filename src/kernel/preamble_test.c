@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/preamble.h"
 #include "src/testing/owned.h"
 
@@ -130,10 +131,10 @@ TEST values_arrive_exactly(void)
 		char script[64];
 		char want[64];
 
-		snprintf(script, sizeof script, "printf %%s \"$%s\"", names[i]);
+		qwe_xfmt(script, sizeof script, "printf %%s \"$%s\"", names[i]);
 		all = qwe_own(with_preamble(names, values, 7, "", 0, &total));
 		n = run(script, all, total, 1, out, sizeof out);
-		snprintf(want, sizeof want, "%s", values[i]);
+		qwe_xfmt(want, sizeof want, "%s", values[i]);
 		ASSERT_EQ(strlen(want), n);
 		ASSERT_MEM_EQ(want, out, n);
 	}

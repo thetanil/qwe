@@ -4,6 +4,7 @@
  * did not and exits non-zero. (The probe does not see stdout of a run that
  * succeeds: it is not flushed.) */
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/cli/encrypt/encrypt.h"
 #include "src/kernel/oom_shim.h"
 #include "src/kernel/qwe.h"
@@ -49,7 +50,7 @@ int main(int argc, char **argv)
 	char path[600];
 	FILE *fp;
 
-	snprintf(path, sizeof path, "%s/home", tmp ? tmp : "/tmp");
+	qwe_xfmt(path, sizeof path, "%s/home", tmp ? tmp : "/tmp");
 	mkdir(path, 0700);
 	setenv("HOME", path, 1);
 	strncat(path, "/.config", sizeof path - strlen(path) - 1);

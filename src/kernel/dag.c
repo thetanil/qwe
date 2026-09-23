@@ -1,4 +1,5 @@
 #include "src/kernel/dag.h"
+#include "src/kernel/fmt.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,7 +50,7 @@ static int visit(struct walk *w, size_t j)
 				len += (size_t)snprintf(e->message + len, sizeof e->message - len, "%s -> ",
 							w->jobs[w->stack[s]].id);
 			if (len < sizeof e->message)
-				snprintf(e->message + len, sizeof e->message - len, "%s", w->jobs[d].id);
+				qwe_msg(e->message + len, sizeof e->message - len, "%s", w->jobs[d].id);
 			return 1;
 		}
 		if (w->color[d] == WHITE && visit(w, d))
@@ -77,7 +78,7 @@ enum qwe_dag_status qwe_dag_check(const struct qwe_dag_job *jobs, size_t n, stru
 				err->status = QWE_DAG_UNKNOWN_NEED;
 				err->job = i;
 				err->need = k;
-				snprintf(err->message, sizeof err->message, "job \"%s\" needs \"%s\", which is not a job",
+				qwe_msg(err->message, sizeof err->message, "job \"%s\" needs \"%s\", which is not a job",
 					 jobs[i].id, jobs[i].needs[k]);
 				return err->status;
 			}
@@ -95,7 +96,7 @@ enum qwe_dag_status qwe_dag_check(const struct qwe_dag_job *jobs, size_t n, stru
 		free(w.color);
 		free(w.stack);
 		err->status = QWE_DAG_NO_MEMORY;
-		snprintf(err->message, sizeof err->message, "cannot check the needs: graph: out of memory");
+		qwe_msg(err->message, sizeof err->message, "cannot check the needs: graph: out of memory");
 		return err->status;
 	}
 	for (i = 0; i < n && !found; i++)

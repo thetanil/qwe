@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/trace.h"
 #include "src/testing/owned.h"
 
@@ -12,7 +13,7 @@ static void path_for(char *path, size_t cap)
 {
 	const char *dir = getenv("TEST_TMPDIR");
 
-	snprintf(path, cap, "%s/trace_test.%d", dir ? dir : "/tmp", (int)getpid());
+	qwe_xfmt(path, cap, "%s/trace_test.%d", dir ? dir : "/tmp", (int)getpid());
 }
 
 /* A record longer than the writer's line buffer is cut short. The cut must

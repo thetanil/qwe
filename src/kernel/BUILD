@@ -20,6 +20,7 @@ cc_library(
     deps = [
         ":alloc",
         ":clock",
+        ":fmt",
         ":dag",
         ":lifecycle",
         ":redact",
@@ -77,6 +78,7 @@ cc_test(
     size = "small",
     srcs = ["proc_test.c"],
     deps = [
+        ":fmt",
         ":proc",
         ":luavm",
         "//third_party/luajit",
@@ -107,7 +109,7 @@ cc_library(
     name = "sink",
     srcs = ["sink.c"],
     hdrs = ["sink.h"],
-    deps = [":alloc"],
+    deps = [":alloc", ":fmt"],
 )
 
 cc_test(
@@ -115,6 +117,7 @@ cc_test(
     size = "small",
     srcs = ["sink_test.c"],
     deps = [
+        ":fmt",
         ":sink",
         "//third_party/greatest",
     ],
@@ -151,6 +154,7 @@ cc_test(
     size = "small",
     srcs = ["summary_test.c"],
     deps = [
+        ":fmt",
         ":summary",
         "//src/testing:owned",
         "//third_party/greatest",
@@ -162,6 +166,7 @@ cc_library(
     srcs = ["luacbor.c"],
     hdrs = ["luacbor.h"],
     deps = [
+        ":fmt",
         "//src/edge/yaml",
         "//third_party/luajit",
         "//third_party/tinycbor",
@@ -206,6 +211,7 @@ cc_library(
     name = "dag",
     srcs = ["dag.c"],
     hdrs = ["dag.h"],
+    deps = [":fmt"],
 )
 
 cc_test(
@@ -249,6 +255,22 @@ sh_test(
     srcs = ["luarun_test.sh"],
     args = ["$(location :luarun)"],
     data = [":luarun"],
+)
+
+# snprintf that says what a cut-short result means (fmt.h).
+cc_library(
+    name = "fmt",
+    hdrs = ["fmt.h"],
+)
+
+cc_test(
+    name = "fmt_test",
+    size = "small",
+    srcs = ["fmt_test.c"],
+    deps = [
+        ":fmt",
+        "//third_party/greatest",
+    ],
 )
 
 # CLOCK_MONOTONIC, aborting on the failure Linux cannot produce (clock.h).
@@ -309,6 +331,7 @@ cc_test(
         "lifecycle_test.c",
     ],
     deps = [
+        ":fmt",
         ":lifecycle",
         ":trace",
         "//src/testing:owned",
@@ -321,7 +344,7 @@ cc_library(
     name = "trace",
     srcs = ["trace.c"],
     hdrs = ["trace.h"],
-    deps = [":clock", ":lifecycle"],
+    deps = [":clock", ":fmt", ":lifecycle"],
 )
 
 cc_test(
@@ -329,6 +352,7 @@ cc_test(
     size = "small",
     srcs = ["trace_test.c"],
     deps = [
+        ":fmt",
         ":trace",
         "//src/testing:owned",
         "//third_party/greatest",
@@ -347,6 +371,7 @@ cc_test(
     size = "small",
     srcs = ["preamble_test.c"],
     deps = [
+        ":fmt",
         ":preamble",
         "//src/testing:owned",
         "//third_party/greatest",
@@ -425,6 +450,7 @@ cc_test(
         "-Wl,--wrap=strndup",
     ],
     deps = [
+        ":fmt",
         ":kernel",
         "//third_party/greatest",
     ],
@@ -438,6 +464,7 @@ cc_test(
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     linkopts = ["-Wl,--wrap=calloc"],
     deps = [
+        ":fmt",
         ":kernel",
         "//third_party/greatest",
     ],
@@ -484,6 +511,7 @@ cc_test(
     ],
     deps = [
         ":clock",
+        ":fmt",
         ":lifecycle",
         "//third_party/greatest",
     ],
@@ -512,6 +540,7 @@ cc_test(
     srcs = ["oom_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
+        ":fmt",
         ":kernel",
         ":oom_shim",
         "//third_party/greatest",

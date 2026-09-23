@@ -2,6 +2,7 @@
 #include "src/kernel/trace.h"
 
 #include "src/kernel/clock.h"
+#include "src/kernel/fmt.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -47,7 +48,7 @@ void qwe_trace_record(struct qwe_trace *t, const char *job, long step, enum qwe_
 		usec += 1000000;
 	}
 	if (step >= 0)
-		snprintf(stepbuf, sizeof stepbuf, "%ld", step);
+		qwe_xfmt(stepbuf, sizeof stepbuf, "%ld", step);
 	else
 		strcpy(stepbuf, "-");
 	n = snprintf(line, sizeof line, "%ld.%06ld %s %s %s %s %s %s %s%s%s\n", sec, usec, job ? job : "-", stepbuf,
@@ -117,6 +118,6 @@ const char *qwe_errno_name(int err)
 
 	if (name)
 		return name;
-	snprintf(buf, sizeof buf, "E%d", err);
+	qwe_xfmt(buf, sizeof buf, "E%d", err);
 	return buf;
 }

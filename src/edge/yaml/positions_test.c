@@ -1,4 +1,5 @@
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/edge/yaml/transcode.h"
 
 #include <stdio.h>
@@ -101,7 +102,7 @@ static void collect_dup(const char *pointer, struct qwe_pos first, struct qwe_po
 	struct dups *d = ud;
 
 	if (d->n < 4) {
-		snprintf(d->pointer[d->n], sizeof d->pointer[0], "%s", pointer);
+		qwe_xfmt(d->pointer[d->n], sizeof d->pointer[0], "%s", pointer);
 		d->first[d->n] = first;
 		d->second[d->n] = second;
 	}

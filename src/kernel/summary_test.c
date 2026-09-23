@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/summary.h"
 #include "src/testing/owned.h"
 
@@ -209,7 +210,7 @@ TEST log_tail_block(void)
 	int i;
 
 	ASSERT(mkdtemp(dir) != NULL);
-	snprintf(logpath, sizeof logpath, "%s/j.log", dir);
+	qwe_xfmt(logpath, sizeof logpath, "%s/j.log", dir);
 	fp = fopen(logpath, "w");
 	ASSERT(fp != NULL);
 	for (i = 0; i < 25; i++)
@@ -265,7 +266,7 @@ TEST log_tail_without_trailing_newline(void)
 	char *out;
 
 	ASSERT(mkdtemp(dir) != NULL);
-	snprintf(logpath, sizeof logpath, "%s/j.log", dir);
+	qwe_xfmt(logpath, sizeof logpath, "%s/j.log", dir);
 	fp = fopen(logpath, "w");
 	ASSERT(fp != NULL);
 	fputs("no newline at the end", fp);

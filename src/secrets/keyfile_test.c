@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/secrets/keyfile.h"
 
 #include <signal.h>
@@ -18,8 +19,8 @@ TEST mode_check_matches_socket_dir_check(void)
 	FILE *f;
 
 	ASSERT(mkdtemp(root) != NULL);
-	snprintf(file, sizeof file, "%s/secret", root);
-	snprintf(dir, sizeof dir, "%s/sock", root);
+	qwe_xfmt(file, sizeof file, "%s/secret", root);
+	qwe_xfmt(dir, sizeof dir, "%s/sock", root);
 	f = fopen(file, "w");
 	ASSERT(f != NULL);
 	ASSERT_EQ(0, fclose(f));
@@ -86,25 +87,25 @@ TEST generate_failures_are_reported(void)
 	ASSERT(mkdtemp(root) != NULL);
 
 	/* the parent "directory" is a file */
-	snprintf(blocker, sizeof blocker, "%s/blocker", root);
+	qwe_xfmt(blocker, sizeof blocker, "%s/blocker", root);
 	f = fopen(blocker, "w");
 	ASSERT(f != NULL);
 	ASSERT_EQ(0, fclose(f));
-	snprintf(path, sizeof path, "%s/blocker/sub/secret", root);
+	qwe_xfmt(path, sizeof path, "%s/blocker/sub/secret", root);
 	ASSERT_EQ(-1, qwe_key_generate(path, err, sizeof err));
 	ASSERT(strstr(err, "cannot create ") != NULL);
 
 	/* the directory exists but cannot be written to (skipped as root, who can) */
-	snprintf(ro, sizeof ro, "%s/ro", root);
+	qwe_xfmt(ro, sizeof ro, "%s/ro", root);
 	ASSERT_EQ(0, mkdir(ro, 0500));
-	snprintf(path, sizeof path, "%s/secret", ro);
+	qwe_xfmt(path, sizeof path, "%s/secret", ro);
 	if (geteuid() != 0) {
 		ASSERT_EQ(-1, qwe_key_generate(path, err, sizeof err));
 		ASSERT(strstr(err, "cannot create the key file ") != NULL);
 	}
 
 	/* the write fails (the file size limit is zero): the half-made file is removed */
-	snprintf(path, sizeof path, "%s/secret", root);
+	qwe_xfmt(path, sizeof path, "%s/secret", root);
 	memset(&ign, 0, sizeof ign);
 	ign.sa_handler = SIG_IGN;
 	sigaction(SIGXFSZ, &ign, &oldact);
@@ -125,11 +126,35 @@ TEST generate_failures_are_reported(void)
 	PASS();
 }
 
+/* A path longer than the directory buffer is refused before anything is made:
+ * a truncated copy would have created the wrong directories. */
+TEST generate_refuses_an_overlong_path(void)
+{
+	char root[] = "/tmp/qwe-keygen-long-XXXXXX", path[2048], first[64], err[512];
+	size_t len;
+
+	ASSERT(mkdtemp(root) != NULL);
+	len = strlen(root);
+	memcpy(path, root, len);
+	while (len < 1200) {
+		path[len++] = '/';
+		path[len++] = 'd';
+	}
+	memcpy(path + len, "/secret", sizeof "/secret");
+	ASSERT_EQ(-1, qwe_key_generate(path, err, sizeof err));
+	ASSERT(strstr(err, "too long") != NULL);
+	qwe_xfmt(first, sizeof first, "%s/d", root);
+	ASSERT_EQ(-1, access(first, F_OK)); /* not one directory made */
+	rmdir(root);
+	PASS();
+}
+
 SUITE(keyfile)
 {
 	RUN_TEST(mode_check_matches_socket_dir_check);
 	RUN_TEST(private_check_refuses_another_owner);
 	RUN_TEST(generate_failures_are_reported);
+	RUN_TEST(generate_refuses_an_overlong_path);
 }
 
 GREATEST_MAIN_DEFS();

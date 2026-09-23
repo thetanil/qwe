@@ -80,7 +80,7 @@ specific, checked reason:
 |---|---|
 | `bugprone-reserved-identifier`, `cert-dcl37-c`, `cert-dcl51-cpp` | Flags `_POSIX_C_SOURCE`/`_GNU_SOURCE` (a required feature-test-macro idiom) and `__real_*`/`__wrap_*` (required by the `-Wl,--wrap=` OOM-test harness, `docs/ci-checks.md`'s "Allocation checks"). Both are reserved-namespace by necessity, not a defect. |
 | `bugprone-multi-level-implicit-pointer-conversion` | Fires on every `calloc`/`free` call (`void *` &harr; `T **`) — the standard, recommended C idiom of not casting `malloc`/`calloc`/`free`. |
-| `cert-err33-c` (narrowed, not excluded) | `CheckedFunctions` is set to `fclose`, `fflush`, `fwrite`, `fseek`, `clock_gettime`, `gmtime_r`, `strftime`, `timerfd_settime` and `signal`, whose failure loses written data or yields a wrong value. The default list is nearly all of `<stdio.h>` and `<string.h>`. Allocation returns are enforced by this repo's OOM-injection gate (`quality/02`, `quality/08`), and `fprintf`/`fputs`/`fputc` to a diagnostic stream are left for the next feature. An `fclose` on a read-only stream is cast to `(void)` with a comment saying so. |
+| `cert-err33-c` (narrowed, not excluded) | `CheckedFunctions` is set to `fclose`, `fflush`, `fwrite`, `fseek`, `clock_gettime`, `gmtime_r`, `strftime`, `timerfd_settime`, `signal`, `snprintf` and `sprintf`, whose failure loses written data or yields a wrong value. `snprintf` goes through `src/kernel/fmt.h` (below). The default list is nearly all of `<stdio.h>` and `<string.h>`. Allocation returns are enforced by this repo's OOM-injection gate (`quality/02`, `quality/08`), and `fprintf`/`fputs`/`fputc` to a diagnostic stream are left for the next feature. An `fclose` on a read-only stream is cast to `(void)` with a comment saying so. |
 | `bugprone-implicit-widening-of-multiplication-result` | Every hit multiplies small compile-time-constant macros (`1024 * 1024`, `64 * 1024`, `2 * QWE_YAML_MAX_DEPTH`); the check does not special-case a constant-folded multiplication that cannot overflow. |
 | `concurrency-mt-unsafe` | qwe has no threads — concurrency is one process per plugin step (`docs/adr/0001-fork-per-plugin-step.md`) — so "not thread-safe" does not apply. |
 | `bugprone-easily-swappable-parameters` | A subjective refactor suggestion (reorder or wrap parameters), not a correctness check. |
@@ -93,6 +93,22 @@ specific, checked reason:
 | `clang-analyzer-optin.taint.TaintedAlloc` | False positive for `tools/bcembed.c`, a local, single-user, build-time-only tool — its argv is the build's own module list, not attacker-controlled. |
 | `clang-analyzer-security.insecureAPI.strcpy` | Name-based (bans `strcpy`/`strcat` outright); every call site in this tree is bounded by explicit buffer-size arithmetic checked by hand (`src/kernel/workflow.c`'s `load_inventory` and its run-directory path). |
 | `clang-analyzer-unix.Errno` | Its one hit (`src/kernel/summary.c`) traced into an unrelated loop in a different function with no `errno` in the flagged file at all — an inter-procedural false positive. |
+
+### snprintf: say what a cut means
+
+A call site never ignores `snprintf`'s return. It uses one of three helpers in
+`src/kernel/fmt.h` (`//src/kernel:fmt`), picked by what a truncated result
+would mean:
+
+- **`qwe_fmt`** for a path, a key or a name, where a cut is a wrong answer. It
+  returns -1 on truncation, and the caller fails.
+- **`qwe_xfmt`** for a buffer sized to fit (allocated from the lengths going in,
+  or a fixed buffer for a number) and for test fixtures. It aborts with
+  `file:line: formatted text truncated`, the way `qwe_xmalloc` does on OOM.
+- **`qwe_msg`** for a diagnostic message a person reads. A cut only shortens it.
+
+`sprintf` is not used anywhere. `tools/bcembed.c` builds without `src/` and
+checks its two `snprintf` calls inline.
 
 ### Test code: same checks, two idioms
 
@@ -200,3 +216,21 @@ Real bugs behind checks that had been excluded as false positives, found by
   `src/kernel/clock.h`'s `qwe_mono_now()`, which aborts on the failure Linux
   cannot produce rather than time a step from an unset `timespec`.
   `qwe_timer_disarm` now returns the result, like `qwe_timer_arm`.
+- **`qwe_key_generate` copied its path into a 1024-byte buffer unchecked.**
+  The copy is used to `mkdir` each parent. A longer path was cut short, so
+  qwe made directories along the truncated prefix and then failed with a
+  misleading "cannot create the key file". It is now refused up front with
+  "the key file path is too long" (`keyfile_test`'s
+  `generate_refuses_an_overlong_path`). `qwe_key_default_path` already
+  failed on an over-long `HOME`, but `qwe keygen` and `resolve` reported
+  that as "HOME is not set". They now say it is too long
+  (`tests/e2e/keygen_long_home`). Found by `cert-err33-c` (`snprintf`).
+- **`bcembed` wrapped a JSON module with `sprintf` into an unchecked
+  `malloc`**, and a module name over 255 bytes was silently cut short in the
+  chunk name. Both now fail the build. Found by `cert-err33-c` (`sprintf`,
+  `snprintf`).
+- The five other `sprintf`s (`validate.c`'s JSON pointers, `workflow.c`'s run
+  directory and trace path) and `sink.c`'s line prefix were bounded only by
+  allocation arithmetic kept next to them by hand. They are now `qwe_xfmt`
+  with the size passed in, so a future mismatch aborts instead of
+  overflowing.

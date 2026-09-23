@@ -14,6 +14,7 @@ cc_library(
     ],
     visibility = ["//src:__subpackages__"],
     deps = [
+        "//src/kernel:fmt",
         "//third_party/libyaml",
         "//third_party/tinycbor",
     ],
@@ -25,6 +26,7 @@ cc_library(
     srcs = [name + "_test.c"],
     deps = [
         ":yaml",
+        "//src/kernel:fmt",
         "//src/testing:owned",
         "//third_party/greatest",
         "//third_party/tinycbor",

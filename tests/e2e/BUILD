@@ -331,6 +331,8 @@ e2e_test(name = "keygen_rejects_argument")
 
 e2e_test(name = "keygen_no_home")
 
+e2e_test(name = "keygen_long_home")
+
 e2e_test(name = "cli_no_subcommand")
 
 e2e_test(name = "result_duration_ms")

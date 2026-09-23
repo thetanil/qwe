@@ -8,7 +8,8 @@
 
 #include <stddef.h>
 
-/* $HOME/.config/qwe/secret into out. Returns 0, or -1 if HOME is unset. */
+/* $HOME/.config/qwe/secret into out. Returns 0, or -1 if HOME is unset or
+ * the path does not fit in n bytes. */
 int qwe_key_default_path(char *out, size_t n);
 
 /* Reads the key at path (the default path when NULL). Returns 0, or -1 with a

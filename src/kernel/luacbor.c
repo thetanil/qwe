@@ -1,4 +1,5 @@
 #include "src/kernel/luacbor.h"
+#include "src/kernel/fmt.h"
 
 #include "cbor.h"
 #include "src/edge/yaml/secret_tag.h"
@@ -174,13 +175,13 @@ int qwe_cbor_to_lua(lua_State *L, const uint8_t *buf, size_t len, char *err, siz
 
 	ensure_metatables(L);
 	if (cbor_parser_init(buf, len, 0, &parser, &it) != CborNoError) {
-		snprintf(err, err_size, "invalid CBOR");
+		qwe_msg(err, err_size, "invalid CBOR");
 		return -1;
 	}
 	msg = convert(L, &it, 0);
 	if (msg) {
 		lua_settop(L, top);
-		snprintf(err, err_size, "%s", msg);
+		qwe_msg(err, err_size, "%s", msg);
 		return -1;
 	}
 	return 0;
@@ -371,7 +372,7 @@ int qwe_lua_to_cbor(lua_State *L, int idx, uint8_t **out, size_t *len, char *err
 		int r;
 
 		if (!buf) {
-			snprintf(err, err_size, "out of memory");
+			qwe_msg(err, err_size, "out of memory");
 			return -1;
 		}
 		cbor_encoder_init(&enc, buf, cap, 0);
@@ -383,7 +384,7 @@ int qwe_lua_to_cbor(lua_State *L, int idx, uint8_t **out, size_t *len, char *err
 		}
 		free(buf);
 		if (r != CborErrorOutOfMemory) {
-			snprintf(err, err_size, "%s", msg);
+			qwe_msg(err, err_size, "%s", msg);
 			return -1;
 		}
 		cap *= 2;
