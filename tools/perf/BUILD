@@ -15,3 +15,19 @@ sh_test(
     args = ["$(location :compare.sh)"],
     data = [":compare.sh"],
 )
+
+# The A/B round runner behind the perf job (15): bazel run //tools/perf:run --
+#   <outdir> <rounds> <candidate-bin> <baseline-bin> <workflow-file>...
+sh_binary(
+    name = "run",
+    srcs = ["run.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_test(
+    name = "run_test",
+    size = "small",
+    srcs = ["run_test.sh"],
+    args = ["$(location :run.sh)"],
+    data = [":run.sh"],
+)

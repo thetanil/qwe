@@ -1,0 +1,8 @@
+# Accepted perf regressions, one line per key: <baseline-version> <key-glob> <max-ratio>  # reason
+#
+# A line only suppresses a regression when the baseline version in this run equals its
+# version exactly, so an accepted slowdown expires the moment the baseline moves to the
+# next release -- nothing here silently covers for a second regression. See
+# docs/adr/0014-perf-gate-is-ab-against-the-last-release.md and tools/perf/compare.sh.
+#
+# Empty on purpose: nothing has been accepted yet.
