@@ -1,21 +1,35 @@
 # qwe
 
-**qwe** (Qualified Workflow Engine) is a small Linux command-line tool that runs a workflow to
-completion and exits. You describe the work as YAML in the style of GitHub Actions (jobs, `needs:`,
-ordered steps, `env:`, `outputs`), and qwe runs it on the machine you are sitting at or, over ssh, on
-other machines. It is one static binary written in C99, with no daemon and no runtime to install.
+**qwe** (Qualified Workflow Engine) is a small Linux command-line tool that runs
+a workflow to completion and exits. You describe the work as YAML in the style
+of GitHub Actions (jobs, `needs:`, ordered steps, `env:`, `outputs`), and qwe
+runs it on the machine you are sitting at or, over ssh, on other machines. It is
+one static binary written in C99, with no daemon and no runtime to install.
 
-What a step can do comes from plugins written in LuaJIT. A step is either `run:` (a shell command,
-which is itself a built-in plugin) or `uses: <plugin>` with `with:` inputs. The plugins ship inside
-the binary, and you can add your own next to a workflow without rebuilding anything. The kernel stays
-small on purpose: it owns processes, timeouts, cancellation, logs and secrets, and everything else is
-a plugin. The design is written up in `docs/workflow-kernel-design.md` and the vocabulary in
-`CONTEXT.md`.
+What a step can do comes from plugins written in LuaJIT. A step is either `run:`
+(a shell command, which is itself a built-in plugin) or `uses: <plugin>` with
+`with:` inputs. The plugins ship inside the binary, and you can add your own
+next to a workflow without rebuilding anything. The kernel stays small on
+purpose: it owns processes, timeouts, cancellation, logs and secrets, and
+everything else is a plugin. The design is written up in
+`docs/workflow-kernel-design.md` and the vocabulary in `CONTEXT.md`.
 
-It began as the engine for managing a small fleet of physical devices (power, flashing, VLAN
-placement, probing) from CI, and that is still the intended use. The device plugins are not written
-yet; what exists is the engine and its first plugins (`run`, `file.ensure`, `file.read`, `file.line`,
-`apt.package`, `assert`, the `local` and `ssh` backends).
+WIP; what exists is the engine and its first plugins (`run`, `file.ensure`,
+`file.read`, `file.line`, `apt.package`, `assert`, the `local` and `ssh`
+backends).
+
+## Status
+
+[![tests](https://github.com/thetanil/qwe/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/tests.yml)
+[![asan](https://github.com/thetanil/qwe/actions/workflows/asan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/asan.yml)
+[![ubsan](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml)
+[![valgrind](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml)
+[![coverage](https://github.com/thetanil/qwe/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/coverage.yml)
+[![coverage percent](https://img.shields.io/endpoint?url=https://thetanil.com/qwe/coverage.json)](https://thetanil.com/qwe/)
+[![smoke](https://github.com/thetanil/qwe/actions/workflows/smoke.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/smoke.yml)
+[![nightly](https://github.com/thetanil/qwe/actions/workflows/nightly.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/nightly.yml)
+[![fuzz](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml)
+[![release](https://github.com/thetanil/qwe/actions/workflows/release.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/release.yml)
 
 ## A first workflow
 
@@ -104,21 +118,6 @@ bazel test //...                                            # the unit, plugin a
 | how it is checked (sanitizers, valgrind, coverage, fuzzing) | `docs/ci-checks.md` and the pages it links |
 | how to write a plugin | the next section of this file |
 | the smoke workflows: layout, running one locally, the negative-case pattern | `docs/smoke.md` |
-
-## Status
-
-[![tests](https://github.com/thetanil/qwe/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/tests.yml)
-[![asan](https://github.com/thetanil/qwe/actions/workflows/asan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/asan.yml)
-[![ubsan](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml)
-[![valgrind](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml)
-[![coverage](https://github.com/thetanil/qwe/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/coverage.yml)
-[![coverage percent](https://img.shields.io/endpoint?url=https://thetanil.com/qwe/coverage.json)](https://thetanil.com/qwe/)
-[![smoke](https://github.com/thetanil/qwe/actions/workflows/smoke.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/smoke.yml)
-[![nightly](https://github.com/thetanil/qwe/actions/workflows/nightly.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/nightly.yml)
-[![fuzz](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml)
-[![release](https://github.com/thetanil/qwe/actions/workflows/release.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/release.yml)
-
-Implemented with Claude using [Matt Pocock's skills](https://github.com/mattpocock/skills).
 
 ## Writing a plugin
 
@@ -329,3 +328,25 @@ never tags, so a tag that was only created locally does nothing.
    `main`, then move the tag: `git tag -d v0.2.0 && git push origin :refs/tags/v0.2.0`, tag the fixed
    commit and push it again.
 
+## Credits
+
+Implemented with Claude using [Matt Pocock's skills](https://github.com/mattpocock/skills).
+
+Every dependency actually linked into the shipped binary, vendored under `third_party/`
+(`bazel run //tools/credits:gen -- --update` refreshes this table from each package's
+`VERSION` file):
+
+<!-- credits:start -->
+| Name | Upstream | Version | License |
+|---|---|---|---|
+| dkjson | [dkolf.de](https://dkolf.de) | 2.8 | MIT |
+| libsodium | [jedisct1/libsodium](https://github.com/jedisct1/libsodium) | 1.0.20 | ISC |
+| libyaml | [yaml/libyaml](https://github.com/yaml/libyaml) | 0.2.5 | MIT |
+| LPeg | [lpeg.org](https://lpeg.org) | 1.1.0 | MIT |
+| lrexlib | [rrthomas/lrexlib](https://github.com/rrthomas/lrexlib) | 2.9.4 | MIT/X11 |
+| luacheck | [lunarmodules/luacheck](https://github.com/lunarmodules/luacheck) | 1.2.0 | MIT |
+| LuaJIT | [luajit.org](https://luajit.org) | v2.1 rolling, commit c6ffc141a876, 2026-09-08 | MIT |
+| lua-schema | [fperrad/lua-schema](https://github.com/fperrad/lua-schema) | commit 1a14a04c8586ce136d39f8e189f032a460c81ef1 | MIT |
+| PCRE2 | [pcre2project/pcre2](https://github.com/pcre2project/pcre2) | 10.44 | BSD |
+| TinyCBOR | [intel/tinycbor](https://github.com/intel/tinycbor) | v7.0 | MIT |
+<!-- credits:end -->
