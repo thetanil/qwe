@@ -89,8 +89,6 @@ specific, checked reason:
 | `bugprone-unsafe-functions`, `cert-msc24-c`, `cert-msc33-c` | Only ever `rewind()` (no `gets()` anywhere in the tree) — a `fseek`-has-error-detection style preference, not a defect. |
 | `cert-msc30-c`, `cert-msc32-c`, `cert-msc50-cpp`, `cert-msc51-cpp` | `rand()`'s "insufficient randomness" — only used for test-only scheduling-jitter simulation; the actual crypto (`src/secrets`) is libsodium's, not `rand()`'s. |
 | `clang-analyzer-optin.performance.Padding` | A performance-only field-order suggestion, not a bug; opt-in for a reason. |
-| `clang-analyzer-optin.taint.TaintedAlloc` | False positive for `tools/bcembed.c`, a local, single-user, build-time-only tool — its argv is the build's own module list, not attacker-controlled. |
-| `clang-analyzer-security.insecureAPI.strcpy` | Name-based (bans `strcpy`/`strcat` outright); every call site in this tree is bounded by explicit buffer-size arithmetic checked by hand (`src/kernel/workflow.c`'s `load_inventory` and its run-directory path). |
 
 ### snprintf: say what a cut means
 
@@ -251,3 +249,12 @@ Real bugs behind checks that had been excluded as false positives, found by
   the other two hits. The check only fires with `unix.StdCLibraryFunctions`
   on, because that checker models which calls set `errno`, so running it
   alone finds nothing.
+- `strcpy`/`strcat` are gone from `src/` and `tools/`. `load_inventory`'s
+  default path, the run directory's `/result.json`, the trace's `-` step
+  and `redact_test.c` each use `memcpy` of a length already known, or
+  `qwe_xfmt` with the buffer's size. The exclusion was name-based, so it would
+  also have let a fourth, unbounded call through.
+- **`bcembed` sized its buffers from whatever file it was given.** Found by
+  `clang-analyzer-optin.taint.TaintedAlloc`. It now refuses a source over
+  1 MiB (about 30 times the largest module, luacheck's `parser.lua`) with
+  `cannot read <file>: File too large` (`//tools:bcembed_test`).

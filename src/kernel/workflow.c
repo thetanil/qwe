@@ -448,7 +448,7 @@ static int load_inventory(lua_State *L, const char *cmd, const char *wf_path, co
 			goto fail;
 		}
 		memcpy(default_path, wf_path, dir_len);
-		strcpy(default_path + dir_len, "inventory.yaml");
+		memcpy(default_path + dir_len, "inventory.yaml", sizeof "inventory.yaml");
 		if (access(default_path, F_OK) != 0) {
 			free(default_path);
 			return 0;
@@ -1921,7 +1921,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	if (ctx.cancel_requested)
 		rc = QWE_EXIT_CANCELLED; /* the operator's cancel outranks any job outcome */
 
-	strcat(run_dir, "/result.json");
+	qwe_xfmt(run_dir + strlen(run_dir), run_dir_size - strlen(run_dir), "/result.json");
 	fp = fopen(run_dir, "w");
 	wrote = fp && qwe_result_write(fp, run_id, results, (size_t)n) == 0;
 	if (fp && fclose(fp) != 0) /* closed whether or not the write failed */

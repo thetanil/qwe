@@ -29,9 +29,7 @@ Checks: >
   -cert-msc33-c,
   -cert-msc50-cpp,
   -cert-msc51-cpp,
-  -clang-analyzer-optin.performance.Padding,
-  -clang-analyzer-optin.taint.TaintedAlloc,
-  -clang-analyzer-security.insecureAPI.strcpy
+  -clang-analyzer-optin.performance.Padding
 WarningsAsErrors: '*'
 # clang-tidy matches these against the header's path as it resolved it, which is
 # './src/...' for Bazel's `-iquote .` includes -- an anchored '^src/' never matches.

@@ -9,9 +9,14 @@
 #include <lua.h>
 #include <lualib.h>
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* The largest source bcembed takes. Its biggest input today is luacheck's
+ * parser.lua, 31 KB, so this is about 30 times that. */
+#define BCEMBED_MAX_SOURCE (1024L * 1024L)
 
 static int writer(lua_State *L, const void *p, size_t sz, void *ud)
 {
@@ -37,6 +42,11 @@ static char *slurp(const char *path, size_t *len)
 	n = fseek(fp, 0, SEEK_END) == 0 ? ftell(fp) : -1;
 	if (n < 0 || fseek(fp, 0, SEEK_SET) != 0) {
 		(void)fclose(fp);
+		return NULL;
+	}
+	if (n > BCEMBED_MAX_SOURCE) {
+		(void)fclose(fp);
+		errno = EFBIG;
 		return NULL;
 	}
 	buf = malloc((size_t)n + 1);
@@ -76,7 +86,7 @@ int main(int argc, char **argv)
 		name = strndup(argv[i], (size_t)(eq - argv[i]));
 		src = slurp(eq + 1, &len);
 		if (!src) {
-			fprintf(stderr, "bcembed: cannot read %s\n", eq + 1);
+			fprintf(stderr, "bcembed: cannot read %s: %s\n", eq + 1, strerror(errno));
 			free(name);
 			(void)fclose(out); /* failing already */
 			return 1;

@@ -49,7 +49,7 @@ TEST split_across_chunks(void)
 
 		memcpy(a, whole, cut);
 		a[cut] = '\0';
-		strcpy(b, whole + cut);
+		memcpy(b, whole + cut, strlen(whole + cut) + 1); /* whole is 13 bytes, b is 32 */
 		run(p, 2, &out);
 		OUT_EQ("aa *** bb", out);
 		qwe_redact_buf_free(&out);

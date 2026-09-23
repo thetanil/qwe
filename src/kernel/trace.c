@@ -50,7 +50,7 @@ void qwe_trace_record(struct qwe_trace *t, const char *job, long step, enum qwe_
 	if (step >= 0)
 		qwe_xfmt(stepbuf, sizeof stepbuf, "%ld", step);
 	else
-		strcpy(stepbuf, "-");
+		memcpy(stepbuf, "-", sizeof "-");
 	n = snprintf(line, sizeof line, "%ld.%06ld %s %s %s %s %s %s %s%s%s\n", sec, usec, job ? job : "-", stepbuf,
 		     qwe_lc_state_name(state), event, next ? next : "-", kind, reason ? reason : "-",
 		     detail ? " " : "", detail ? detail : "");

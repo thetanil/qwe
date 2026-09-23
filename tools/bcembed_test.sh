@@ -29,4 +29,11 @@ expect_in "writes: table" "$dir/out.c" '{"m", '
 check "full device: exit" 1 $?
 expect_in "full device: message" "$dir/err" "cannot write /dev/full"
 
+# A source over the size cap (1 MiB, about 30 times the largest module) is refused
+# before anything is allocated for it.
+head -c 1048577 /dev/zero | tr "\\0" "-" >"$dir/big.lua"
+"$bcembed" "$dir/out.c" "big=$dir/big.lua" 2>"$dir/err"
+check "over the cap: exit" 1 $?
+expect_in "over the cap: message" "$dir/err" "cannot read $dir/big.lua: File too large"
+
 exit $fail
