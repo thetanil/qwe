@@ -1,0 +1,8 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: file.line
+        with:
+          path: roDir/f.txt
+          line: hi

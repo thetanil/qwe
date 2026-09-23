@@ -59,6 +59,7 @@ filegroup(
     for name in [
         "file.ensure",
         "file.read",
+        "file.line",
         "assert",
         "backend-ssh",
         "recording",

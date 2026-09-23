@@ -1,0 +1,48 @@
+# present/append, present/replace (regexp), and absent, each run twice: changed the
+# first time, unchanged the second. check.sh proves the mode file.ensure set survives
+# every file.line edit (file.line never chmods).
+jobs:
+  f:
+    target: local
+    steps:
+      - id: seed
+        uses: file.ensure
+        with:
+          path: out.txt
+          content: "a=1\nb=2\nc=3\n"
+          mode: "0640"
+      - id: append
+        uses: file.line
+        with:
+          path: out.txt
+          line: "d=4"
+      - id: append_again
+        uses: file.line
+        with:
+          path: out.txt
+          line: "d=4"
+      - id: replace
+        uses: file.line
+        with:
+          path: out.txt
+          line: "a=99"
+          regexp: "^a="
+      - id: replace_again
+        uses: file.line
+        with:
+          path: out.txt
+          line: "a=99"
+          regexp: "^a="
+      - id: remove
+        uses: file.line
+        with:
+          path: out.txt
+          line: "b=2"
+          state: absent
+      - id: remove_again
+        uses: file.line
+        with:
+          path: out.txt
+          line: "b=2"
+          state: absent
+      - run: cat out.txt; stat -c %a out.txt

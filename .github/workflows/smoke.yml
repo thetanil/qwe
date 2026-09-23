@@ -84,6 +84,24 @@ jobs:
             echo "neg_assert_mismatch: expected message not found in the step's output" >&2
             exit 1
           }
+      # Same negative-case pattern, for file.line (09).
+      - name: neg_file_line_readonly
+        id: neg_file_line_readonly
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          bazel-bin/src/cli/qwe validate tests/smoke/neg_file_line_readonly.yml
+          bazel-bin/src/cli/qwe run tests/smoke/neg_file_line_readonly.yml --debug 2>&1 | tee "$RUNNER_TEMP/neg_file_line_readonly.out"
+      - name: neg_file_line_readonly must fail with a helpful message
+        run: |
+          if [ "${{ steps.neg_file_line_readonly.outcome }}" != "failure" ]; then
+            echo "neg_file_line_readonly: expected the step to fail, outcome was '${{ steps.neg_file_line_readonly.outcome }}'" >&2
+            exit 1
+          fi
+          grep -F "file.line: cannot write roDir/f.txt: Permission denied" "$RUNNER_TEMP/neg_file_line_readonly.out" || {
+            echo "neg_file_line_readonly: expected message not found in the step's output" >&2
+            exit 1
+          }
       - if: failure()
         uses: ./.github/actions/collect-logs
         with:
@@ -227,5 +245,23 @@ jobs:
           fi
           grep -F "assert: values differ: expected equals what we wanted, actual not what we wanted" "$RUNNER_TEMP/neg_assert_mismatch.out" || {
             echo "neg_assert_mismatch: expected message not found in the step's output" >&2
+            exit 1
+          }
+      # Same negative-case pattern, for file.line (09).
+      - name: neg_file_line_readonly
+        id: neg_file_line_readonly
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./qwe validate tests/smoke/neg_file_line_readonly.yml
+          ./qwe run tests/smoke/neg_file_line_readonly.yml 2>&1 | tee "$RUNNER_TEMP/neg_file_line_readonly.out"
+      - name: neg_file_line_readonly must fail with a helpful message
+        run: |
+          if [ "${{ steps.neg_file_line_readonly.outcome }}" != "failure" ]; then
+            echo "neg_file_line_readonly: expected the step to fail, outcome was '${{ steps.neg_file_line_readonly.outcome }}'" >&2
+            exit 1
+          fi
+          grep -F "file.line: cannot write roDir/f.txt: Permission denied" "$RUNNER_TEMP/neg_file_line_readonly.out" || {
+            echo "neg_file_line_readonly: expected message not found in the step's output" >&2
             exit 1
           }

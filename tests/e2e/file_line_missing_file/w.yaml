@@ -1,0 +1,20 @@
+# A missing file with state: absent is already in state; a missing file with state:
+# present (the default) is created with the line.
+jobs:
+  f:
+    target: local
+    steps:
+      - id: absent
+        uses: file.line
+        with:
+          path: missing_absent.txt
+          line: "x"
+          state: absent
+      - id: present
+        uses: file.line
+        with:
+          path: missing_present.txt
+          line: "hello"
+      - run: |
+          [ -e missing_absent.txt ] && echo bad || echo still-missing
+          cat missing_present.txt

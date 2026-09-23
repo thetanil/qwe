@@ -365,6 +365,12 @@ e2e_test(name = "file_read_missing")
 
 e2e_test(name = "file_read_denied")
 
+e2e_test(name = "file_line_idempotent")
+
+e2e_test(name = "file_line_missing_file")
+
+e2e_test(name = "file_line_denied")
+
 e2e_test(name = "assert_ops")
 
 e2e_test(name = "assert_mismatch")

@@ -1,6 +1,7 @@
-# smoke: file.ensure, file.read, assert (07, 08). Writes a file, reads it back, and checks
-# every output assert knows how to check; then does it all again to prove file.ensure and
-# file.read agree the second time that nothing changed.
+# smoke: file.ensure, file.read, file.line, assert (07, 08, 09). Writes a config file, reads
+# it back, patches a key with file.line (regexp, changed, then the same patch again
+# unchanged), reads the patch, then removes a line with file.line (absent, changed), and
+# reads that too.
 name: smoke file
 jobs:
   file:
@@ -10,7 +11,7 @@ jobs:
         uses: file.ensure
         with:
           path: smoke-file.txt
-          content: "hello from qwe smoke\n"
+          content: "greeting=hello from qwe smoke\nkey=old\n"
           mode: "0644"
       - id: read
         uses: file.read
@@ -19,24 +20,42 @@ jobs:
       - uses: assert
         with: {actual: "${{ steps.read.outputs.exists }}", equals: "true"}
       - uses: assert
-        with: {actual: "${{ steps.read.outputs.content }}", equals: "hello from qwe smoke\n"}
+        with: {actual: "${{ steps.read.outputs.content }}", equals: "greeting=hello from qwe smoke\nkey=old\n"}
       - uses: assert
         with: {actual: "${{ steps.read.outputs.mode }}", equals: "0644"}
       - uses: assert
         with:
           actual: "${{ steps.read.outputs.sha256 }}"
-          equals: "14de508bc3110b812b8aad58806327e6c8509b6a92ca7ac13c35a0b9d8b60377"
-      - id: ensure-again
-        uses: file.ensure
+          equals: "3dafb74c8e9b393c0b2691dc7cde2824037f15008a8daa212fedf0d7e1253272"
+      - id: patch
+        uses: file.line
         with:
           path: smoke-file.txt
-          content: "hello from qwe smoke\n"
-          mode: "0644"
-      - id: read-again
+          line: "key=patched"
+          regexp: "^key="
+      - id: patch-again
+        uses: file.line
+        with:
+          path: smoke-file.txt
+          line: "key=patched"
+          regexp: "^key="
+      - id: read-patched
         uses: file.read
         with:
           path: smoke-file.txt
       - uses: assert
-        with: {actual: "${{ steps.read-again.outputs.content }}", equals: "hello from qwe smoke\n"}
+        with:
+          actual: "${{ steps.read-patched.outputs.content }}"
+          equals: "greeting=hello from qwe smoke\nkey=patched\n"
+      - id: remove
+        uses: file.line
+        with:
+          path: smoke-file.txt
+          line: "greeting=hello from qwe smoke"
+          state: absent
+      - id: read-removed
+        uses: file.read
+        with:
+          path: smoke-file.txt
       - uses: assert
-        with: {actual: "${{ steps.read-again.outputs.mode }}", equals: "0644"}
+        with: {actual: "${{ steps.read-removed.outputs.content }}", equals: "key=patched\n"}

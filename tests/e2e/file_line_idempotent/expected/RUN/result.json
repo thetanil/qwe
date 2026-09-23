@@ -1,0 +1,88 @@
+{
+  "run_id": "RUN",
+  "jobs": {
+    "f": {
+      "outcome": "success",
+      "reason": null,
+      "started": "TIME",
+      "ended": "TIME",
+      "duration_ms": DURATION,
+      "dropped_bytes": 0,
+      "steps": [
+        {
+          "id": "seed",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION,
+          "outputs": {"mode":"0640"}
+        },
+        {
+          "id": "append",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        },
+        {
+          "id": "append_again",
+          "outcome": "success",
+          "reason": null,
+          "changed": false,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        },
+        {
+          "id": "replace",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        },
+        {
+          "id": "replace_again",
+          "outcome": "success",
+          "reason": null,
+          "changed": false,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        },
+        {
+          "id": "remove",
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        },
+        {
+          "id": "remove_again",
+          "outcome": "success",
+          "reason": null,
+          "changed": false,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        },
+        {
+          "id": null,
+          "outcome": "success",
+          "reason": null,
+          "changed": true,
+          "started": "TIME",
+          "ended": "TIME",
+          "duration_ms": DURATION
+        }
+      ]
+    }
+  }
+}
