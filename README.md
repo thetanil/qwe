@@ -103,6 +103,7 @@ bazel test //...                                            # the unit, plugin a
 | the ssh backend and its security decisions | `docs/qwe-ssh-sec.md` |
 | how it is checked (sanitizers, valgrind, coverage, fuzzing) | `docs/ci-checks.md` and the pages it links |
 | how to write a plugin | the next section of this file |
+| the smoke workflows: layout, running one locally, the negative-case pattern | `docs/smoke.md` |
 
 ## Status
 
@@ -216,6 +217,8 @@ To have a built-in plugin measured, add it to the repo like the others:
    merger drops the file from the report without a warning.
 4. Write the tests that should exercise it (a Lua test through `luarun`, or an e2e case under
    `tests/e2e/`). Only code those tests run is counted as hit.
+5. Add a smoke workflow that uses it under `tests/smoke/` (see `docs/smoke.md`).
+   `tests/smoke:coverage_test` fails `bazel test //...` if a built-in plugin has none.
 
 One command runs the coverage and writes the HTML (needs `genhtml`, from the `lcov` package):
 

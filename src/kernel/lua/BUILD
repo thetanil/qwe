@@ -126,6 +126,10 @@ exports_files([
     "workflow.schema.json",
 ])
 
+# The BUILD file itself, so tests/smoke:coverage_test can read MODULES (the built-in
+# plugin registry: every "plugin.<name>" and "backend.<name>") without duplicating it.
+exports_files(["BUILD"], visibility = ["//tests/smoke:__pkg__"])
+
 genrule(
     name = "gen_modules",
     srcs = MODULES.values() + [
