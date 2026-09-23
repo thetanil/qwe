@@ -37,6 +37,15 @@ jobs:
         run: |
           bazel-bin/src/cli/qwe validate tests/smoke/smoke_apt.yml &&
           bazel-bin/src/cli/qwe run tests/smoke/smoke_apt.yml --debug --summary "$GITHUB_STEP_SUMMARY"
+      # become (11) needs real passwordless sudo: same skip-in-bazel story as smoke_apt.
+      - name: smoke_become
+        run: |
+          bazel-bin/src/cli/qwe validate tests/smoke/smoke_become.yml &&
+          bazel-bin/src/cli/qwe run tests/smoke/smoke_become.yml --debug --summary "$GITHUB_STEP_SUMMARY"
+      # secrets (11): gen_secrets.sh generates smoke_secrets.yml from its .in template with
+      # a fresh per-run encrypted value, runs it, and asserts the value leaked nowhere.
+      - name: smoke_secrets
+        run: tests/smoke/gen_secrets.sh bazel-bin/src/cli/qwe tests/smoke
       # Same negative-case pattern as the smoke job below (06).
       - name: neg_file_ensure_denied
         id: neg_file_ensure_denied
@@ -240,6 +249,15 @@ jobs:
         run: |
           ./qwe validate tests/smoke/smoke_apt.yml &&
           ./qwe run tests/smoke/smoke_apt.yml --summary "$GITHUB_STEP_SUMMARY"
+      # become (11) needs real passwordless sudo: same skip-in-bazel story as smoke_apt.
+      - name: smoke_become
+        run: |
+          ./qwe validate tests/smoke/smoke_become.yml &&
+          ./qwe run tests/smoke/smoke_become.yml --summary "$GITHUB_STEP_SUMMARY"
+      # secrets (11): gen_secrets.sh generates smoke_secrets.yml from its .in template with
+      # a fresh per-run encrypted value, runs it, and asserts the value leaked nowhere.
+      - name: smoke_secrets
+        run: tests/smoke/gen_secrets.sh ./qwe tests/smoke
       # The negative-case pattern (06), repeated by later tickets: the workflow step is
       # continue-on-error and tees qwe's output to a file; the assertion step right after it
       # fails the job unless the step's outcome was failure and the file has the expected

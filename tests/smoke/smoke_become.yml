@@ -1,0 +1,45 @@
+# smoke: become (14). Proves become: true and become: <user> really change who a command
+# runs as, using only plugins already covered elsewhere (run, file.ensure, file.read,
+# assert). Needs real passwordless sudo, so it only runs for real in the smoke GitHub job;
+# skipped inside the Bazel sandbox.
+#
+# become: <user> steps into an unprivileged, un-owned account, and $QWE_OUTPUT is created
+# 0600 by the invoking user (workflow.c's make_output_file, deliberately, so a secret
+# written there is never readable by another user) -- so a become: nobody step cannot
+# itself write $QWE_OUTPUT. It proves who it ran as by writing a plain file into a
+# world-writable directory instead, which a later, non-become'd file.read step reads back.
+# smoke: skip-in-bazel: needs real passwordless sudo that the sandbox does not have
+name: smoke become
+jobs:
+  become:
+    target: local
+    steps:
+      - id: as-root
+        run: echo "uid=$(id -u)" >> "$QWE_OUTPUT"
+        become: true
+      - uses: assert
+        with: {actual: "${{ steps.as-root.outputs.uid }}", equals: "0"}
+      - run: mkdir -m 777 world-writable
+        become: true
+      - run: id -un > world-writable/whoami.txt
+        become: nobody
+      - id: read-nobody-file
+        uses: file.read
+        with:
+          path: world-writable/whoami.txt
+      - uses: assert
+        with: {actual: "${{ steps.read-nobody-file.outputs.content }}", equals: "nobody\n"}
+      - uses: assert
+        with: {actual: "${{ steps.read-nobody-file.outputs.owner }}", equals: "nobody"}
+      - id: ensure-root-file
+        uses: file.ensure
+        with:
+          path: root-owned.txt
+          content: "hi\n"
+        become: true
+      - id: read-root-file
+        uses: file.read
+        with:
+          path: root-owned.txt
+      - uses: assert
+        with: {actual: "${{ steps.read-root-file.outputs.owner }}", equals: "root"}

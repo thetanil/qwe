@@ -4,7 +4,9 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 # so the smoke workflows cannot rot between the pushes that actually exercise them in CI.
 # Timing is not checked here, and a workflow marked "# smoke: skip-in-bazel: <reason>" (become,
 # apt -- anything that needs privileges or real package installs the sandbox cannot give) is
-# skipped: it still runs for real in the smoke GitHub job.
+# skipped: it still runs for real in the smoke GitHub job. Also runs gen_secrets.sh (11),
+# which generates and runs smoke_secrets.yml from smoke_secrets.yml.in itself, needing
+# neither privilege nor a real package: it is not skip-in-bazel.
 sh_test(
     name = "smoke_workflows_test",
     size = "small",
@@ -13,5 +15,5 @@ sh_test(
         "$(location //src/cli:qwe)",
         package_name(),
     ],
-    data = ["//src/cli:qwe"] + glob(["*.yml"]),
+    data = ["//src/cli:qwe", "gen_secrets.sh", "smoke_secrets.yml.in"] + glob(["*.yml"]),
 )
