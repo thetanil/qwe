@@ -1,0 +1,12 @@
+# smoke: negative case. apt.package installing a package that does not exist must fail
+# with a clean, helpful message (06's I/O-error work, reused by apt.package (10)). The
+# GitHub step that runs this is continue-on-error, and the step after it asserts the
+# failure and the message (see smoke.yml).
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: apt.package
+        with:
+          name: no-such-package-xyz
+        become: true

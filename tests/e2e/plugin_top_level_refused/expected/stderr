@@ -1,4 +1,4 @@
 qwe validate: .qwe/plugins/side/plugin.lua:2:11: top-level code is not allowed in a plugin: a call would run when the file loads; put it in check or apply, or in a function they call
 qwe validate: .qwe/plugins/side/plugin.lua:3:1: top-level code is not allowed in a plugin: a method call would run when the file loads; put it in check or apply, or in a function they call
 qwe validate: .qwe/plugins/side/plugin.lua:4:1: top-level code is not allowed in a plugin: a method call would run when the file loads; put it in check or apply, or in a function they call
-qwe validate: w.yaml:5:15: unknown plugin "side" (built-in: file.ensure, file.read, file.line, assert)
+qwe validate: w.yaml:5:15: unknown plugin "side" (built-in: file.ensure, file.read, file.line, apt.package, assert)

@@ -1,0 +1,11 @@
+# smoke: negative case. apt.package never escalates by itself: installing without
+# become: true must fail with a clean "are you root?" message, not silently do nothing.
+# The GitHub step that runs this is continue-on-error, and the step after it asserts the
+# failure and the message (see smoke.yml).
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: apt.package
+        with:
+          name: hello

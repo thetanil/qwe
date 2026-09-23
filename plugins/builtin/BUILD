@@ -60,6 +60,7 @@ filegroup(
         "file.ensure",
         "file.read",
         "file.line",
+        "apt.package",
         "assert",
         "backend-ssh",
         "recording",

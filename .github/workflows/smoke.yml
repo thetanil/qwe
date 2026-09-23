@@ -30,6 +30,13 @@ jobs:
         run: |
           bazel-bin/src/cli/qwe validate tests/smoke/smoke_run.yml &&
           bazel-bin/src/cli/qwe run tests/smoke/smoke_run.yml --debug --summary "$GITHUB_STEP_SUMMARY"
+      # apt.package (10) needs real apt-get and root: `# smoke: skip-in-bazel:` in
+      # smoke_apt.yml itself keeps the full Bazel suite from ever trying to run it, so it
+      # needs this explicit step, like smoke_run above.
+      - name: smoke_apt
+        run: |
+          bazel-bin/src/cli/qwe validate tests/smoke/smoke_apt.yml &&
+          bazel-bin/src/cli/qwe run tests/smoke/smoke_apt.yml --debug --summary "$GITHUB_STEP_SUMMARY"
       # Same negative-case pattern as the smoke job below (06).
       - name: neg_file_ensure_denied
         id: neg_file_ensure_denied
@@ -100,6 +107,42 @@ jobs:
           fi
           grep -F "file.line: cannot write roDir/f.txt: Permission denied" "$RUNNER_TEMP/neg_file_line_readonly.out" || {
             echo "neg_file_line_readonly: expected message not found in the step's output" >&2
+            exit 1
+          }
+      # Same negative-case pattern, for apt.package (10): an unknown package name.
+      - name: neg_apt_unknown
+        id: neg_apt_unknown
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          bazel-bin/src/cli/qwe validate tests/smoke/neg_apt_unknown.yml
+          bazel-bin/src/cli/qwe run tests/smoke/neg_apt_unknown.yml --debug 2>&1 | tee "$RUNNER_TEMP/neg_apt_unknown.out"
+      - name: neg_apt_unknown must fail with a helpful message
+        run: |
+          if [ "${{ steps.neg_apt_unknown.outcome }}" != "failure" ]; then
+            echo "neg_apt_unknown: expected the step to fail, outcome was '${{ steps.neg_apt_unknown.outcome }}'" >&2
+            exit 1
+          fi
+          grep -F "apt.package: no package no-such-package-xyz" "$RUNNER_TEMP/neg_apt_unknown.out" || {
+            echo "neg_apt_unknown: expected message not found in the step's output" >&2
+            exit 1
+          }
+      # Same negative-case pattern, for apt.package (10): installing without become: true.
+      - name: neg_apt_no_become
+        id: neg_apt_no_become
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          bazel-bin/src/cli/qwe validate tests/smoke/neg_apt_no_become.yml
+          bazel-bin/src/cli/qwe run tests/smoke/neg_apt_no_become.yml --debug 2>&1 | tee "$RUNNER_TEMP/neg_apt_no_become.out"
+      - name: neg_apt_no_become must fail with a helpful message
+        run: |
+          if [ "${{ steps.neg_apt_no_become.outcome }}" != "failure" ]; then
+            echo "neg_apt_no_become: expected the step to fail, outcome was '${{ steps.neg_apt_no_become.outcome }}'" >&2
+            exit 1
+          fi
+          grep -F "apt.package: cannot install hello: are you root? (set become: true)" "$RUNNER_TEMP/neg_apt_no_become.out" || {
+            echo "neg_apt_no_become: expected message not found in the step's output" >&2
             exit 1
           }
       - if: failure()
@@ -190,6 +233,13 @@ jobs:
         run: |
           ./qwe validate tests/smoke/smoke_run.yml &&
           ./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"
+      # apt.package (10) needs real apt-get and root: `# smoke: skip-in-bazel:` in
+      # smoke_apt.yml itself keeps the full Bazel suite from ever trying to run it, so it
+      # needs this explicit step, like smoke_run above.
+      - name: smoke_apt
+        run: |
+          ./qwe validate tests/smoke/smoke_apt.yml &&
+          ./qwe run tests/smoke/smoke_apt.yml --summary "$GITHUB_STEP_SUMMARY"
       # The negative-case pattern (06), repeated by later tickets: the workflow step is
       # continue-on-error and tees qwe's output to a file; the assertion step right after it
       # fails the job unless the step's outcome was failure and the file has the expected
@@ -263,5 +313,41 @@ jobs:
           fi
           grep -F "file.line: cannot write roDir/f.txt: Permission denied" "$RUNNER_TEMP/neg_file_line_readonly.out" || {
             echo "neg_file_line_readonly: expected message not found in the step's output" >&2
+            exit 1
+          }
+      # Same negative-case pattern, for apt.package (10): an unknown package name.
+      - name: neg_apt_unknown
+        id: neg_apt_unknown
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./qwe validate tests/smoke/neg_apt_unknown.yml
+          ./qwe run tests/smoke/neg_apt_unknown.yml 2>&1 | tee "$RUNNER_TEMP/neg_apt_unknown.out"
+      - name: neg_apt_unknown must fail with a helpful message
+        run: |
+          if [ "${{ steps.neg_apt_unknown.outcome }}" != "failure" ]; then
+            echo "neg_apt_unknown: expected the step to fail, outcome was '${{ steps.neg_apt_unknown.outcome }}'" >&2
+            exit 1
+          fi
+          grep -F "apt.package: no package no-such-package-xyz" "$RUNNER_TEMP/neg_apt_unknown.out" || {
+            echo "neg_apt_unknown: expected message not found in the step's output" >&2
+            exit 1
+          }
+      # Same negative-case pattern, for apt.package (10): installing without become: true.
+      - name: neg_apt_no_become
+        id: neg_apt_no_become
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./qwe validate tests/smoke/neg_apt_no_become.yml
+          ./qwe run tests/smoke/neg_apt_no_become.yml 2>&1 | tee "$RUNNER_TEMP/neg_apt_no_become.out"
+      - name: neg_apt_no_become must fail with a helpful message
+        run: |
+          if [ "${{ steps.neg_apt_no_become.outcome }}" != "failure" ]; then
+            echo "neg_apt_no_become: expected the step to fail, outcome was '${{ steps.neg_apt_no_become.outcome }}'" >&2
+            exit 1
+          fi
+          grep -F "apt.package: cannot install hello: are you root? (set become: true)" "$RUNNER_TEMP/neg_apt_no_become.out" || {
+            echo "neg_apt_no_become: expected message not found in the step's output" >&2
             exit 1
           }

@@ -13,6 +13,7 @@ local BUILTIN = {
   { name = "file.ensure", uses = true },
   { name = "file.read", uses = true },
   { name = "file.line", uses = true },
+  { name = "apt.package", uses = true },
   { name = "assert", uses = true },
 }
 

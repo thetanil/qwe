@@ -1,0 +1,55 @@
+# smoke: apt.package (10). Installs and removes the small `hello` package, proving both
+# check/apply branches (not installed -> install, installed -> remove) and their second-run
+# idempotency. Needs real apt-get and root (become), so it only runs for real in the smoke
+# GitHub job; the Bazel sandbox has neither.
+# smoke: skip-in-bazel: needs real apt-get and root (become) that the sandbox does not have
+name: smoke apt
+jobs:
+  apt:
+    target: local
+    steps:
+      - run: apt-get update
+        become: true
+      # Removes hello if the runner image already has it, or is a no-op if not: covers both
+      # of apt.package's branches over the life of this run, whichever the runner starts in.
+      - id: start-absent
+        uses: apt.package
+        with:
+          name: hello
+          state: absent
+        become: true
+      - id: list-absent
+        run: |
+          echo "count=$(apt list --installed hello 2>/dev/null | grep -c '^hello/')" >> "$QWE_OUTPUT"
+      - uses: assert
+        with: {actual: "${{ steps.list-absent.outputs.count }}", equals: "0"}
+      - id: install
+        uses: apt.package
+        with:
+          name: hello
+        become: true
+      - uses: assert
+        with: {actual: "${{ steps.install.outputs.version }}", matches: ".+"}
+      - id: install-again
+        uses: apt.package
+        with:
+          name: hello
+        become: true
+      - run: hello
+      - id: remove
+        uses: apt.package
+        with:
+          name: hello
+          state: absent
+        become: true
+      - id: remove-again
+        uses: apt.package
+        with:
+          name: hello
+          state: absent
+        become: true
+      - id: list-removed
+        run: |
+          echo "count=$(apt list --installed hello 2>/dev/null | grep -c '^hello/')" >> "$QWE_OUTPUT"
+      - uses: assert
+        with: {actual: "${{ steps.list-removed.outputs.count }}", equals: "0"}
