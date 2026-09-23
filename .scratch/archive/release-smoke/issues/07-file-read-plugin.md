@@ -30,7 +30,7 @@ file) to smoke.yml.
 - [x] An unreadable file: the one-line error, `failed`/`plugin-error`: `e2e: tests/e2e/file_read_denied/` (skipped as root)
 - [x] Command shapes and parsing against the recording backend (path quoting, a stat failure, a sha256sum failure): `plugin: plugins/builtin/file.read/test.lua::outputs`, `::missing`, `::denied`
 - [x] The summary shows file.read as `unchanged`: `e2e: tests/e2e/file_read_outputs/` (summary.md golden)
-- [ ] The smoke.yml negative for an unreadable file passes: `manual: push; check the run` (not run, see comments)
+- [x] The smoke.yml negative for an unreadable file passes: `manual: push; check the run` — done, [run 35865874382, job 107198012432](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432): `neg_file_read_denied` and its assertion step both `success`
 - [x] `bazel test //...` green; the coverage floor holds (new file listed with `--update`)
 
 ## Comments
@@ -88,3 +88,7 @@ file) to smoke.yml.
   `src/kernel/summary.h` newly listed at 0), which is the ratchet working as designed.
 - `bazel test //...`: 234 passed, 3 skipped (pre-existing: asan/ubsan/valgrind smoke), 0
   failed.
+
+- **Update, after the user pushed (2026-09-23):** the manual criterion is closed for real —
+  [run 35865874382, job 107198012432](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432)
+  shows `neg_file_read_denied` and its assertion step both `success`.

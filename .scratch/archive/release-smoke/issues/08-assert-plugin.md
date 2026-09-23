@@ -31,7 +31,7 @@ Convert `smoke_run.yml`'s `test` checks to `assert` steps where one fits.
 - [x] It runs no backend command: `plugin: plugins/builtin/assert/test.lua::no_commands` (recording backend records nothing)
 - [x] An asserted secret is redacted in the error: `e2e: tests/e2e/assert_secret_redacted/`
 - [x] `smoke_file.yml` passes in the Bazel suite: `e2e: tests/smoke:smoke_workflows_test`
-- [ ] The smoke.yml negative for a mismatch passes: `manual: push; check the run and its summary` (not run, see comments)
+- [x] The smoke.yml negative for a mismatch passes: `manual: push; check the run and its summary` — done, [run 35865874382, job 107198012432](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432): `neg_assert_mismatch` and its assertion step both `success`
 - [x] `bazel test //...` green; the coverage floor holds
 
 ## Comments
@@ -102,3 +102,7 @@ Convert `smoke_run.yml`'s `test` checks to `assert` steps where one fits.
   uncovered lines), no regressions elsewhere; `floor.txt` gained one line.
 - `bazel test //...`: 239 passed, 3 skipped (pre-existing: asan/ubsan/valgrind smoke), 0
   failed.
+
+- **Update, after the user pushed (2026-09-23):** the manual criterion is closed for real —
+  [run 35865874382, job 107198012432](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432)
+  shows `neg_assert_mismatch` and its assertion step both `success`.

@@ -9,6 +9,14 @@ or a workflow has no badge. `.github/actions/setup` is the shared setup: the run
 and an sshd on `172.18.0.1` for the ssh e2e cases (`QWE_E2E_REQUIRE_SSH=1` makes a
 skipped one a failure).
 
+That "command is in no workflow" check is a plain substring match across every file under
+`.github/workflows/`, not a real wiring check tied to the workflow that is supposed to run
+the command. Quoting a command from this file verbatim in an unrelated comment (for
+example, mentioning `` `bazel test //...` `` in a `smoke.yml` comment while the command
+itself belongs to `tests.yml`) satisfies the check even though nothing new is actually
+wired up. Describe a command in prose instead of quoting it exactly when the quote would
+land somewhere other than the workflow that runs it.
+
 | Check | Workflow | Command | Cadence | Cost | Fails when |
 |---|---|---|---|---|---|
 | Tests | `tests.yml` | `bazel test //...` | every push to main | seconds, warm cache | any test fails |

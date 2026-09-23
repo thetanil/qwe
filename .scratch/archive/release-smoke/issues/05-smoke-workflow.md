@@ -36,9 +36,9 @@ test rules 1–3 hold.
 
 - [x] `smoke_run.yml` passes with the fastbuild binary in the Bazel suite: `e2e: tests/smoke:smoke_workflows_test`
 - [x] The drift test accepts smoke.yml (badge, workflow_call, push to main, commands listed): `unit: tools/ci/workflows_test.sh::repo_is_consistent`
-- [ ] On a push to main, build and smoke are green, and the run summary shows the smoke_run report from 02: `manual: push; open the run; screenshot or paste the summary into a comment` (not run: this session never pushes, per the workspace's "never push" rule; see comments)
-- [ ] Deliberately breaking `smoke_run.yml` (for example `exit 1` in a step) on a branch dispatch fails the smoke step and the job: `manual: workflow_dispatch on a scratch branch; record the run URL` (not run, same reason)
-- [ ] The smoke job's log shows `statically linked`: `manual: same run` (not run on GitHub; verified equivalently below)
+- [x] On a push to main, build and smoke are green, and the run summary shows the smoke_run report from 02: `manual: push; open the run; screenshot or paste the summary into a comment` — done, [run 35875671339](https://github.com/thetanil/qwe/actions/runs/35875671339): `debug-smoke`, `build`, `smoke` (and `perf`, 15) all green
+- [ ] Deliberately breaking `smoke_run.yml` (for example `exit 1` in a step) on a branch dispatch fails the smoke step and the job: `manual: workflow_dispatch on a scratch branch; record the run URL` — still not done; tracked in `.scratch/release-smoke-verification`
+- [x] The smoke job's log shows `statically linked`: `manual: same run` — confirmed on the real runner, [job 107231482314, step 5](https://github.com/thetanil/qwe/actions/runs/35875671339/job/107231482314), "The binary is statically linked": success
 - [x] `bazel test //...` green
 
 ## Comments
@@ -60,19 +60,13 @@ test rules 1–3 hold.
   commands (`bazel test --config=release //...`,
   `./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"`), which
   `tools/ci/workflows_test.sh::repo_is_consistent` confirms are wired up.
-- **The three GitHub-only manual criteria are not checked off.** This session works under
-  `thetanil/qwe/CLAUDE.md`'s "**Never push.**" rule (this project's own override of the
-  workspace default, which is otherwise "never commit"), and has no way to trigger a GitHub
-  Actions run without pushing or dispatching on the remote. What I could verify locally instead:
-  - Built the release binary and ran the exact `smoke` job commands (`file qwe | grep -q
-    "statically linked"`, then `./qwe validate ... && ./qwe run ... --summary
-    "$GITHUB_STEP_SUMMARY"`) from a scratch directory standing in for the checkout — same
-    output shape as the manual verification asks for, icons and all.
-  - `file bazel-bin/src/cli/qwe` reports `statically linked` (also re-confirmed from 04).
-  - Did not simulate the "deliberately break it" case beyond what `summary_log_tail`/
-    `summary_*` already cover in `bazel test //...` (a failing `run:` step, `continue-on-error`
-    semantics, `qwe run`'s own exit code) — those are the same mechanics the broken-branch
-    check would exercise, just not through an actual `workflow_dispatch`.
-  When the user pushes (or dispatches `smoke.yml` on a branch), these three should be
-  straightforward to close out by pasting the run's summary/log into this file.
+- **Update, after the user pushed (2026-09-23):** the first and third manual criteria are
+  now closed for real. [Run 35875671339](https://github.com/thetanil/qwe/actions/runs/35875671339)
+  (the fix for a `tools/perf:compare_test` awk portability bug that had failed the previous
+  push) shows `debug-smoke`, `build` and `smoke` all green, with `smoke`'s "The binary is
+  statically linked" step (`file qwe | grep -q "statically linked"`) succeeding for real on
+  a clean runner. The second criterion (deliberately breaking `smoke_run.yml` on a scratch
+  branch) is still open; it needs its own throwaway branch and dispatch, distinct from what
+  this push exercised, and is tracked in `.scratch/release-smoke-verification` rather than
+  left silently unchecked in an archived ticket.
 - `bazel test //...`: 225 passed, 3 skipped (pre-existing), 0 failed. Coverage floor holds.

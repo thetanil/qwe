@@ -30,6 +30,17 @@ awk -v f=src/kernel/luafs.c '/^SF:/{on=($0=="SF:"f)} on&&/^DA:/{split(substr($0,
 Branch data is not produced by this toolchain (`lcov` reports "no data found"); lines and
 functions are.
 
+## A toolchain quirk: prefer a flat guard clause to a nested return-only block
+
+LuaJIT/luacov can mark a bare `end` closing an `if x then ... end` block as an uncovered,
+unreachable line when that block is *nested inside* another `if/else`, even when every
+branch inside it is exercised by a test. Flattening it to a single-level guard clause
+(`if not x then ... end` followed by unconditional code, the style `checkapply.lua` already
+uses) makes the line disappear from the instrumented set entirely instead of showing as a
+phantom miss. If the coverage floor rejects a line that every test path clearly reaches,
+check whether it is a return-only block nested inside an `if/else` before assuming the test
+is missing one.
+
 ## Baseline (2026-09-20, before quality/05's tests)
 
 Whole report: 74.2% of lines (3404 of 4587), 85.8% of functions (314 of 366), 139 test

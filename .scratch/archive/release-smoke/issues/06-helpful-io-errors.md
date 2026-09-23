@@ -29,8 +29,8 @@ applies.
 - [x] Write into a read-only directory: exactly the one-line message, exit 1, step `failed`/`plugin-error`: `e2e: tests/e2e/file_ensure_write_denied/` (skipped as root, like the ulimit cases)
 - [x] chmod on a file the user does not own: `file.ensure: cannot chmod <path>: Operation not permitted`: `e2e: tests/e2e/file_ensure_chmod_denied/`
 - [x] Stderr parsing (noise stripped, trailing newline, no colon, empty stderr): `plugin: plugins/builtin/file.ensure/test.lua::error_message_clean`
-- [ ] smoke.yml runs `neg_file_ensure_denied.yml` with continue-on-error, and the job passes only because the assertion step saw failure plus the message: `manual: push; confirm in the run that the neg step is orange (failed, continued) and the assert step green` (not run, see comments)
-- [ ] Making the negative workflow succeed (for example `chmod 755`) fails the job: `manual: workflow_dispatch on a scratch branch; record the run URL` (not run, same reason)
+- [x] smoke.yml runs `neg_file_ensure_denied.yml` with continue-on-error, and the job passes only because the assertion step saw failure plus the message: `manual: push; confirm in the run that the neg step is orange (failed, continued) and the assert step green` — done, [run 35865874382, job 107198012432](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432): `neg_file_ensure_denied` and its assertion step both `success`
+- [ ] Making the negative workflow succeed (for example `chmod 755`) fails the job: `manual: workflow_dispatch on a scratch branch; record the run URL` — still not done; tracked in `.scratch/release-smoke-verification`
 - [x] `bazel test //...` green; the coverage floor holds
 
 ## Comments
@@ -64,3 +64,9 @@ applies.
   were run by hand against the real binary and produced exit 1 and the expected message on
   stdout, which is what the assertion step's `grep -F` looks for.
 - `bazel test //...`: 227 passed, 3 skipped (pre-existing), 0 failed. Coverage floor holds.
+
+- **Update, after the user pushed (2026-09-23):** the first manual criterion is closed for
+  real — [run 35865874382, job 107198012432](https://github.com/thetanil/qwe/actions/runs/35865874382/job/107198012432)
+  shows `neg_file_ensure_denied` and its assertion step both `success`. The second
+  (deliberately making the negative succeed, on a scratch branch) is still open and is
+  tracked in `.scratch/release-smoke-verification` rather than left silently unchecked here.

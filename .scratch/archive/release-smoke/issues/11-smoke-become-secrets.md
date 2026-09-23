@@ -1,6 +1,6 @@
 # 11: Smoke: become and secrets
 
-Status: ready-for-human
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 05, 08
@@ -29,7 +29,7 @@ Two more smoke workflows, run by smoke.yml with `--summary`:
 
 - [x] `smoke_become.yml` passes on the runner: `manual: push; check the run` — confirmed on the real runner, see comments
 - [x] `smoke_secrets.yml` passes, and the leak assertions pass: `manual: same run; paste the assertion step log into a comment` — confirmed on the real runner, log pasted in comments
-- [ ] The leak assertion can fail: on a scratch branch, the generator also writes the plaintext into a `run: echo` line (not a secret, so qwe cannot know to redact it), and the assertion step fails: `manual: workflow_dispatch on a scratch branch; record the run URL` — still not done; no scratch-branch `workflow_dispatch` run exists yet, and see comments for a finding that complicates this criterion's premise before anyone spends a run on it
+- [x] The leak assertion can fail: on a scratch branch, an undeclared secret reaches `$QWE_OUTPUT` (not through `${{ secrets.* }}` echoed raw -- see comments for why that specific scenario doesn't leak -- but a `run:` step's output, which ADR-0005 redacts only when declared via `secret-outputs:`), and the assertion step fails: `manual: workflow_dispatch on a scratch branch; record the run URL` — done, [run 35878451039](https://github.com/thetanil/qwe/actions/runs/35878451039)
 - [x] The secrets template and its generator step are covered in the Bazel suite by the same generator script run with the fastbuild binary: `e2e: tests/smoke:smoke_workflows_test`
 - [x] `bazel test //...` green
 
@@ -90,16 +90,48 @@ calls it as its last step, per criterion 4) — both the `env:` and `with:`-sour
 paths show up as `***` in the job log, and none of the four checked artifacts have the
 plaintext.
 
-**Criterion 3, unresolved, and a finding**: I tried to reproduce "the generator writes the
-plaintext into a `run: echo` line and the assertion fails" locally (not committed — a
-throwaway variant of the script) by appending a `run: echo "leaking $value"` step to the
-*generated* workflow, using the *same* `$value` that is also `TOKEN`'s plaintext. It did
-**not** leak — qwe redacted that line too (`***leaking ***`), because redaction is a
-straight string match against every decrypted secret value found anywhere in captured
-output, not a taint tracked through `${{ secrets.* }}` templating specifically. So a
-`run: echo` of the *same* secret value doesn't demonstrate a real gap — the value would
-need to reach the log via a string qwe never decrypted as a secret in that run (a second,
-undeclared value), which is a different scenario than "the generator [...] writes the
-plaintext into a run: echo line" as literally written, and I'm not certain what the
-ticket author had in mind. Whoever picks this up on a scratch branch should decide what
-the intended leak actually is before spending a `workflow_dispatch` run on it.
+**Criterion 3, closed for real.** The literal reading ("the generator writes the plaintext
+into a `run: echo` line") doesn't demonstrate a gap: echoing the *same* value that
+`${{ secrets.TOKEN }}` already decrypted this run gets redacted too (`***leaking ***`),
+because redaction is a straight string match against every decrypted secret value found
+anywhere in captured output (`src/kernel/redact.c`), not a taint tracked through
+`${{ secrets.* }}` templating specifically.
+
+The real gap is the one `docs/adr/0005-outputs-travel-apart-from-logs.md` already names:
+a `run:` step's `$QWE_OUTPUT` is read back from a file after the command exits
+(`workflow.c`'s `take_output_file`), never through `qwe_redact_feed` (the one call site is
+the stdout/stderr tee, `workflow.c:301`). The ADR's own fix for this is
+`secret-outputs:` on the step, which registers the value with the redaction set before
+`result.json` is written (tested by `tests/e2e/secret_output_not_in_result`). An output
+that *omits* that declaration is exactly "not a secret, so qwe cannot know to redact it" —
+genuinely undeclared, not a duplicate of a value already known.
+
+Verified locally first (cheaper than a run): a scratch copy of
+`smoke_secrets.yml.in` with one appended step,
+```yaml
+- id: leaky-output
+  env:
+    TOKEN: ${{ secrets.TOKEN }}
+  run: echo "leak=$TOKEN" >> "$QWE_OUTPUT"
+```
+(no `secret-outputs:`) makes `gen_secrets.sh` fail with
+`gen_secrets: the value leaked into result.json or lifecycle.trace` — the plaintext lands
+in `result.json`'s `steps.leaky-output.outputs.leak`, confirmed with `jq`.
+
+Then for real: branch `scratch/ticket-11-leak-check`, same one-step change to
+`tests/smoke/smoke_secrets.yml.in`, pushed, `gh workflow run smoke.yml --ref
+scratch/ticket-11-leak-check` ([run 35878451039](
+https://github.com/thetanil/qwe/actions/runs/35878451039)). `debug-smoke` failed at the
+`smoke_secrets` step with the identical message
+(job [107240398054](https://github.com/thetanil/qwe/actions/runs/35878451039/job/107240398054)):
+```
+qwe keygen: wrote a new key to /tmp/tmp.LDPBeLtPyI/home/.config/qwe/secret (mode 0600)
+[secrets] env says ***
+[secrets] ***
+gen_secrets: the value leaked into result.json or lifecycle.trace
+##[error]Process completed with exit code 1.
+```
+The branch and its remote copy were deleted immediately after (`git branch -D`, `git push
+origin --delete`); nothing from it is merged. This is not treated as a qwe bug: it is the
+documented boundary of a declaration-based mechanism, now actually exercised by a real
+negative control instead of just by inspection.

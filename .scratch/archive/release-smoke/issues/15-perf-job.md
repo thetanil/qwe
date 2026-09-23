@@ -28,10 +28,10 @@ real comparison is against v0.2.0 (`-O0`), so expect a speedup; note it on the t
 
 ## Acceptance criteria
 
-- [ ] A push to main: the perf job is green, the summary has the header, the verdict and the tables: `manual: push; paste the header and verdict into a comment` (not run: this session never pushes; see comments)
-- [ ] `baseline: self` dispatched 5 times → no regression in any run: `manual: record the 5 run URLs` (not run, same reason)
-- [ ] A scratch branch that adds a 5 ms busy-wait to the `run` plugin's path → the perf job fails and names the affected keys: `manual: workflow_dispatch; record the URL; do not merge` (not run, same reason)
-- [ ] A checksum mismatch in the baseline download fails the job before any run: `manual: scratch branch with a corrupted expected sum` (not run, same reason)
+- [x] A push to main: the perf job is green, the summary has the header, the verdict and the tables: `manual: push; paste the header and verdict into a comment` — done, [run 35875671339](https://github.com/thetanil/qwe/actions/runs/35875671339), see comments for the header/verdict/tables and the first real v0.2.0 comparison
+- [ ] `baseline: self` dispatched 5 times → no regression in any run: `manual: record the 5 run URLs` — still not done; tracked in `.scratch/release-smoke-verification`
+- [ ] A scratch branch that adds a 5 ms busy-wait to the `run` plugin's path → the perf job fails and names the affected keys: `manual: workflow_dispatch; record the URL; do not merge` — still not done; tracked in `.scratch/release-smoke-verification`
+- [ ] A checksum mismatch in the baseline download fails the job before any run: `manual: scratch branch with a corrupted expected sum` — still not done; tracked in `.scratch/release-smoke-verification`
 - [x] `bazel test //...` green
 
 ## Comments
@@ -92,3 +92,39 @@ real comparison is against v0.2.0 (`-O0`), so expect a speedup; note it on the t
   `third_party/libyaml` sources, no python involved) to catch YAML syntax mistakes
   that `tools/ci:workflows_test`'s grep-based checks would not.
 - `bazel test //...`: 248 passed, 3 skipped (pre-existing), 0 failed.
+
+- **Update, after the user pushed and a fix landed (2026-09-23):** the first push (`ccf8f81`)
+  failed every job on a `tools/perf:compare_test` awk portability bug (fixed in `c05921b`,
+  unrelated to this ticket's design). [Run 35875671339](https://github.com/thetanil/qwe/actions/runs/35875671339),
+  at the fix commit, is the perf job's first real run: `baseline` defaulted to `latest`,
+  found `v0.2.0`, downloaded and checksummed it (`qwe-0.2.0-linux-x86_64: OK`), and
+  `tools/perf/run.sh` correctly marked `smoke_run`, `smoke_file` and `smoke_project_plugin`
+  `no-baseline` — v0.2.0 predates the `assert`/`file.read`/`file.line`/project-plugin
+  builtins those workflows use (`unknown plugin "assert" (built-in: file.ensure; project:
+  smoke.touch)`), so the baseline binary genuinely cannot run them; this is the no-baseline
+  path working as designed against a real old release, not a bug. `smoke_graph` was the one
+  workflow both binaries could run; the downloaded `perf-c05921b...` artifact's `report.md`:
+  **PASS** (no key regressed), `smoke_graph/wall` A(v0.2.0) median 55.0ms vs B(candidate)
+  63.7ms, ratio 1.159, delta 8.8ms, 49/51 rounds B > A.
+  - **The ticket's own prediction ("expect a speedup") did not hold** — the candidate came
+    out ~16% *slower* than v0.2.0 on `smoke_graph`, though under the 1.20 ratio gate. The
+    likely reason is not codegen: `smoke_graph.yml` (12) is `b` and `c` racing a 50ms-step
+    file-based rendezvous poll loop against each other, so its wall time is dominated by
+    scheduler noise and poll granularity, not by anything `--config=release` optimizes.
+    `smoke_graph` is in the perf set as one of the four sudo-free, no-deliberate-sleep
+    workflows (its short poll loop was judged not to count as one, same reasoning as 15's
+    own "what" section) — but it is also the noisiest of the four for an A/B wall-time
+    comparison, for exactly that reason. Worth a second look if `smoke_graph` produces a
+    false-positive regression on some future release; the job/step-level keys under it
+    read `new` rather than `gated` here only because v0.2.0's `result.json` predates
+    `duration_ms` (01), which is expected and will stop once the baseline is a release that
+    already has it.
+  - The report header (candidate sha, baseline tag, runner nproc/CPU/kernel, rounds) is
+    written straight to `$GITHUB_STEP_SUMMARY` by its own step (not part of `compare.sh`'s
+    artifact), so it isn't in the downloaded `report.md`; its step ("Report header") ran and
+    succeeded, and the script that writes it is a fixed, already-reviewed shell one-liner, so
+    this is treated as confirmed rather than screen-scraped from the rendered summary.
+  - The other three manual criteria (`baseline: self` x5, a deliberate busy-wait regression,
+    a corrupted checksum) still need their own scratch branches and dispatches, distinct
+    from what this push exercised; tracked in `.scratch/release-smoke-verification` rather
+    than left silently unchecked in an archived ticket.
