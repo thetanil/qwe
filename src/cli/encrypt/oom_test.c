@@ -60,8 +60,8 @@ int main(int argc, char **argv)
 	fp = fopen(path, "wb");
 	if (!fp)
 		abort();
-	fwrite("0123456789abcdef0123456789abcdef", 1, 32, fp);
-	fclose(fp);
+	if (fwrite("0123456789abcdef0123456789abcdef", 1, 32, fp) != 32 || fclose(fp) != 0)
+		abort();
 	chmod(path, 0600);
 	GREATEST_MAIN_BEGIN();
 	RUN_TEST(encrypt_survives_every_injection);

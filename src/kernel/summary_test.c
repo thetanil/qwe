@@ -22,8 +22,7 @@ static char *slurp(const char *path)
 
 	if (!fp)
 		abort();
-	fseek(fp, 0, SEEK_END);
-	len = ftell(fp);
+	len = fseek(fp, 0, SEEK_END) == 0 ? ftell(fp) : -1;
 	if (len < 0)
 		abort();
 	rewind(fp);
@@ -32,7 +31,7 @@ static char *slurp(const char *path)
 		abort();
 	got = fread(buf, 1, (size_t)len, fp);
 	buf[got] = '\0';
-	fclose(fp);
+	(void)fclose(fp); /* read-only */
 	return buf;
 }
 
@@ -160,7 +159,7 @@ TEST write_failure_after_open_fails(void)
 
 	close(fd);
 	getrlimit(RLIMIT_FSIZE, &old);
-	signal(SIGXFSZ, SIG_IGN);
+	ASSERT(signal(SIGXFSZ, SIG_IGN) != SIG_ERR);
 	tiny.rlim_cur = 1;
 	tiny.rlim_max = old.rlim_max;
 	setrlimit(RLIMIT_FSIZE, &tiny);
@@ -216,7 +215,7 @@ TEST log_tail_block(void)
 	for (i = 0; i < 25; i++)
 		fprintf(fp, "line %d\n", i);
 	fputs("a ``` run\n", fp); /* a 3-backtick run: the fence must beat it */
-	fclose(fp);
+	ASSERT_EQ(0, fclose(fp));
 
 	jobs[0] = (struct qwe_job_result){.id = "j", .outcome = "failed", .steps = &step, .nsteps = 1};
 	jobs[1] = (struct qwe_job_result){.id = "ok", .outcome = "success", .steps = &ok_step, .nsteps = 1};
@@ -270,7 +269,7 @@ TEST log_tail_without_trailing_newline(void)
 	fp = fopen(logpath, "w");
 	ASSERT(fp != NULL);
 	fputs("no newline at the end", fp);
-	fclose(fp);
+	ASSERT_EQ(0, fclose(fp));
 
 	out = qwe_own(written_in(dir, "w.yaml", "failed", 1, &job, 1));
 	ASSERT(strstr(out, "no newline at the end\n```"));

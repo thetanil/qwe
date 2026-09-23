@@ -30,11 +30,11 @@ int qwe_timer_arm(struct qwe_timer *t, long ms)
 	return timerfd_settime(t->fd, 0, &its, NULL);
 }
 
-void qwe_timer_disarm(struct qwe_timer *t)
+int qwe_timer_disarm(struct qwe_timer *t)
 {
 	struct itimerspec zero = {{0, 0}, {0, 0}};
 
-	timerfd_settime(t->fd, 0, &zero, NULL);
+	return timerfd_settime(t->fd, 0, &zero, NULL);
 }
 
 int qwe_timer_expired(struct qwe_timer *t)

@@ -29,13 +29,13 @@ static size_t run(const char *script, const char *input, size_t input_len, int u
 		tmp = tmpfile();
 		if (!tmp)
 			abort();
-		fwrite(input, 1, input_len, tmp);
-		fflush(tmp);
+		if (fwrite(input, 1, input_len, tmp) != input_len || fflush(tmp) != 0)
+			abort();
 		in[0] = dup(fileno(tmp));
 		if (in[0] < 0)
 			abort();
 		lseek(in[0], 0, SEEK_SET);
-		fclose(tmp);
+		(void)fclose(tmp); /* flushed above; in[0] holds the file open */
 	}
 	pid = fork();
 	if (pid == 0) {

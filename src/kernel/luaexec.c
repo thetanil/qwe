@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "src/kernel/luaexec.h"
+#include "src/kernel/clock.h"
 #include "src/kernel/gcov.h"
 #include "src/kernel/preamble.h"
 
@@ -149,7 +150,7 @@ static int exec_run(lua_State *L)
 		lua_pushinteger(L, (lua_Integer)pid);
 		return 1;
 	}
-	clock_gettime(CLOCK_MONOTONIC, &t0);
+	t0 = qwe_mono_now();
 	fcntl(in_p[1], F_SETFL, O_NONBLOCK);
 
 	while (out_p[0] >= 0 || err_p[0] >= 0 || in_p[1] >= 0) {
@@ -177,7 +178,7 @@ static int exec_run(lua_State *L)
 			struct timespec now;
 			long left;
 
-			clock_gettime(CLOCK_MONOTONIC, &now);
+			now = qwe_mono_now();
 			left = timeout_ms - ((long)(now.tv_sec - t0.tv_sec) * 1000 + (now.tv_nsec - t0.tv_nsec) / 1000000);
 			if (left <= 0) {
 				timed_out = 1;
@@ -226,7 +227,7 @@ static int exec_run(lua_State *L)
 
 		if (r != 0)
 			goto reaped;
-		clock_gettime(CLOCK_MONOTONIC, &now);
+		now = qwe_mono_now();
 		if ((long)(now.tv_sec - t0.tv_sec) * 1000 + (now.tv_nsec - t0.tv_nsec) / 1000000 >= timeout_ms)
 			timed_out = 1;
 		else

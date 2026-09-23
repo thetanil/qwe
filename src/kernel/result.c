@@ -11,8 +11,12 @@ static void put_time(FILE *fp, time_t t)
 		return;
 	}
 
-	gmtime_r(&t, &tm);
-	strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", &tm);
+	/* A time gmtime cannot break down (a year past INT_MAX) has no ISO 8601
+	 * form: write the epoch seconds, still a string, rather than an unset buffer. */
+	if (!gmtime_r(&t, &tm) || strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", &tm) == 0) {
+		fprintf(fp, "\"%lld\"", (long long)t);
+		return;
+	}
 	fprintf(fp, "\"%s\"", buf);
 }
 

@@ -26,7 +26,8 @@ static void write_file(const char *path, const char *body)
 	if (!fp)
 		abort();
 	fputs(body, fp);
-	fclose(fp);
+	if (ferror(fp) || fclose(fp) != 0)
+		abort(); /* the fixture was not fully written */
 }
 
 /* A fresh directory holding the workflow, whose steps leave a file each. */
@@ -66,7 +67,7 @@ static int has_file(const char *dir, const char *name, const char *want)
 		return 0;
 	if (!fgets(got, sizeof got, fp))
 		got[0] = 0;
-	fclose(fp);
+	(void)fclose(fp); /* read-only */
 	return strcmp(got, want) == 0;
 }
 
@@ -96,7 +97,7 @@ static void read_result(const char *dir, char *out, size_t cap)
 		fp = fopen(path, "r");
 		if (fp) {
 			got = fread(out, 1, cap - 1, fp);
-			fclose(fp);
+			(void)fclose(fp); /* read-only */
 		}
 	}
 	closedir(d);
@@ -243,7 +244,8 @@ static void fresh_select_case(char *dir, size_t cap)
 		abort();
 	for (i = 0; i < 80; i++)
 		fputs("# padding, so that the file is longer than the reader's first buffer, and then some\n", fp);
-	fclose(fp);
+	if (ferror(fp) || fclose(fp) != 0)
+		abort();
 }
 
 static int select_case(void *arg)

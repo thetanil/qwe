@@ -1,6 +1,8 @@
 #define _GNU_SOURCE
 #include "src/kernel/trace.h"
 
+#include "src/kernel/clock.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -15,7 +17,7 @@ int qwe_trace_open(struct qwe_trace *t, const char *path, int debug)
 	t->fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
 	if (t->fd < 0)
 		return -1;
-	clock_gettime(CLOCK_MONOTONIC, &t->t0);
+	t->t0 = qwe_mono_now();
 	return 0;
 }
 
@@ -37,7 +39,7 @@ void qwe_trace_record(struct qwe_trace *t, const char *job, long step, enum qwe_
 
 	if (t->fd < 0)
 		return;
-	clock_gettime(CLOCK_MONOTONIC, &now);
+	now = qwe_mono_now();
 	sec = (long)(now.tv_sec - t->t0.tv_sec);
 	usec = (now.tv_nsec - t->t0.tv_nsec) / 1000;
 	if (usec < 0) {

@@ -49,8 +49,10 @@ static inline void qwe_release_owned(void *unused)
 	while (qwe_owned_nfiles > 0) {
 		FILE *fp = qwe_owned_files[--qwe_owned_nfiles];
 
+		/* After the test, a failed close cannot fail it: a test that needs what
+		 * it wrote on disk closes that stream itself and asserts the result. */
 		if (fp)
-			fclose(fp);
+			(void)fclose(fp);
 	}
 }
 

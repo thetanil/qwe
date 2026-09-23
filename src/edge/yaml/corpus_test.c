@@ -18,16 +18,20 @@ static int replay(const char *path)
 
 	if (!f)
 		return -1;
-	fseek(f, 0, SEEK_END);
-	n = ftell(f);
+	/* f is read-only: a failed fclose loses nothing */
+	n = fseek(f, 0, SEEK_END) == 0 ? ftell(f) : -1;
+	if (n < 0) {
+		(void)fclose(f);
+		return -1;
+	}
 	rewind(f);
 	buf = malloc(n ? (size_t)n : 1);
 	if (!buf || fread(buf, 1, (size_t)n, f) != (size_t)n) {
-		fclose(f);
+		(void)fclose(f);
 		free(buf);
 		return -1;
 	}
-	fclose(f);
+	(void)fclose(f);
 	qwe_fuzz_transcode(buf, (size_t)n);
 	qwe_fuzz_chain(buf, (size_t)n);
 	free(buf);

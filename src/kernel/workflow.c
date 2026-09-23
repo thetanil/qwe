@@ -3,6 +3,7 @@
 
 #include "src/edge/yaml/transcode.h"
 #include "src/kernel/alloc.h"
+#include "src/kernel/clock.h"
 #include "src/kernel/jobs.h"
 #include "src/kernel/lifecycle.h"
 #include "src/kernel/luacbor.h"
@@ -142,7 +143,9 @@ static char **child_argv(void *arg, int result_fd)
 			send_status(L, result_fd, "failed", "engine-error");
 			ok = 0;
 		}
-		fflush(stdout);
+		/* output the step printed but that never reached its log is a failed step */
+		if (fflush(stdout) != 0)
+			ok = 0;
 		qwe_lua_coverage_flush(L);
 		_exit(ok ? 0 : 1);
 	}
@@ -192,7 +195,7 @@ fail:
 	fprintf(stderr, "qwe: plugin failed: %s\n", lua_tostring(L, -1));
 	if (is_plugin) {
 		send_status(L, result_fd, "failed", "plugin-error");
-		fflush(stdout);
+		(void)fflush(stdout); /* failing already: a lost line cannot make it worse */
 		qwe_lua_coverage_flush(L);
 		_exit(1);
 	}
@@ -226,7 +229,7 @@ static int read_file(const char *path, char **out, size_t *len)
 			}
 		}
 	}
-	fclose(fp);
+	(void)fclose(fp); /* read-only: a failed close loses nothing */
 	if (!buf) {
 		errno = ENOMEM;
 		return -1;
@@ -414,8 +417,9 @@ static void fmt_run_id(char *buf, size_t n)
 	time_t now = time(NULL);
 	struct tm tm;
 
-	gmtime_r(&now, &tm);
-	strftime(buf, n, "%Y%m%dT%H%M%SZ", &tm);
+	/* A clock so far off that gmtime cannot break it down still gets a unique id. */
+	if (!gmtime_r(&now, &tm) || strftime(buf, n, "%Y%m%dT%H%M%SZ", &tm) == 0)
+		snprintf(buf, n, "%lld", (long long)now);
 	snprintf(buf + strlen(buf), n - strlen(buf), "-%d", (int)getpid());
 }
 
@@ -641,9 +645,8 @@ static void owe_start_failed(struct job *job, const char *what, const char *op, 
 /* CLOCK_MONOTONIC, in nanoseconds. */
 static int64_t mono_now_ns(void)
 {
-	struct timespec ts;
+	struct timespec ts = qwe_mono_now();
 
-	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
@@ -1765,8 +1768,9 @@ static void report_disabled(const struct job *jobs, size_t n)
 				skipped == 1 ? "" : "s", targets == 1 ? "" : "s");
 			for (k = 0; k < targets; k++)
 				fprintf(mem, "%s %s (%s)", k ? "," : "", seen[k]->target, seen[k]->detail);
-			fclose(mem);
-			fprintf(stderr, "%s\n", line);
+			/* line and len are only set once the stream closes cleanly */
+			if (fclose(mem) == 0)
+				fprintf(stderr, "%s\n", line);
 			free(line);
 		}
 	}
@@ -1785,7 +1789,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	const char *slash;
 	long n, max_parallel;
 	size_t i;
-	int rc = QWE_EXIT_OK, all_ok = 1, trace_ok = 0;
+	int rc = QWE_EXIT_OK, all_ok = 1, trace_ok = 0, wrote;
 	FILE *fp;
 	int64_t run_mono_start;
 	long run_duration_ms;
@@ -1899,7 +1903,10 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 
 	strcat(run_dir, "/result.json");
 	fp = fopen(run_dir, "w");
-	if (!fp || qwe_result_write(fp, run_id, results, (size_t)n) < 0 || fclose(fp) != 0) {
+	wrote = fp && qwe_result_write(fp, run_id, results, (size_t)n) == 0;
+	if (fp && fclose(fp) != 0) /* closed whether or not the write failed */
+		wrote = 0;
+	if (!wrote) {
 		fprintf(stderr, "qwe run: cannot write %s: %s\n", run_dir, strerror(errno));
 		rc = QWE_EXIT_FAILED;
 	}

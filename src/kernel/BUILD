@@ -19,6 +19,7 @@ cc_library(
     ],
     deps = [
         ":alloc",
+        ":clock",
         ":dag",
         ":lifecycle",
         ":redact",
@@ -177,6 +178,7 @@ cc_library(
         "//src/kernel/lua:shipped",
     ],
     deps = [
+        ":clock",
         ":redact",
         "//src/secrets",
         "//third_party/libsodium",
@@ -249,6 +251,12 @@ sh_test(
     data = [":luarun"],
 )
 
+# CLOCK_MONOTONIC, aborting on the failure Linux cannot produce (clock.h).
+cc_library(
+    name = "clock",
+    hdrs = ["clock.h"],
+)
+
 cc_library(
     name = "timer",
     srcs = ["timer.c"],
@@ -313,7 +321,7 @@ cc_library(
     name = "trace",
     srcs = ["trace.c"],
     hdrs = ["trace.h"],
-    deps = [":lifecycle"],
+    deps = [":clock", ":lifecycle"],
 )
 
 cc_test(
@@ -475,6 +483,7 @@ cc_test(
         "strerrorname_np=qwe_strerrorname_np_must_not_be_called",
     ],
     deps = [
+        ":clock",
         ":lifecycle",
         "//third_party/greatest",
     ],

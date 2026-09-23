@@ -112,24 +112,24 @@ static char *log_tail(const char *run_dir, const char *job_id, int n)
 	free(path);
 	if (!fp)
 		return NULL;
-	fseek(fp, 0, SEEK_END);
-	len = ftell(fp);
+	/* fp is read-only throughout: a failed fclose loses nothing. */
+	len = fseek(fp, 0, SEEK_END) == 0 ? ftell(fp) : -1;
 	if (len < 0) {
-		fclose(fp);
+		(void)fclose(fp);
 		return NULL;
 	}
 	rewind(fp);
 	buf = malloc((size_t)len + 1);
 	if (!buf) {
-		fclose(fp);
+		(void)fclose(fp);
 		return NULL;
 	}
 	if (len > 0 && fread(buf, 1, (size_t)len, fp) != (size_t)len) {
 		free(buf);
-		fclose(fp);
+		(void)fclose(fp);
 		return NULL;
 	}
-	fclose(fp);
+	(void)fclose(fp);
 	buf[len] = '\0';
 
 	end = buf + len;

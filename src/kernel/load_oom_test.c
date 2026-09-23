@@ -47,7 +47,8 @@ static void write_file(const char *name, const char *body)
 	if (!fp)
 		abort();
 	fputs(body, fp);
-	fclose(fp);
+	if (ferror(fp) || fclose(fp) != 0)
+		abort(); /* the fixture was not fully written */
 }
 
 /* Validates w.yaml (with an inventory), failing allocation number at; returns

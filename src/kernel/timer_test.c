@@ -36,7 +36,7 @@ TEST timeout_and_grace_independent(void)
 	ASSERT(after >= before - 1000);      /* and not restarted at 5000 */
 
 	/* Disarming one leaves the other alone. */
-	qwe_timer_disarm(&timeout);
+	ASSERT_EQ(0, qwe_timer_disarm(&timeout));
 	ASSERT(qwe_timer_expired(&timeout)); /* fired stays fired */
 	ASSERT(qwe_timer_remaining_ms(&grace) > 0);
 

@@ -33,19 +33,18 @@ static char *slurp(const char *path, size_t *len)
 
 	if (!fp)
 		return NULL;
-	fseek(fp, 0, SEEK_END);
-	n = ftell(fp);
-	if (n < 0) {
-		fclose(fp);
+	/* fp is read-only: a failed fclose loses nothing */
+	n = fseek(fp, 0, SEEK_END) == 0 ? ftell(fp) : -1;
+	if (n < 0 || fseek(fp, 0, SEEK_SET) != 0) {
+		(void)fclose(fp);
 		return NULL;
 	}
-	fseek(fp, 0, SEEK_SET);
 	buf = malloc((size_t)n + 1);
 	if (buf && fread(buf, 1, (size_t)n, fp) != (size_t)n) {
 		free(buf);
 		buf = NULL;
 	}
-	fclose(fp);
+	(void)fclose(fp);
 	if (buf)
 		buf[n] = '\0';
 	*len = (size_t)n;
@@ -56,7 +55,7 @@ int main(int argc, char **argv)
 {
 	lua_State *L = luaL_newstate();
 	FILE *out;
-	int i;
+	int i, bad;
 
 	if (argc < 2 || !(out = fopen(argv[1], "w"))) {
 		fprintf(stderr, "usage: bcembed <out.c> <module>=<file> ...\n");
@@ -71,7 +70,7 @@ int main(int argc, char **argv)
 
 		if (!eq) {
 			fprintf(stderr, "bcembed: bad argument %s\n", argv[i]);
-			fclose(out);
+			(void)fclose(out); /* failing already */
 			return 2;
 		}
 		name = strndup(argv[i], (size_t)(eq - argv[i]));
@@ -79,7 +78,7 @@ int main(int argc, char **argv)
 		if (!src) {
 			fprintf(stderr, "bcembed: cannot read %s\n", eq + 1);
 			free(name);
-			fclose(out);
+			(void)fclose(out); /* failing already */
 			return 1;
 		}
 		is_json = strlen(eq + 1) > 5 && !strcmp(eq + 1 + strlen(eq + 1) - 5, ".json");
@@ -100,7 +99,7 @@ int main(int argc, char **argv)
 					free(src);
 				free(chunk);
 				free(name);
-				fclose(out);
+				(void)fclose(out); /* failing already */
 				return 1;
 			}
 		}
@@ -119,6 +118,11 @@ int main(int argc, char **argv)
 		fprintf(out, "\t{\"%.*s\", \"%s\", data%d, sizeof data%d - 1},\n", (int)(eq - argv[i]), argv[i], eq + 1, i, i);
 	}
 	fputs("\t{0, 0, 0, 0},\n};\n", out);
-	fclose(out);
+	/* A truncated table can still compile: a write that failed must fail the build. */
+	bad = ferror(out);
+	if (fclose(out) != 0 || bad) {
+		fprintf(stderr, "bcembed: cannot write %s\n", argv[1]);
+		return 1;
+	}
 	return 0;
 }

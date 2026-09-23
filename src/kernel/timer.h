@@ -15,7 +15,8 @@ void qwe_timer_close(struct qwe_timer *t);
 /* Arms the timer to fire once, ms milliseconds from now. Re-arming a timer
  * that has not fired moves its deadline; a timer that has fired stays fired. */
 int qwe_timer_arm(struct qwe_timer *t, long ms);
-void qwe_timer_disarm(struct qwe_timer *t);
+/* Returns 0, or -1 with errno set (the timer may then still fire). */
+int qwe_timer_disarm(struct qwe_timer *t);
 
 /* Non-blocking. Returns 1 once the timer has fired (and keeps returning 1). */
 int qwe_timer_expired(struct qwe_timer *t);

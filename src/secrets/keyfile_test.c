@@ -22,7 +22,7 @@ TEST mode_check_matches_socket_dir_check(void)
 	snprintf(dir, sizeof dir, "%s/sock", root);
 	f = fopen(file, "w");
 	ASSERT(f != NULL);
-	fclose(f);
+	ASSERT_EQ(0, fclose(f));
 	ASSERT_EQ(0, mkdir(dir, 0700));
 
 	/* private: both pass */
@@ -89,7 +89,7 @@ TEST generate_failures_are_reported(void)
 	snprintf(blocker, sizeof blocker, "%s/blocker", root);
 	f = fopen(blocker, "w");
 	ASSERT(f != NULL);
-	fclose(f);
+	ASSERT_EQ(0, fclose(f));
 	snprintf(path, sizeof path, "%s/blocker/sub/secret", root);
 	ASSERT_EQ(-1, qwe_key_generate(path, err, sizeof err));
 	ASSERT(strstr(err, "cannot create ") != NULL);

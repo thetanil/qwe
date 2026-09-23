@@ -12,8 +12,11 @@ static char *escaped(const char *s)
 	size_t len = 0;
 	FILE *fp = open_memstream(&buf, &len);
 
+	if (!fp)
+		abort();
 	qwe_json_string(fp, s);
-	fclose(fp);
+	if (fclose(fp) != 0) /* buf is only complete once the memstream closes */
+		abort();
 	return buf;
 }
 
@@ -75,7 +78,7 @@ TEST hostile_text_in_a_result(void)
 	FILE *fp = open_memstream(&buf, &len);
 
 	ASSERT_EQ(0, qwe_result_write(fp, "run\"id", &job, 1));
-	fclose(fp);
+	ASSERT_EQ(0, fclose(fp));
 	ASSERT(strstr(buf, "\"run_id\": \"run\\\"id\""));
 	ASSERT(strstr(buf, "\"j\\\\1\": {"));
 	ASSERT(strstr(buf, "\"reason\": \"r\\\"\""));
@@ -111,10 +114,29 @@ TEST duration_written(void)
 	steps[0] = step;
 	steps[1] = skipped_step;
 	ASSERT_EQ(0, qwe_result_write(fp, "run", &job, 1));
-	fclose(fp);
+	ASSERT_EQ(0, fclose(fp));
 	ASSERT(strstr(buf, "\"duration_ms\": 1234"));
 	ASSERT(strstr(buf, "\"duration_ms\": 5"));
 	ASSERT(strstr(buf, "\"duration_ms\": null"));
+	free(buf);
+	PASS();
+}
+
+/* A time gmtime cannot break down (its year overflows an int) is still a JSON
+ * string, the epoch seconds, not whatever an unset buffer held. */
+TEST time_past_gmtime_written_as_seconds(void)
+{
+	struct qwe_job_result job = {
+		.id = "j", .outcome = "success", .started = 1, .ended = (time_t)0x7fffffffffffffffLL,
+	};
+	char *buf = NULL;
+	size_t len = 0;
+	FILE *fp = open_memstream(&buf, &len);
+
+	ASSERT_EQ(0, qwe_result_write(fp, "run", &job, 1));
+	ASSERT_EQ(0, fclose(fp));
+	ASSERT(strstr(buf, "\"started\": \"1970-01-01T00:00:01Z\""));
+	ASSERT(strstr(buf, "\"ended\": \"9223372036854775807\""));
 	free(buf);
 	PASS();
 }
@@ -124,6 +146,7 @@ SUITE(result)
 	RUN_TEST(escaping);
 	RUN_TEST(hostile_text_in_a_result);
 	RUN_TEST(duration_written);
+	RUN_TEST(time_past_gmtime_written_as_seconds);
 }
 
 GREATEST_MAIN_DEFS();

@@ -143,7 +143,7 @@ static int live_in_group(pid_t pgid)
 			if (sscanf(p + 1, " %c %d %d", &state, &ppid, &pg) == 3 && pg == (int)pgid && state != 'Z')
 				n++;
 		}
-		fclose(fp);
+		(void)fclose(fp); /* read-only */
 	}
 	if (d)
 		closedir(d);
@@ -205,7 +205,7 @@ static pid_t getppid_of(pid_t pid)
 		if (sscanf(p + 1, " %c %d", &state, &ppid) != 2)
 			ppid = -1;
 	}
-	fclose(f);
+	(void)fclose(f); /* read-only */
 	return ppid;
 }
 

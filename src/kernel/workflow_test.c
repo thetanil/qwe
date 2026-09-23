@@ -32,7 +32,8 @@ static void write_file(const char *name, const char *body)
 	if (!fp)
 		abort();
 	fputs(body, fp);
-	fclose(fp);
+	if (ferror(fp) || fclose(fp) != 0)
+		abort(); /* the fixture was not fully written */
 }
 
 /* The text of the one run's result.json. */
@@ -61,7 +62,7 @@ static int read_result(char *out, size_t cap)
 		return -1;
 	got = fread(out, 1, cap - 1, fp);
 	out[got] = 0;
-	fclose(fp);
+	(void)fclose(fp); /* read-only */
 	return 0;
 }
 

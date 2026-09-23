@@ -80,7 +80,7 @@ specific, checked reason:
 |---|---|
 | `bugprone-reserved-identifier`, `cert-dcl37-c`, `cert-dcl51-cpp` | Flags `_POSIX_C_SOURCE`/`_GNU_SOURCE` (a required feature-test-macro idiom) and `__real_*`/`__wrap_*` (required by the `-Wl,--wrap=` OOM-test harness, `docs/ci-checks.md`'s "Allocation checks"). Both are reserved-namespace by necessity, not a defect. |
 | `bugprone-multi-level-implicit-pointer-conversion` | Fires on every `calloc`/`free` call (`void *` &harr; `T **`) — the standard, recommended C idiom of not casting `malloc`/`calloc`/`free`. |
-| `cert-err33-c` | Its default `CheckedFunctions` list is nearly the whole of `<stdio.h>` and `<string.h>`; allocation return values are already independently enforced by this repo's own OOM-injection gate (`quality/02`, `quality/08`), and unchecked `fprintf`/`fputs` to a diagnostic stream is not a defect. |
+| `cert-err33-c` (narrowed, not excluded) | `CheckedFunctions` is set to `fclose`, `fflush`, `fwrite`, `fseek`, `clock_gettime`, `gmtime_r`, `strftime`, `timerfd_settime` and `signal`, whose failure loses written data or yields a wrong value. The default list is nearly all of `<stdio.h>` and `<string.h>`. Allocation returns are enforced by this repo's OOM-injection gate (`quality/02`, `quality/08`), and `fprintf`/`fputs`/`fputc` to a diagnostic stream are left for the next feature. An `fclose` on a read-only stream is cast to `(void)` with a comment saying so. |
 | `bugprone-implicit-widening-of-multiplication-result` | Every hit multiplies small compile-time-constant macros (`1024 * 1024`, `64 * 1024`, `2 * QWE_YAML_MAX_DEPTH`); the check does not special-case a constant-folded multiplication that cannot overflow. |
 | `concurrency-mt-unsafe` | qwe has no threads — concurrency is one process per plugin step (`docs/adr/0001-fork-per-plugin-step.md`) — so "not thread-safe" does not apply. |
 | `bugprone-easily-swappable-parameters` | A subjective refactor suggestion (reorder or wrap parameters), not a correctness check. |
@@ -173,3 +173,30 @@ Real bugs behind checks that had been excluded as false positives, found by
   `clang-analyzer-unix.StdCLibraryFunctions` and
   `clang-analyzer-optin.portability.UnixAPI` once `run.sh` stopped narrowing
   them out of test files.
+- **A failed write of `result.json` leaked its stream.** `qwe_run_workflow`
+  tested `!fp || qwe_result_write(...) < 0 || fclose(fp) != 0`, so a write
+  error short-circuited past the `fclose`. The stream is now closed whether
+  or not the write failed. Found by `cert-err33-c` (`fclose`).
+- **`bcembed` ignored a failed write of its output.** It never checked the
+  final `fclose`, so a full disk left a truncated module table that still
+  compiled into the binary. It now exits 1 with `cannot write <out>`
+  (`//tools:bcembed_test` writes to `/dev/full`). `slurp` there and
+  `log_tail` in `summary.c` also sized their buffer from an `ftell` after an
+  unchecked `fseek`. Found by `cert-err33-c` (`fclose`, `fseek`).
+- **`gmtime_r`/`strftime` results were used unchecked.** `result.json`'s
+  `put_time` and the run-id formatter printed whatever the buffer held when
+  a time could not be broken down (a year past `INT_MAX`). `put_time` now
+  writes the epoch seconds as the string (`result_test`'s
+  `time_past_gmtime_written_as_seconds`), and the run id falls back to them.
+  Found by `cert-err33-c`.
+- **`report_disabled` printed a memstream's buffer after an unchecked
+  `fclose`.** `open_memstream` sets the buffer only on a clean close, so a
+  failure there passed NULL to `%s`. And a plugin step's child reported
+  success even when the final `fflush(stdout)` failed and its output never
+  reached the log. It now exits 1. Found by `cert-err33-c` (`fclose`,
+  `fflush`).
+- `clock_gettime(CLOCK_MONOTONIC)` (six sites) and `qwe_timer_disarm`'s
+  `timerfd_settime` went unchecked. The clock goes through
+  `src/kernel/clock.h`'s `qwe_mono_now()`, which aborts on the failure Linux
+  cannot produce rather than time a step from an unset `timespec`.
+  `qwe_timer_disarm` now returns the result, like `qwe_timer_arm`.
