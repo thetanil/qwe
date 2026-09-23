@@ -65,9 +65,13 @@ static char *with_preamble(const char *const *names, const char *const *values, 
 	char *pre, *all;
 	size_t pre_len, bad;
 
+	/* A setup failure aborts, like run()'s: returning NULL would hand run() a
+	 * null input and an unset length. */
 	if (qwe_preamble_build(names, values, nvars, &pre, &pre_len, &bad) < 0)
-		return NULL;
+		abort();
 	all = malloc(pre_len + data_len);
+	if (!all)
+		abort();
 	memcpy(all, pre, pre_len);
 	memcpy(all + pre_len, data, data_len);
 	free(pre);
@@ -85,7 +89,6 @@ TEST stdin_passthrough_exact(void)
 	char *all = with_preamble(names, values, 2, data, sizeof data, &total);
 	int use_pipe;
 
-	ASSERT(all != NULL);
 	for (use_pipe = 0; use_pipe <= 1; use_pipe++) {
 		n = run("cat", all, total, use_pipe, out, sizeof out);
 		ASSERT_EQ(sizeof data, n);
@@ -102,7 +105,6 @@ TEST stdin_passthrough_empty_and_starting_with_newline(void)
 	size_t total, n;
 	char *all = with_preamble(NULL, NULL, 0, data, sizeof data - 1, &total);
 
-	ASSERT(all != NULL);
 	n = run("cat", all, total, 1, out, sizeof out);
 	ASSERT_EQ(sizeof data - 1, n);
 	ASSERT_MEM_EQ(data, out, n);

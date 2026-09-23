@@ -83,7 +83,6 @@ specific, checked reason:
 | `bugprone-multi-level-implicit-pointer-conversion` | Fires on every `calloc`/`free` call (`void *` &harr; `T **`) — the standard, recommended C idiom of not casting `malloc`/`calloc`/`free`. |
 | `cert-err33-c` | Its default `CheckedFunctions` list is nearly the whole of `<stdio.h>` and `<string.h>`; allocation return values are already independently enforced by this repo's own OOM-injection gate (`quality/02`, `quality/08`), and unchecked `fprintf`/`fputs` to a diagnostic stream is not a defect. |
 | `bugprone-implicit-widening-of-multiplication-result` | Every hit multiplies small compile-time-constant macros (`1024 * 1024`, `64 * 1024`, `2 * QWE_YAML_MAX_DEPTH`); the check does not special-case a constant-folded multiplication that cannot overflow. |
-| `clang-analyzer-core.StackAddressEscape`, `clang-analyzer-core.CallAndMessage` | False positives from `third_party/greatest`'s `ASSERT`/`FAIL` macros: they store `&local` into a global to report the current test's failure location within the same call, and their macro-heavy control flow defeats the analyzer's path exploration. |
 | `concurrency-mt-unsafe` | qwe has no threads — concurrency is one process per plugin step (`docs/adr/0001-fork-per-plugin-step.md`) — so "not thread-safe" does not apply. |
 | `bugprone-easily-swappable-parameters` | A subjective refactor suggestion (reorder or wrap parameters), not a correctness check. |
 | `bugprone-assignment-in-if-condition` | A deliberate, common idiom in this codebase (`if ((out = fopen(...)))`-style single-read checks). |
@@ -135,3 +134,20 @@ suppressed to get a green run:
   passed a possibly-null `ptr` when `n == 0` (the array is never allocated for
   an empty list) — a base pointer that must not be null even when the
   standard permits `nmemb == 0`. Found by `clang-analyzer-core.NonNullParamChecker`.
+
+## What re-enabling excluded checks found
+
+Real bugs behind checks that had been excluded as false positives, found by
+`.scratch/sca-findings` as each class was switched back on:
+
+- **`lifecycle_test.c` handed greatest stack buffers as failure messages.**
+  `ASSERTm(where, ...)` keeps the message pointer in a global and prints it
+  after the test function has returned, so every one of the 24 `ASSERTm`s
+  on a local `char where[]`/`why[]`/`line[]` read a dead stack frame on failure.
+  The buffers are now `static`. Found by `clang-analyzer-core.StackAddressEscape`,
+  which had been excluded as a greatest false positive.
+- **`preamble_test.c`'s `with_preamble` returned NULL on a setup failure and
+  left the length unset**, and every caller passed both straight to `run()`, so
+  a `qwe_preamble_build` failure became a `write()` of an uninitialized length
+  from a null pointer, not a test failure. It now aborts, as `run()` already
+  does on its own setup failures. Found by `clang-analyzer-core.CallAndMessage`.

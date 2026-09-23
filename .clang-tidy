@@ -19,8 +19,6 @@ Checks: >
   -bugprone-multi-level-implicit-pointer-conversion,
   -cert-err33-c,
   -bugprone-implicit-widening-of-multiplication-result,
-  -clang-analyzer-core.StackAddressEscape,
-  -clang-analyzer-core.CallAndMessage,
   -concurrency-mt-unsafe,
   -bugprone-easily-swappable-parameters,
   -bugprone-assignment-in-if-condition,

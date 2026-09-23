@@ -11,6 +11,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+/* An ASSERTm message: greatest keeps the pointer and prints it after the test
+ * returns, so it must not live on the test's stack. */
+static char where[256];
+
 #define FOR_ALL_CELLS(s, e) \
 	for ((s) = 0; (s) < QWE_LC_NSTATES; (s)++) \
 		for ((e) = 0; (e) < QWE_LC_NEVENTS; (e)++)
@@ -67,7 +71,6 @@ TEST rules_hold_in_every_cell(void)
 	{
 		const struct qwe_lc_cell *c = qwe_lc_cell(s, e);
 		enum qwe_lc_state next;
-		char where[128];
 
 		snprintf(where, sizeof where, "%s x %s", qwe_lc_state_name(s), qwe_lc_event_name(e));
 		if (c->kind == QWE_LC_IMPOSSIBLE)
@@ -262,9 +265,8 @@ static enum qwe_lc_state walk(enum qwe_lc_state s, const struct step *steps, siz
 	TEST scenario_##name(void) \
 	{ \
 		static const struct step steps[] = {__VA_ARGS__}; \
-		char why[256] = ""; \
-		enum qwe_lc_state got = walk(start, steps, sizeof steps / sizeof *steps, why, sizeof why); \
-		ASSERTm(why, got != QWE_LC_NSTATES); \
+		enum qwe_lc_state got = walk(start, steps, sizeof steps / sizeof *steps, where, sizeof where); \
+		ASSERTm(where, got != QWE_LC_NSTATES); \
 		ASSERT_EQ_FMT((enum qwe_lc_state)end, got, "%d"); \
 		PASS(); \
 	}
@@ -421,7 +423,8 @@ TEST impossible_cell_aborts(void)
 	 * sink, and the sink must hold the impossible line once the child is
 	 * dead: the line is written before the abort. */
 	const char *dir = getenv("TEST_TMPDIR");
-	char path[256], line[256] = "";
+	char path[256];
+	static char line[256]; /* an ASSERTm message, like where */
 	struct qwe_trace trace;
 	FILE *fp;
 	pid_t pid;
