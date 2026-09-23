@@ -35,6 +35,10 @@ static char *slurp(const char *path, size_t *len)
 		return NULL;
 	fseek(fp, 0, SEEK_END);
 	n = ftell(fp);
+	if (n < 0) {
+		fclose(fp);
+		return NULL;
+	}
 	fseek(fp, 0, SEEK_SET);
 	buf = malloc((size_t)n + 1);
 	if (buf && fread(buf, 1, (size_t)n, fp) != (size_t)n) {
@@ -67,12 +71,15 @@ int main(int argc, char **argv)
 
 		if (!eq) {
 			fprintf(stderr, "bcembed: bad argument %s\n", argv[i]);
+			fclose(out);
 			return 2;
 		}
 		name = strndup(argv[i], (size_t)(eq - argv[i]));
 		src = slurp(eq + 1, &len);
 		if (!src) {
 			fprintf(stderr, "bcembed: cannot read %s\n", eq + 1);
+			free(name);
+			fclose(out);
 			return 1;
 		}
 		is_json = strlen(eq + 1) > 5 && !strcmp(eq + 1 + strlen(eq + 1) - 5, ".json");
@@ -89,6 +96,11 @@ int main(int argc, char **argv)
 			snprintf(chunkname, sizeof chunkname, "=%s", name);
 			if (luaL_loadbuffer(L, chunk, n, chunkname) != 0) {
 				fprintf(stderr, "bcembed: %s\n", lua_tostring(L, -1));
+				if (is_json)
+					free(src);
+				free(chunk);
+				free(name);
+				fclose(out);
 				return 1;
 			}
 		}
@@ -96,6 +108,10 @@ int main(int argc, char **argv)
 		lua_dump(L, writer, out);
 		fputs("0};\n", out);
 		lua_pop(L, 1);
+		if (is_json)
+			free(src);
+		free(chunk);
+		free(name);
 	}
 	fputs("\nconst struct qwe_embedded qwe_embedded_modules[] = {\n", out);
 	for (i = 2; i < argc; i++) {

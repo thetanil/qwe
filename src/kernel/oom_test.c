@@ -277,10 +277,9 @@ TEST select_job_survives_every_injection(void)
 				fprintf(stderr, "allocation %ld: exit 0 with the wrong work done\n%s\n", at, r.err);
 				FAIL();
 			}
-		} else if (r.exited && (r.code == QWE_EXIT_FAILED || r.code == QWE_EXIT_USAGE) && r.err[0]) {
-			; /* a message and a non-zero exit */
-		} else if (!r.exited && r.signal == SIGABRT && strstr(r.err, "out of memory")) {
-			; /* allocation policy rule 2 */
+		} else if ((r.exited && (r.code == QWE_EXIT_FAILED || r.code == QWE_EXIT_USAGE) && r.err[0]) ||
+			   (!r.exited && r.signal == SIGABRT && strstr(r.err, "out of memory"))) {
+			; /* a message and a non-zero exit, or allocation policy rule 2 */
 		} else {
 			fprintf(stderr, "allocation %ld of %ld: exited %d code %d signal %d\n%s\n", at, o.count,
 			    r.exited, r.code, r.signal, r.err);

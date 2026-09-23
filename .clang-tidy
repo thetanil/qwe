@@ -1,0 +1,42 @@
+# The LLVM Static Analyzer plus a popular C ruleset (docs/static-analysis.md).
+# clang-analyzer-* is the analyzer itself; bugprone/cert/concurrency/performance/
+# portability are the groups that apply to C. C++-only groups (cppcoreguidelines-*,
+# modernize-*, most of readability-*) are left out on purpose: this is a C99 codebase.
+#
+# Every exclusion below is a class of finding checked against this codebase and
+# judged not to fit it -- see docs/static-analysis.md for the reasoning behind each.
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  cert-*,
+  concurrency-*,
+  performance-*,
+  portability-*,
+  -bugprone-reserved-identifier,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -cert-err33-c,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -clang-analyzer-core.StackAddressEscape,
+  -clang-analyzer-core.CallAndMessage,
+  -concurrency-mt-unsafe,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-misplaced-widening-cast,
+  -bugprone-unsafe-functions,
+  -cert-msc24-c,
+  -cert-msc30-c,
+  -cert-msc32-c,
+  -cert-msc33-c,
+  -cert-msc50-cpp,
+  -cert-msc51-cpp,
+  -cert-err34-c,
+  -clang-analyzer-optin.performance.Padding,
+  -clang-analyzer-optin.taint.TaintedAlloc,
+  -clang-analyzer-security.insecureAPI.strcpy,
+  -clang-analyzer-unix.Errno
+WarningsAsErrors: '*'
+HeaderFilterRegex: '^(src|tools)/.*'
+FormatStyle: none

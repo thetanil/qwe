@@ -144,8 +144,10 @@ int qwe_oom_probe(long n, long child_n, int (*fn)(void *), void *arg, struct qwe
 
 		dup2(errp[1], 2);
 		dup2(errp[1], 1);
-		dup2(nul, 0);
-		close(nul);
+		if (nul >= 0) {
+			dup2(nul, 0);
+			close(nul);
+		}
 		close(errp[0]);
 		close(errp[1]);
 		close(cntp[0]);

@@ -24,12 +24,14 @@ land somewhere other than the workflow that runs it.
 | UBSan | `ubsan.yml` | `bazel test --config=ubsan //...` | every push to main | about the plain suite | undefined behaviour |
 | Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | nightly, release and manual | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
 | Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | nightly, release and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
+| Static analysis | `valgrind.yml` (job `static-analysis`) | `tools/clang-tidy/run.sh` | nightly, release and manual | about the plain suite's build, plus one clang-tidy pass per file | any `clang-analyzer-*`/bugprone/cert/concurrency/performance/portability finding in `src/`, `plugins/` or `tools/` |
 | Coverage floor | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/coverage/floor.txt` |
 | Smoke | `smoke.yml` (job `debug-smoke`, then `build`, then `smoke`) | `./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"` | every push to main | debug-smoke seconds, fastbuild; build ~ the plain suite under `--config=release`; smoke seconds on a fresh runner | debug-smoke: a real bug in a smoke workflow, caught on the fastbuild binary before `build` pays for `--config=release`. build/smoke: the release binary fails a real smoke workflow, is not statically linked, or the full suite fails under `--config=release` (`build` then keeps a gdb backtrace of any crashed test as the `smoke-release-backtraces` artifact) |
 | Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | nightly (3600 s) and manual | hours; four processes in parallel | any crash artifact exists |
 
 Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
-`docs/coverage.md` and `docs/fuzzing.md`. What follows is only what CI needs.
+`docs/static-analysis.md`, `docs/coverage.md` and `docs/fuzzing.md`. What
+follows is only what CI needs.
 
 ## Every push
 
@@ -54,11 +56,14 @@ an artifact. On a green push to main it is also deployed to GitHub Pages (`https
 
 Valgrind takes 23 minutes on a runner, so `valgrind.yml` runs only from `workflow_dispatch` and
 from `nightly.yml` and `release.yml` (by `workflow_call`), never on a push. `workflows_test` checks these commands too.
+Static analysis (`docs/static-analysis.md`) runs as a third, independent job in the same
+workflow file — same cadence, same triggers, no separate badge or wiring needed.
 `release.yml` builds the shipped binaries with the release config (same codegen as fastbuild,
 debug info kept for `qwe-debug`; the strip rule still strips `qwe`).
 
 ```
 bazel build --config=release //src/cli:qwe //src/cli:qwe-debug
+tools/clang-tidy/run.sh
 ```
 
 ## How CI reaches ssh

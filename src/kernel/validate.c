@@ -74,7 +74,12 @@ static struct qwe_pos locate(const struct qwe_positions *pos, const char *pointe
 
 static char *escape_token(const char *s)
 {
-	char *out = malloc(strlen(s) * 2 + 1), *o = out;
+	char *out, *o;
+
+	if (!s)
+		s = "";
+	out = malloc(strlen(s) * 2 + 1);
+	o = out;
 
 	if (!out)
 		return NULL;
@@ -140,7 +145,8 @@ static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, st
 			goto nomem;
 		n++;
 	}
-	qsort(ids, n, sizeof *ids, cmp_str);
+	if (n)
+		qsort(ids, n, sizeof *ids, cmp_str);
 
 	jobs = calloc(n ? n : 1, sizeof *jobs);
 	if (!jobs)

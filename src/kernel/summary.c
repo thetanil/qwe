@@ -114,6 +114,10 @@ static char *log_tail(const char *run_dir, const char *job_id, int n)
 		return NULL;
 	fseek(fp, 0, SEEK_END);
 	len = ftell(fp);
+	if (len < 0) {
+		fclose(fp);
+		return NULL;
+	}
 	rewind(fp);
 	buf = malloc((size_t)len + 1);
 	if (!buf) {

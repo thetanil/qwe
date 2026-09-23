@@ -274,7 +274,7 @@ what each one fails on.
 | `asan` | the suite under AddressSanitizer and LeakSanitizer | every push to `main` |
 | `ubsan` | the suite under UBSan | every push to `main` |
 | `coverage` | the coverage floor, and the HTML report as an artifact | every push to `main` |
-| `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes) | by hand, nightly, and in a release |
+| `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes), plus a static-analysis job (the LLVM Static Analyzer and a C ruleset, `docs/static-analysis.md`) | by hand, nightly, and in a release |
 | `nightly` | all five of the above, from fresh caches, and `fuzz` | 02:17 UTC, and by hand |
 | `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | nightly (one hour), and by hand |
 | `release` | all five again, then builds and publishes | a pushed tag `v*` |

@@ -97,6 +97,13 @@ static int send_status(lua_State *L, int fd, const char *status, const char *rea
 	return rc;
 }
 
+static void free_argv(char **argv, size_t n)
+{
+	while (argv && n-- > 0)
+		free(argv[n]);
+	free(argv);
+}
+
 /* Runs in the child: hands the step to its plugin (qwe.plugins.run_step). A
  * run: step or a run-like plugin gives back the argv to exec. A check/apply
  * plugin does its work here, sends its result to the parent and the child
@@ -155,9 +162,7 @@ static char **child_argv(void *arg, int result_fd)
 			break;
 	}
 	if (!argv || (n > 0 && !argv[n - 1])) {
-		while (argv && i-- > 0)
-			free(argv[i]);
-		free(argv);
+		free_argv(argv, i);
 		fprintf(stderr, "qwe: out of memory building the step's command\n");
 		send_status(L, result_fd, "failed", "engine-error");
 		return NULL;
@@ -165,6 +170,7 @@ static char **child_argv(void *arg, int result_fd)
 	/* The parent starts the step's clock on "exec"; without it, the step has not started. */
 	if (send_status(L, result_fd, "exec", NULL) < 0) {
 		send_status(L, result_fd, "failed", "engine-error");
+		free_argv(argv, n);
 		return NULL;
 	}
 	qwe_lua_coverage_flush(L);
@@ -176,6 +182,7 @@ static char **child_argv(void *arg, int result_fd)
 		/* the bootstrap shell reads exactly the preamble; the rest is the command's */
 		if (fd < 0 || write(fd, s, sl) != (ssize_t)sl || lseek(fd, 0, SEEK_SET) < 0 || dup2(fd, 0) < 0) {
 			fprintf(stderr, "qwe: cannot set up the step's stdin: %s\n", strerror(errno));
+			free_argv(argv, n);
 			return NULL;
 		}
 		close(fd);
@@ -201,8 +208,14 @@ static int read_file(const char *path, char **out, size_t *len)
 	if (!fp)
 		return -1;
 	buf = malloc(cap);
+	/* A failed fread (got <= 0) ends the loop via this same condition; fp is
+	 * never read again, only fclose'd below, which is well-defined on a
+	 * stream in any state. */
+	// NOLINTNEXTLINE(clang-analyzer-unix.Stream)
 	while (buf && (got = fread(buf + n, 1, cap - n, fp)) > 0) {
 		n += got;
+		if (feof(fp))
+			break;
 		if (n == cap) {
 			char *grown = realloc(buf, cap *= 2);
 			if (!grown) {

@@ -87,7 +87,8 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 		qwe_jobs_free(L, jobs, n);
 		return -1;
 	}
-	qsort(jobs, n, sizeof *jobs, cmp_job);
+	if (n)
+		qsort(jobs, n, sizeof *jobs, cmp_job);
 
 	for (i = 0; i < n; i++) {
 		struct job *j = &jobs[i];

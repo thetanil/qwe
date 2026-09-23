@@ -38,3 +38,19 @@ jobs:
         uses: ./.github/actions/collect-logs
         with:
           name: valgrind-e2e-logs
+  static-analysis:
+    # Static (clang-tidy/clang-analyzer) alongside dynamic (valgrind): same cadence,
+    # same workflow file, docs/static-analysis.md.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          apt: clang-tidy
+          cache-key: static-analysis
+      - run: clang-tidy --version
+      - run: tools/clang-tidy/run.sh
+      - if: failure()
+        uses: ./.github/actions/collect-logs
+        with:
+          name: static-analysis-logs

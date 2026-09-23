@@ -12,8 +12,8 @@
 #include <unistd.h>
 
 #define FOR_ALL_CELLS(s, e) \
-	for (s = 0; s < QWE_LC_NSTATES; s++) \
-		for (e = 0; e < QWE_LC_NEVENTS; e++)
+	for ((s) = 0; (s) < QWE_LC_NSTATES; (s)++) \
+		for ((e) = 0; (e) < QWE_LC_NEVENTS; (e)++)
 
 static int has_action(const struct qwe_lc_cell *c, enum qwe_lc_action a)
 {
