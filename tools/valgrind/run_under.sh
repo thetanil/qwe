@@ -17,5 +17,6 @@ shift
 if [ "$(head -c 4 "$bin" 2>/dev/null | od -An -c | tr -d ' ')" != '177ELF' ]; then
 	exec "$bin" "$@"
 fi
+export QWE_OOM_PROBE_TIMEOUT=180
 exec valgrind --leak-check=full --error-exitcode=1 --errors-for-leak-kinds=definite,indirect \
 	--suppressions="$supp" --quiet "$bin" "$@"

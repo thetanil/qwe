@@ -38,7 +38,8 @@ int qwe_oom_fired(void);
 /* One injected run, in a process of its own so that a fault, an abort or a hang
  * is an outcome to report rather than the end of the test. The child arms the
  * shim (n for itself, child_n for the processes it forks; 0 = not), calls fn,
- * and exits with its return value. It gets 30 s. */
+ * and exits with its return value. It gets 30 s by default; set
+ * QWE_OOM_PROBE_TIMEOUT to a positive integer number of seconds to override. */
 struct qwe_oom_outcome {
 	int exited; /* it exited by itself... */
 	int code; /* ...with this code */
