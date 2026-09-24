@@ -27,6 +27,12 @@ TEST probe_timeout_defaults_can_be_overridden(void)
 	ASSERT(o.exited);
 	ASSERT_EQ(7, o.code);
 
+	secs = 1;
+	ASSERT_EQ(0, setenv("QWE_OOM_PROBE_TIMEOUT", "bogus", 1));
+	ASSERT_EQ(0, qwe_oom_probe(0, 0, sleep_case, &secs, &o));
+	ASSERT(o.exited);
+	ASSERT_EQ(7, o.code);
+
 	ASSERT_EQ(0, unsetenv("QWE_OOM_PROBE_TIMEOUT"));
 	PASS();
 }
