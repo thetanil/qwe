@@ -17,6 +17,14 @@ itself belongs to `tests.yml`) satisfies the check even though nothing new is ac
 wired up. Describe a command in prose instead of quoting it exactly when the quote would
 land somewhere other than the workflow that runs it.
 
+**Reading a failure.** Runners are thrown away, so bazel's "see <path>/test.log" leads nowhere.
+On a failure, `.github/actions/collect-logs` (every gate job calls it) uploads the logs as an
+artifact and then runs `.github/scripts/test-failures.sh`: for each failed test, an error
+annotation on the run page with the end of its log, the end of its log in the job summary, and
+a failing "Failed tests" step at the end of the job, which is what
+`gh run view <id> --log-failed` prints. `codeql.yml` is GitHub's code scanning, not a gate:
+nightly and release do not call it, and `workflows_test` requires only its badge.
+
 | Check | Workflow | Command | Cadence | Cost | Fails when |
 |---|---|---|---|---|---|
 | Tests | `tests.yml` | `bazel test //...` | every push to main | seconds, warm cache | any test fails |

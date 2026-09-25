@@ -30,6 +30,7 @@ backends).
 [![nightly](https://github.com/thetanil/qwe/actions/workflows/nightly.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/nightly.yml)
 [![fuzz](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml)
 [![release](https://github.com/thetanil/qwe/actions/workflows/release.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/release.yml)
+[![codeql](https://github.com/thetanil/qwe/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/codeql.yml)
 
 ## A first workflow
 
@@ -272,10 +273,12 @@ what each one fails on.
 | `asan` | the suite under AddressSanitizer and LeakSanitizer | every push to `main` |
 | `ubsan` | the suite under UBSan | every push to `main` |
 | `coverage` | the 85% per-file coverage check, and the HTML report as an artifact | every push to `main` |
+| `smoke` | the smoke workflows on the release build, and `perf`'s timing against the last release | every push to `main` |
 | `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes), plus a static-analysis job (the LLVM Static Analyzer and a C ruleset, `docs/static-analysis.md`) | by hand, nightly, and in a release |
 | `nightly` | all five of the above, from fresh caches, and `fuzz` | 02:17 UTC, and by hand |
 | `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | nightly (one hour), and by hand |
 | `release` | all five again, then builds and publishes | a pushed tag `v*` |
+| `codeql` | GitHub CodeQL code scanning (C and the workflow files); results in the Security tab. Not a gate: nightly and release do not call it | every push to `main`, pull requests, weekly |
 
 - **Runner and setup.** `ubuntu-24.04`, Bazel from `.bazelversion`, the caches through
   `bazel-contrib/setup-bazel`. The shared steps are in `.github/actions/setup`. The ssh e2e cases run

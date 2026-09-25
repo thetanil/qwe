@@ -252,7 +252,9 @@ jobs:
           if-no-files-found: ignore
       - name: fail if the release suite failed
         if: steps.release_tests.outcome == 'failure'
-        run: exit 1
+        run: |
+          echo "::error title=bazel test --config=release //... failed::the failed tests and the end of their logs are in this job's 'Failed tests' step and summary"
+          exit 1
       - run: bazel build --config=release //src/cli:qwe
       - if: failure()
         uses: ./.github/actions/collect-logs

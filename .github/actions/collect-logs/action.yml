@@ -1,5 +1,5 @@
 name: collect-logs
-description: Upload the test logs and each test's undeclared outputs (sanitizer and valgrind reports).
+description: Upload the test logs and each test's undeclared outputs (sanitizer and valgrind reports), then show each failed test's log in the run (annotation, job summary, and this step).
 inputs:
   name:
     description: Artifact name.
@@ -20,3 +20,9 @@ runs:
         name: ${{ inputs.name }}
         path: ${{ runner.temp }}/testlogs
         if-no-files-found: warn
+    # Last, because it fails when it finds a failed test: that makes it the step a failed job opens
+    # on, and the end of `gh run view --log-failed`, instead of bazel's "see <path>/test.log" on a
+    # runner that no longer exists.
+    - name: Failed tests
+      shell: bash
+      run: .github/scripts/test-failures.sh

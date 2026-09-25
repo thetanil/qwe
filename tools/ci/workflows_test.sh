@@ -11,8 +11,9 @@
 #     appears in some workflow file
 #  4. nightly.yml and release.yml call all five gate workflows (tests asan ubsan valgrind coverage)
 #  5. fuzz.yml never starts on a push or a schedule of its own; nightly.yml calls it and release.yml does not
-#  3. every workflow but fuzz.yml, release.yml and nightly.yml runs on workflow_call, and on push to main
-#     (valgrind.yml is on demand and must not run on push)
+#  3. every workflow but fuzz.yml, release.yml, nightly.yml and codeql.yml runs on workflow_call, and on
+#     push to main (valgrind.yml is on demand and must not run on push; codeql.yml is GitHub's code
+#     scanning, not a gate, with its own triggers)
 #  6. nightly.yml and release.yml both call smoke.yml
 here=$(cd "$(dirname "$0")/../.." && pwd)
 
@@ -26,7 +27,7 @@ check_repo() {
 			echo "rule 1: $w has no badge in README.md" >&2
 			bad=1
 		fi
-		case $w in fuzz.yml | release.yml | nightly.yml) continue ;; esac
+		case $w in fuzz.yml | release.yml | nightly.yml | codeql.yml) continue ;; esac
 		push=$(grep -c 'branches: \[main\]' "$f")
 		if [ "$w" = valgrind.yml ]; then want=0; else want=1; fi # valgrind: on demand only
 		if ! grep -q 'workflow_call:' "$f" || [ "$push" -ne "$want" ]; then
