@@ -34,7 +34,8 @@ static int sleep_case(void *arg)
 TEST probe_timeout_defaults_can_be_overridden(void)
 {
 	struct qwe_oom_outcome o;
-	struct saved_env saved = {0};
+	/* static: greatest runs the teardown after this function has returned */
+	static struct saved_env saved = {0};
 	unsigned secs = 2;
 
 	saved.value = getenv("QWE_OOM_PROBE_TIMEOUT");
