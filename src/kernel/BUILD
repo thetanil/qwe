@@ -66,10 +66,27 @@ cc_test(
     ],
 )
 
+# qwe_gcov_dump: coverage of a process that ends in exec, _exit or abort (quality/09).
+cc_library(
+    name = "gcov",
+    hdrs = ["gcov.h"],
+)
+
+cc_test(
+    name = "gcov_test",
+    size = "small",
+    srcs = ["gcov_test.c"],
+    deps = [
+        ":gcov",
+        "//third_party/greatest",
+    ],
+)
+
 cc_library(
     name = "proc",
     srcs = ["proc.c"],
-    hdrs = ["proc.h", "gcov.h"],
+    hdrs = ["proc.h"],
+    deps = [":gcov"],
 )
 
 # Signals and process groups: its own test binary (spec, "Test strategy").
@@ -176,13 +193,14 @@ cc_library(
 cc_library(
     name = "luavm",
     srcs = ["luavm.c", "luafs.c", "luaexec.c", "luasecrets.c"],
-    hdrs = ["gcov.h", "luavm.h", "luafs.h", "luaexec.h", "luasecrets.h"],
+    hdrs = ["luavm.h", "luafs.h", "luaexec.h", "luasecrets.h"],
     # The Lua sources, so bazel coverage keeps their line coverage (see //tools/coverage:defs.bzl).
     data = [
         "//plugins/builtin:shipped",
         "//src/kernel/lua:shipped",
     ],
     deps = [
+        ":gcov",
         ":clock",
         ":redact",
         "//src/secrets",
@@ -277,6 +295,19 @@ cc_test(
 cc_library(
     name = "clock",
     hdrs = ["clock.h"],
+)
+
+cc_test(
+    name = "clock_test",
+    size = "small",
+    srcs = ["clock_test.c"],
+    linkopts = ["-Wl,--wrap=clock_gettime"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    deps = [
+        ":clock",
+        ":gcov",
+        "//third_party/greatest",
+    ],
 )
 
 cc_library(
@@ -411,6 +442,7 @@ cc_library(
     testonly = True,
     srcs = ["oom_shim.c"],
     hdrs = ["oom_shim.h"],
+    deps = [":gcov"],
     linkopts = [
         "-Wl,--wrap=malloc",
         "-Wl,--wrap=calloc",
@@ -429,6 +461,7 @@ cc_test(
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
         ":alloc",
+        ":gcov",
         ":oom_shim",
         "//src/testing:owned",
         "//third_party/greatest",
@@ -441,6 +474,8 @@ cc_test(
     srcs = ["oom_shim_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
+        ":fmt",
+        ":gcov",
         ":oom_shim",
         "//third_party/greatest",
     ],

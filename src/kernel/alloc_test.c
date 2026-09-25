@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
 #include "src/kernel/alloc.h"
+#include "src/kernel/gcov.h"
 #include "src/kernel/oom_shim.h"
 #include "src/testing/owned.h"
 
@@ -9,6 +10,14 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+/* The child ends in abort(), which writes no coverage: dump it on the way out.
+ * abort() still ends the process with SIGABRT once this returns. */
+static void dump_on_abort(int sig)
+{
+	(void)sig;
+	qwe_gcov_dump();
+}
 
 /* Runs body in a child with allocation failing, and returns what it wrote to
  * stderr and how it ended. */
@@ -21,8 +30,13 @@ static int run_failing(void (*body)(void), char *err, size_t errcap, int *status
 		return -1;
 	pid_t pid = fork();
 	if (pid == 0) {
+		struct sigaction sa;
+
 		dup2(fd[1], 2);
 		close(fd[0]);
+		memset(&sa, 0, sizeof sa);
+		sa.sa_handler = dump_on_abort;
+		(void)sigaction(SIGABRT, &sa, NULL);
 		qwe_oom_arm(1);
 		body();
 		_exit(0);
@@ -40,16 +54,30 @@ static void grab(void)
 	(void)qwe_xmalloc(16);
 }
 
+static void grab_zeroed(void)
+{
+	(void)qwe_xcalloc(4, 4);
+}
+
+static void grow(void)
+{
+	(void)qwe_xrealloc(NULL, 16);
+}
+
 TEST helper_aborts_and_names_the_site(void)
 {
+	void (*bodies[])(void) = {grab, grab_zeroed, grow};
 	char err[512];
 	int status;
+	size_t i;
 
-	ASSERT_EQ(0, run_failing(grab, err, sizeof err, &status));
-	ASSERT(WIFSIGNALED(status));
-	ASSERT_EQ(SIGABRT, WTERMSIG(status));
-	ASSERT(strstr(err, "alloc_test.c:"));
-	ASSERT(strstr(err, "out of memory"));
+	for (i = 0; i < sizeof bodies / sizeof *bodies; i++) {
+		ASSERT_EQ(0, run_failing(bodies[i], err, sizeof err, &status));
+		ASSERT(WIFSIGNALED(status));
+		ASSERT_EQ(SIGABRT, WTERMSIG(status));
+		ASSERT(strstr(err, "alloc_test.c:"));
+		ASSERT(strstr(err, "out of memory"));
+	}
 	PASS();
 }
 

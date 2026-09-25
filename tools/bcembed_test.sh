@@ -36,4 +36,38 @@ head -c 1048577 /dev/zero | tr "\\0" "-" >"$dir/big.lua"
 check "over the cap: exit" 1 $?
 expect_in "over the cap: message" "$dir/err" "cannot read $dir/big.lua: File too large"
 
+# No output file, or an argument that is not <module>=<file>: usage errors.
+"$bcembed" 2>"$dir/err"
+check "no arguments: exit" 2 $?
+expect_in "no arguments: message" "$dir/err" "usage: bcembed"
+"$bcembed" "$dir/out.c" "m" 2>"$dir/err"
+check "bad argument: exit" 2 $?
+expect_in "bad argument: message" "$dir/err" "bad argument m"
+
+# A source that is missing, or that cannot be sized (a pipe), is not read.
+"$bcembed" "$dir/out.c" "m=$dir/missing.lua" 2>"$dir/err"
+check "missing source: exit" 1 $?
+expect_in "missing source: message" "$dir/err" "cannot read $dir/missing.lua"
+echo "return 1" | "$bcembed" "$dir/out.c" "m=/dev/stdin" 2>"$dir/err"
+check "pipe: exit" 1 $?
+expect_in "pipe: message" "$dir/err" "cannot read /dev/stdin"
+
+# A .json file is embedded as a module that returns its text.
+echo '{"a": 1}' >"$dir/d.json"
+"$bcembed" "$dir/out.c" "d=$dir/d.json" "m=$dir/m.lua" 2>"$dir/err"
+check "json: exit" 0 $?
+expect_in "json: table" "$dir/out.c" '{"d", '
+
+# The chunk name (what a Lua error names the module by) has a length limit.
+long=$(head -c 300 /dev/zero | tr "\\0" "n")
+"$bcembed" "$dir/out.c" "$long=$dir/m.lua" 2>"$dir/err"
+check "long name: exit" 1 $?
+expect_in "long name: message" "$dir/err" "module name too long"
+
+# A source that does not compile fails the build, naming the module.
+echo 'return +' >"$dir/bad.lua"
+"$bcembed" "$dir/out.c" "bad=$dir/bad.lua" 2>"$dir/err"
+check "syntax error: exit" 1 $?
+expect_in "syntax error: message" "$dir/err" "bcembed: bad:"
+
 exit $fail

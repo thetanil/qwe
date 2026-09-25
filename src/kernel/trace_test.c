@@ -4,6 +4,7 @@
 #include "src/kernel/trace.h"
 #include "src/testing/owned.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,10 +52,36 @@ TEST long_line_is_truncated(void)
 	PASS();
 }
 
+/* A trace that cannot be opened is an error; a closed one takes records and
+ * drops them; a write that fails (a full device) is not an error of the step
+ * being traced. */
+TEST open_close_and_failed_writes(void)
+{
+	struct qwe_trace t;
+
+	ASSERT_EQ(-1, qwe_trace_open(&t, "/nonexistent-dir/trace", 0));
+	ASSERT_EQ(0, qwe_trace_open(&t, "/dev/full", 0));
+	qwe_trace_record(&t, "job", 0, QWE_LC_READY, "start", NULL, "transition", NULL, NULL);
+	qwe_trace_close(&t);
+	qwe_trace_record(&t, "job", 0, QWE_LC_READY, "start", NULL, "transition", NULL, NULL);
+	qwe_trace_close(&t);
+	PASS();
+}
+
+/* An errno with no name is written as its number. */
+TEST unknown_errno_is_its_number(void)
+{
+	ASSERT_STR_EQ("E99999", qwe_errno_name(99999));
+	ASSERT_STR_EQ("ENOENT", qwe_errno_name(ENOENT));
+	PASS();
+}
+
 SUITE(trace)
 {
 	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(long_line_is_truncated);
+	RUN_TEST(open_close_and_failed_writes);
+	RUN_TEST(unknown_errno_is_its_number);
 }
 
 GREATEST_MAIN_DEFS();

@@ -1,4 +1,5 @@
 #include "src/kernel/oom_shim.h"
+#include "src/kernel/gcov.h"
 
 #include <fcntl.h>
 #include <limits.h>
@@ -176,6 +177,10 @@ int qwe_oom_probe(long n, long child_n, int (*fn)(void *), void *arg, struct qwe
 		report[0] = qwe_oom_count();
 		report[1] = qwe_oom_fired();
 		(void)!write(cntp[1], report, sizeof report);
+		/* disarmed first: the dump allocates, and must not be the one that fails */
+		fail_at = 0;
+		child_fail_at = 0;
+		qwe_gcov_dump();
 		_exit(rc);
 	}
 	close(errp[1]);

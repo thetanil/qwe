@@ -253,14 +253,12 @@ see `.bazelrc`), with `qwe-debug` still keeping its DWARF (`qwe` is stripped reg
 ## Keeping coverage from dropping
 
 ```
-bazel run //tools/coverage:check              # fails if a file has more uncovered lines than floor.txt allows
-bazel run //tools/coverage:check -- --update  # after improving coverage: ratchet floor.txt down
+bazel run //tools/coverage:check   # fails if a file of ours is below 85% line coverage
 ```
 
-`tools/coverage/floor.txt` lists, per file under `src/` and `plugins/` (C and Lua), the most
-uncovered lines allowed. Untested new code raises a file's count and fails the check; a new file with misses
-must be listed (run `--update` once it is tested). It is a `bazel run`, not a `bazel test`,
-because a test cannot itself run `bazel coverage`; run it in CI. Commit `floor.txt` changes on purpose.
+Every file under `src/`, `plugins/` and `tools/` (C and Lua) must have at least 85% of its
+lines covered; the check lists the uncovered lines of any file that does not. It is a `bazel run`,
+not a `bazel test`, because a test cannot itself run `bazel coverage`; run it in CI.
 
 ## CI
 
@@ -273,7 +271,7 @@ what each one fails on.
 | `tests` | `bazel test //...` | every push to `main` |
 | `asan` | the suite under AddressSanitizer and LeakSanitizer | every push to `main` |
 | `ubsan` | the suite under UBSan | every push to `main` |
-| `coverage` | the coverage floor, and the HTML report as an artifact | every push to `main` |
+| `coverage` | the 85% per-file coverage check, and the HTML report as an artifact | every push to `main` |
 | `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes), plus a static-analysis job (the LLVM Static Analyzer and a C ruleset, `docs/static-analysis.md`) | by hand, nightly, and in a release |
 | `nightly` | all five of the above, from fresh caches, and `fuzz` | 02:17 UTC, and by hand |
 | `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | nightly (one hour), and by hand |

@@ -2,7 +2,9 @@
  *
  * gcov writes a process's counters when it exits normally. A step child (proc.c,
  * qwe.exec.run) ends in execvp or _exit, so everything it ran would be lost from
- * `bazel coverage`. Those places call qwe_gcov_dump() first. It is a no-op except
+ * `bazel coverage`. Those places call qwe_gcov_dump() first; so do the OOM probe's
+ * child (oom_shim.c) and the SIGABRT handlers of the tests that expect an abort
+ * (alloc_test.c, clock_test.c). It is a no-op except
  * in `bazel coverage` builds, which .bazelrc gives -DQWE_GCOV. It resets the
  * counters after dumping them, so a process can dump more than once without
  * counting anything twice (gcov refuses a second dump until they are reset). */
@@ -21,8 +23,9 @@ static inline void qwe_gcov_dump(void)
 {
 	if (!getenv("QWE_LUA_COVERAGE"))
 		return;
-	__gcov_dump();
-	__gcov_reset();
+	/* One line: a line of its own for the reset would count its run after the
+	 * dump, and the reset zeroes that count, so no report could ever show it. */
+	__gcov_dump(), __gcov_reset();
 }
 #else
 static inline void qwe_gcov_dump(void) {}

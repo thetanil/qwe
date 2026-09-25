@@ -37,7 +37,7 @@ unreachable line when that block is *nested inside* another `if/else`, even when
 branch inside it is exercised by a test. Flattening it to a single-level guard clause
 (`if not x then ... end` followed by unconditional code, the style `checkapply.lua` already
 uses) makes the line disappear from the instrumented set entirely instead of showing as a
-phantom miss. If the coverage floor rejects a line that every test path clearly reaches,
+phantom miss. If the coverage check flags a line that every test path clearly reaches,
 check whether it is a return-only block nested inside an `if/else` before assuming the test
 is missing one.
 
@@ -87,7 +87,7 @@ Still open, and not in the ticket's table: `src/cli/encrypt/encrypt.c` (5/50) an
 Whole report: 85.1% of lines (5083 of 5974), 88.9% of functions. (The line count is larger than
 the table above's 4588 because the unit tests added since count too: `src/` includes test-support
 code such as `oom_shim.c`.) Files in `src/` with a miss, hit / found. Compare a later report to this
-table; `tools/coverage/floor.txt` holds the same counts as a ratchet.
+table.
 
 Two things changed how coverage is *measured*, not only what is tested:
 
@@ -175,6 +175,28 @@ defensive path: a clean schema with a bad `needs` is an ordinary user error. The
 cases `validate_needs_unknown` and `validate_needs_cycle` now reach `check_dag`'s
 error branch and `escape_token`.
 
+## Every file at least 85% (2026-09-25)
+
+`floor.txt` and its ratchet are gone. `check.sh` now fails if any file under `src/`, `plugins/`
+or `tools/` (C and Lua) has fewer than 85% of its lines covered, and lists the uncovered lines
+of each one that does. `tools/` is new to the check; `tools/bcembed.c` went from 64% to 90%
+with `bcembed_test.sh`'s error cases.
+
+What was below 85% was mostly unmeasured, not untested, so measurement changed too:
+
+- **The OOM probe's child dumps its counters** (`qwe_gcov_dump` before `_exit`, disarmed first).
+  The allocation-failure branches that the sweeps reach (`envelope.c`, the shim itself) now
+  show as covered. `//src/kernel:oom_test` still unsets `QWE_LUA_COVERAGE`, so its probes do not.
+- **A test that expects `abort()` dumps from a `SIGABRT` handler** (`alloc_test.c`,
+  `clock_test.c`), since an aborted process writes no gcov data. `clock_test` fails
+  `clock_gettime` with `--wrap` to reach `qwe_mono_now`'s abort.
+- **`qwe_gcov_dump` calls dump and reset on one line.** A separate reset line is counted after
+  the dump and zeroed by the reset, so it could never be covered. `gcov_test` calls it with
+  and without `QWE_LUA_COVERAGE`.
+
+The lowest files after this: `kernel/luavm.c` 86.7%, `edge/yaml/fuzz_harness.c` 87.8%,
+`tools/bcembed.c` 89.5%, `kernel/workflow.c` 89.7%.
+
 ## Lua
 
 The same command measures the Lua qwe ships (`src/kernel/lua/*.lua`, `plugins/builtin/**`):
@@ -248,4 +270,4 @@ Tests added, all `qwe validate` cases with the exact message and position as the
 `bazel run //tools/coverage:html` (and the report published to GitHub Pages) runs the combined report
 through `tools/coverage/ours.sh`, which drops every `third_party/` record (tinycbor is the one that
 shows up: it is vendored C that our tests exercise). The CI job summary totals and the percentage
-badge (`badge.sh`) count `src/` and `plugins/` only, too. `check.sh` and `floor.txt` always did.
+badge (`badge.sh`) count `src/` and `plugins/` only, too. `check.sh` counts `src/`, `plugins/` and `tools/`.

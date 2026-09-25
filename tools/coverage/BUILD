@@ -9,7 +9,7 @@ sh_binary(
     srcs = ["html.sh"],
 )
 
-# Fails if coverage dropped below tools/coverage/floor.txt: bazel run //tools/coverage:check
+# Fails if a file of ours is below 85% line coverage: bazel run //tools/coverage:check
 sh_binary(
     name = "check",
     srcs = ["check.sh"],

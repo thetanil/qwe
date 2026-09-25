@@ -11,6 +11,7 @@
 #include <lauxlib.h>
 #include <lua.h>
 
+#include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -59,9 +60,33 @@ TEST atpanic_formats_a_clean_error_and_exits_failed(void)
 	PASS();
 }
 
+/* Without QWE_LUA_COVERAGE (the OOM tests unset it) a VM starts and flushes
+ * with the Lua coverage hook off. */
+TEST starts_and_flushes_with_lua_coverage_off(void)
+{
+	const char *was = getenv("QWE_LUA_COVERAGE");
+	char *saved = was ? strdup(was) : NULL;
+	lua_State *L = NULL;
+	int ok = (!was || saved) && unsetenv("QWE_LUA_COVERAGE") == 0;
+
+	if (ok)
+		L = qwe_lua_new();
+	if (L) {
+		qwe_lua_coverage_flush(L);
+		lua_close(L);
+	}
+	if (saved)
+		(void)setenv("QWE_LUA_COVERAGE", saved, 1);
+	free(saved);
+	ASSERT(ok);
+	ASSERT(L != NULL);
+	PASS();
+}
+
 SUITE(luavm)
 {
 	RUN_TEST(atpanic_formats_a_clean_error_and_exits_failed);
+	RUN_TEST(starts_and_flushes_with_lua_coverage_off);
 }
 
 GREATEST_MAIN_DEFS();

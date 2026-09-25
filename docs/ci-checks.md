@@ -25,7 +25,7 @@ land somewhere other than the workflow that runs it.
 | Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | nightly, release and manual | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
 | Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | nightly, release and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
 | Static analysis | `valgrind.yml` (job `static-analysis`) | `tools/clang-tidy/run.sh` | nightly, release and manual | about the plain suite's build, plus one clang-tidy pass per file | any `clang-analyzer-*`/bugprone/cert/concurrency/performance/portability finding in `src/`, `plugins/` or `tools/` |
-| Coverage floor | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/` or `plugins/` has more uncovered lines than `tools/coverage/floor.txt` |
+| Coverage | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/`, `plugins/` or `tools/` has less than 85% of its lines covered |
 | Smoke | `smoke.yml` (job `debug-smoke`, then `build`, then `smoke`) | `./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"` | every push to main | debug-smoke seconds, fastbuild; build ~ the plain suite under `--config=release`; smoke seconds on a fresh runner | debug-smoke: a real bug in a smoke workflow, caught on the fastbuild binary before `build` pays for `--config=release`. build/smoke: the release binary fails a real smoke workflow, is not statically linked, or the full suite fails under `--config=release` (`build` then keeps a gdb backtrace of any crashed test as the `smoke-release-backtraces` artifact) |
 | Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | nightly (3600 s) and manual | hours; four processes in parallel | any crash artifact exists |
 
@@ -44,11 +44,9 @@ bazel test --config=release //...
 ./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"
 ```
 
-`check` runs `bazel coverage //... --combined_report=lcov` itself and compares
-per-file miss counts with `tools/coverage/floor.txt`, a ratchet: new code without
-tests raises a count and fails; deleting code cannot fail. After adding tests,
-`bazel run //tools/coverage:check -- --update` rewrites the floor, and the result
-is committed on purpose. For a browsable report, `bazel run //tools/coverage:html`
+`check` runs `bazel coverage //... --combined_report=lcov` itself and fails if
+any file under `src/`, `plugins/` or `tools/` has less than 85% of its lines covered,
+listing the uncovered lines. For a browsable report, `bazel run //tools/coverage:html`
 (needs `genhtml`, from the `lcov` package) writes `coverage-html/`; the coverage workflow uploads it as
 an artifact. On a green push to main it is also deployed to GitHub Pages (`https://thetanil.com/qwe/`, Settings, Pages, source "GitHub Actions"), next to `coverage.json`, the percentage badge document that `tools/coverage/badge.sh` writes (line coverage of `src/` and `plugins/`; red under 70, yellow under 85, green above).
 
@@ -165,8 +163,7 @@ also run under the asan, ubsan and valgrind configs above.
   then update the list. `tools/bcembed.c` is exempt (build-time tool).
 - **Which allocations a test fails**: run the test with
   `QWE_OOM_SITE_LOG=<file>` (`--test_env`, and `--copt=-g --strip=never`), then
-  `addr2line -i -e <test binary> $(sed 's/^/0x/' <file>)`. Coverage cannot show this,
-  because the injected run is a forked probe that never flushes it.
-- **Coverage floor**: the shim's probe code and the forked step children count as
-  uncovered in `tools/coverage/floor.txt` for the same reason; new injection code can
-  raise those counts, and `--update` is the right response when that is all it is.
+  `addr2line -i -e <test binary> $(sed 's/^/0x/' <file>)`. Coverage shows which lines
+  the sweeps reach (the probe child dumps its gcov data before `_exit`; not in
+  `//src/kernel:oom_test`, which unsets `QWE_LUA_COVERAGE`), not which injection
+  reached them.
