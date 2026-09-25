@@ -1,0 +1,5 @@
+# Code scanning covers our own code only, the same scope as clang-tidy and the sanitizers
+# (docs/static-analysis.md): vendored code under third_party/ is upstream's to fix.
+name: qwe
+paths-ignore:
+  - third_party

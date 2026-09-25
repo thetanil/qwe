@@ -5,6 +5,7 @@
 #include "src/secrets/keyfile.h"
 #include "src/testing/owned.h"
 
+#include <fcntl.h>
 #include <sodium.h>
 #include <stdlib.h>
 #include <string.h>
@@ -79,27 +80,35 @@ TEST tamper_detected(void)
 
 TEST key_file_perms(void)
 {
-	char dir[] = "/tmp/qwe-keytest-XXXXXX", path[256], err[256];
+	char dir[] = "/tmp/qwe-keytest-XXXXXX", path[256], err[256], err644[256] = "";
 	uint8_t loaded[QWE_KEY_BYTES];
 	struct stat st;
+	int fd, stat_rc, rc644, rc640;
 
 	ASSERT(mkdtemp(dir) != NULL);
 	qwe_xfmt(path, sizeof path, "%s/a/b/secret", dir);
 	ASSERT_EQ(0, qwe_key_generate(path, err, sizeof err));
-	ASSERT_EQ(0, stat(path, &st));
-	ASSERT_EQ(0600, st.st_mode & 0777);
-	ASSERT_EQ(QWE_KEY_BYTES, st.st_size);
 	ASSERT_EQ(0, qwe_key_load(path, loaded, err, sizeof err));
 	/* a second keygen refuses */
 	ASSERT(qwe_key_generate(path, err, sizeof err) != 0);
 	ASSERT(strstr(err, "already exists") != NULL);
+
+	/* The mode is read and changed through a descriptor, not by name: nothing can
+	 * swap the file between a check and a chmod. */
+	fd = open(path, O_RDONLY | O_CLOEXEC);
+	ASSERT(fd >= 0);
+	stat_rc = fstat(fd, &st);
 	/* group or world access is refused, naming the file and the mode */
-	chmod(path, 0644);
-	ASSERT(qwe_key_load(path, loaded, err, sizeof err) != 0);
-	ASSERT(strstr(err, path) != NULL);
-	ASSERT(strstr(err, "0644") != NULL);
-	chmod(path, 0640);
-	ASSERT(qwe_key_load(path, loaded, err, sizeof err) != 0);
+	rc644 = fchmod(fd, 0644) == 0 ? qwe_key_load(path, loaded, err644, sizeof err644) : 0;
+	rc640 = fchmod(fd, 0640) == 0 ? qwe_key_load(path, loaded, err, sizeof err) : 0;
+	(void)close(fd);
+	ASSERT_EQ(0, stat_rc);
+	ASSERT_EQ(0600, st.st_mode & 0777);
+	ASSERT_EQ(QWE_KEY_BYTES, st.st_size);
+	ASSERT(rc644 != 0);
+	ASSERT(strstr(err644, path) != NULL);
+	ASSERT(strstr(err644, "0644") != NULL);
+	ASSERT(rc640 != 0);
 	unlink(path);
 	PASS();
 }

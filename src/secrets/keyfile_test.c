@@ -3,6 +3,7 @@
 #include "src/kernel/fmt.h"
 #include "src/secrets/keyfile.h"
 
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -16,29 +17,30 @@ TEST mode_check_matches_socket_dir_check(void)
 {
 	char root[] = "/tmp/qwe-modetest-XXXXXX", file[128], dir[128], fe[256], de[256];
 	struct stat fst, dst;
-	FILE *f;
+	int ff, df, ok;
 
 	ASSERT(mkdtemp(root) != NULL);
 	qwe_xfmt(file, sizeof file, "%s/secret", root);
 	qwe_xfmt(dir, sizeof dir, "%s/sock", root);
-	f = fopen(file, "w");
-	ASSERT(f != NULL);
-	ASSERT_EQ(0, fclose(f));
 	ASSERT_EQ(0, mkdir(dir, 0700));
+	/* Modes are set and read through descriptors, not by name: nothing can swap the
+	 * file between a chmod and the stat that checks it. */
+	ff = open(file, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+	df = open(dir, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+	ok = ff >= 0 && df >= 0;
 
 	/* private: both pass */
-	chmod(file, 0600);
-	chmod(dir, 0700);
-	ASSERT_EQ(0, stat(file, &fst));
-	ASSERT_EQ(0, stat(dir, &dst));
-	ASSERT_EQ(0, qwe_private_check(&fst, "the key file", file, fe, sizeof fe));
-	ASSERT_EQ(0, qwe_private_check(&dst, "the socket directory", dir, de, sizeof de));
+	ok = ok && fchmod(ff, 0600) == 0 && fchmod(df, 0700) == 0 && fstat(ff, &fst) == 0 && fstat(df, &dst) == 0;
+	ok = ok && qwe_private_check(&fst, "the key file", file, fe, sizeof fe) == 0 &&
+	     qwe_private_check(&dst, "the socket directory", dir, de, sizeof de) == 0;
 
 	/* any group or other bit: both refuse, naming the path and the mode */
-	chmod(file, 0640);
-	chmod(dir, 0750);
-	ASSERT_EQ(0, stat(file, &fst));
-	ASSERT_EQ(0, stat(dir, &dst));
+	ok = ok && fchmod(ff, 0640) == 0 && fchmod(df, 0750) == 0 && fstat(ff, &fst) == 0 && fstat(df, &dst) == 0;
+	if (ff >= 0)
+		(void)close(ff);
+	if (df >= 0)
+		(void)close(df);
+	ASSERT(ok);
 	ASSERT_EQ(-1, qwe_private_check(&fst, "the key file", file, fe, sizeof fe));
 	ASSERT_EQ(-1, qwe_private_check(&dst, "the socket directory", dir, de, sizeof de));
 	ASSERT(strstr(fe, "the key file ") == fe && strstr(fe, file) && strstr(fe, "has mode 0640"));
