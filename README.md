@@ -308,23 +308,35 @@ never tags, so a tag that was only created locally does nothing.
 
 1. Bump `QWE_VERSION` in `src/kernel/qwe.h` and the expected output in
    `tests/e2e/cli_version/expected/stdout` (`qwe <version>`). Run `bazel test //...`.
-2. Commit and `git push` to `main`. Wait until `tests`, `asan`, `ubsan` and `coverage` are green **on
-   that commit**. The release reruns every gate at the tag, so a red `main` means a failed release.
+2. Commit and `git push` to `main`. Wait until every workflow a push runs (`tests`, `asan`, `ubsan`,
+   `coverage` and `smoke`) is green **on that commit**. The release reruns all of them at the tag, so
+   a red `main` means a failed release:
+   ```
+   gh run list -c "$(git rev-parse HEAD)"     # one row per workflow; wait for five successes
+   gh run watch <run id>                      # or follow one of them
+   ```
 3. Tag that exact commit, then push the tag by name:
    ```
    git tag v0.2.0                # the tag is "v" + QWE_VERSION, or the version check fails
    git push origin v0.2.0        # this is the step that starts the release
    ```
    (Instead, you can write the release in the GitHub web UI with the tag `v<version>` and publish it;
-   the tag it creates starts the same run.)
-4. Watch `release` in the Actions tab. It runs all five gates (valgrind included, about 25 minutes) and
-   `smoke` (the release binary's own smoke workflows on a clean runner, then `perf`'s A/B timing
-   against the newest eligible release), builds `qwe` and `qwe-debug`, checks that the tag,
-   `QWE_VERSION` and `qwe --version` agree, then attaches the binaries and `SHA256SUMS`, and adds the
-   commit hash to the notes. A tag with a `-` (`v0.3.0-rc1`) is marked a pre-release.
-5. If a gate or the version check fails, a release you wrote in the web UI goes back to a draft. Fix
-   `main`, then move the tag: `git tag -d v0.2.0 && git push origin :refs/tags/v0.2.0`, tag the fixed
-   commit and push it again.
+   the tag it creates starts the same run. That release is public while the gates run.)
+4. Watch the run: `gh run list -w release -L 1`, then `gh run watch <run id>`. It reruns
+   `tests`, `asan`, `ubsan` and `coverage`, adds `valgrind` (unit, e2e and static analysis; about
+   25 minutes, the slowest part), and runs `smoke` (the release binary's own smoke workflows on a
+   clean runner, then `perf`'s A/B timing against the newest non-draft, non-prerelease release).
+   Only then does `publish` build `qwe` and `qwe-debug`, check that the tag, `QWE_VERSION` and
+   `qwe --version` agree, and create the release (title `v<version> (<short hash>)`, generated
+   notes plus the commit hash) with the binaries and `SHA256SUMS` attached. A tag with a `-`
+   (`v0.3.0-rc1`) is marked a pre-release. Check it with `gh release view v<version>`.
+5. If a gate or the version check fails: for a pushed tag, no release was created. For a release
+   written in the web UI, it is turned back into a draft. Either way, fix `main`, then move the tag
+   and push it again:
+   ```
+   git tag -d v0.2.0 && git push origin :refs/tags/v0.2.0
+   git tag v0.2.0 && git push origin v0.2.0
+   ```
 
 ## Credits
 
