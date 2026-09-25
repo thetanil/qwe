@@ -158,7 +158,14 @@ cc_library(
         "-D_FILE_OFFSET_BITS=64",
         "-D_LARGEFILE_SOURCE",
         "-DLUAJIT_UNWIND_EXTERNAL",
-    ],
+    ] + select({
+        # Fuzz builds allocate the Lua heap with malloc instead of LuaJIT's own mmap arena.
+        # LeakSanitizer scans malloc'd memory, not that arena, so without this a PCRE2
+        # object held only by a live Lua value (lua-schema caches compiled patterns in the
+        # fuzzer's long-lived state) is reported as leaked, and every nightly run fails.
+        "//tools/fuzz:fuzz": ["-DLUAJIT_USE_SYSMALLOC"],
+        "//conditions:default": [],
+    }),
     includes = ["src"],
     linkopts = [
         "-lm",

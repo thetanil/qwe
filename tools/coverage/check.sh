@@ -12,15 +12,29 @@ trap 'rm -f "$now"' EXIT
 # path lines-found lines-hit
 awk -F: '/^SF:/{f=$2} /^LF:/{lf=$2} /^LH:/{lh=$2} /^end_of_record/{ if (f ~ /^(src|plugins|tools)\//) print f, lf, lh; f="" }' "$report" | sort > "$now"
 
+# In GitHub Actions, each failing file is also an error annotation (shown on the run's
+# page, not only in this log) and a row in the job summary.
+gh=${GITHUB_ACTIONS-}
+summary=${GITHUB_STEP_SUMMARY-}
+
 echo
 echo "== Coverage per file (at least $min% of lines)"
 status=0
-awk -v min="$min" '
+awk -v min="$min" -v gh="$gh" -v summary="$summary" '
 {
 	f=$1; found=$2; hit=$3
 	lang = (f ~ /\.lua$/) ? "Lua" : "C"
 	F[lang]+=found; H[lang]+=hit; nfiles[lang]++
-	if (found && 100*hit < min*found) { printf "  FAIL  %-48s %5.1f%%  (%d of %d lines)\n", f, 100*hit/found, hit, found; bad++ }
+	if (found && 100*hit < min*found) {
+		printf "  FAIL  %-48s %5.1f%%  (%d of %d lines)\n", f, 100*hit/found, hit, found
+		# %25 is a literal % in a workflow command
+		if (gh == "true") printf "::error file=%s,title=coverage::%s: %.1f%%25 of lines covered (%d of %d), below %d%%25\n", f, f, 100*hit/found, hit, found, min
+		if (summary != "") {
+			if (!bad) printf "### Coverage below %d%%\n\n| file | covered | lines |\n|---|---|---|\n", min >> summary
+			printf "| `%s` | %.1f%% | %d of %d |\n", f, 100*hit/found, hit, found >> summary
+		}
+		bad++
+	}
 }
 END {
 	for (l in F) printf "  %-3s  %d of %d lines covered (%.1f%%) in %d files\n", l, H[l], F[l], 100*H[l]/F[l], nfiles[l]
@@ -37,7 +51,7 @@ if [ "$status" != 0 ]; then
 		echo
 	done
 	echo
-	echo "check: coverage below $min%" >&2
+	echo "check: coverage below $min%"
 	exit 1
 fi
 echo "check: every file is at least $min% covered"

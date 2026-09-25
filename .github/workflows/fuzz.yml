@@ -81,3 +81,5 @@ jobs:
             ${{ env.QWE_FUZZ_DIR }}/*-crashes/
             ${{ env.QWE_FUZZ_DIR }}/*.log
           if-no-files-found: ignore
+          # QWE_FUZZ_DIR is .fuzz: without this, upload-artifact skips it as hidden and uploads nothing.
+          include-hidden-files: true

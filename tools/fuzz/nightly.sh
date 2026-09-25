@@ -33,5 +33,21 @@ for san in asan ubsan; do
 done
 wait
 
-crashes=$(find "$base" -path '*-crashes/*' -type f | wc -l)
+# Each run that crashed: which one, its artifacts, and the end of its log (the
+# sanitizer report). libFuzzer writes to the .log files, not to this output, so
+# without this a CI log says only that something crashed.
+crashes=0
+for san in asan ubsan; do
+	for t in transcode chain; do
+		c=$base/$t-$san
+		n=$(find "$c-crashes" -type f | wc -l)
+		[ "$n" -eq 0 ] && continue
+		crashes=$((crashes + n))
+		echo "fuzz: ${t}_$san: $n artifact(s):" >&2
+		find "$c-crashes" -type f | sed 's/^/  /' >&2
+		echo "fuzz: ${t}_$san: end of $c.log:" >&2
+		tail -n 60 "$c.log" | sed 's/^/  /' >&2
+		[ "${GITHUB_ACTIONS-}" = true ] && echo "::error title=fuzz::${t}_$san crashed ($n artifact(s)); the sanitizer report is in the Fuzz step's log, the inputs in the fuzz-findings artifact"
+	done
+done
 [ "$crashes" -eq 0 ] || { echo "fuzz: $crashes crash artifact(s) under $base/*-crashes/" >&2; exit 1; }

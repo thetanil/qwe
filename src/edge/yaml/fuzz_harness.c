@@ -8,6 +8,7 @@
 
 #include <lauxlib.h>
 #include <lua.h>
+#include <luajit.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -68,6 +69,10 @@ void qwe_fuzz_chain(const uint8_t *data, size_t len)
 		L = chain_L = qwe_lua_new();
 		if (!L || !stderr)
 			abort();
+		/* The chain is what is fuzzed, not LuaJIT's trace compiler, and the
+		 * compiler holds its IR buffer by a biased pointer that LeakSanitizer
+		 * cannot follow, so every run reported it as a leak. */
+		luaJIT_setmode(L, 0, LUAJIT_MODE_ENGINE | LUAJIT_MODE_OFF);
 	}
 	if (transcode(data, len, &cbor, &n, &pos) < 0)
 		return;

@@ -53,5 +53,7 @@ coverage --copt=-DQWE_GCOV
 # Fuzz targets (quality/06) need clang's libFuzzer. Combine with --config=asan or --config=ubsan.
 build:fuzz --repo_env=CC=clang
 build:fuzz --action_env=CC=clang
+# LuaJIT on malloc (third_party/luajit/BUILD), so LeakSanitizer can see into the Lua heap.
+build:fuzz --define=qwe_fuzz=1
 # Coverage feedback for our own code only (src/): third_party (libyaml, LuaJIT) is not fuzzed for now.
 build:fuzz --per_file_copt=^src/.*@-fsanitize=fuzzer-no-link
