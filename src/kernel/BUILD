@@ -435,6 +435,17 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "oom_shim_test",
+    size = "small",
+    srcs = ["oom_shim_test.c"],
+    linkstatic = True,  # --wrap only reaches objects linked into the binary
+    deps = [
+        ":oom_shim",
+        "//third_party/greatest",
+    ],
+)
+
 # Fails every allocation on the load path in turn (ticket quality/02).
 cc_test(
     name = "load_oom_test",

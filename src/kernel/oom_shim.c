@@ -1,6 +1,8 @@
 #include "src/kernel/oom_shim.h"
 
 #include <fcntl.h>
+#include <limits.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
@@ -19,6 +21,21 @@ static long child_fail_at;
 static pid_t child_pid; /* the child whose count child_calls is */
 static long child_calls;
 static char child_log[512];
+
+static unsigned oom_probe_timeout_seconds(void)
+{
+	const char *s = getenv("QWE_OOM_PROBE_TIMEOUT");
+	char *end;
+	long n;
+
+	if (!s || !*s)
+		return 30;
+	errno = 0;
+	n = strtol(s, &end, 10);
+	if (errno != 0 || *end != 0 || n <= 0 || n > INT_MAX)
+		return 30;
+	return (unsigned)n;
+}
 
 void qwe_oom_arm(long n)
 {
@@ -151,7 +168,7 @@ int qwe_oom_probe(long n, long child_n, int (*fn)(void *), void *arg, struct qwe
 		close(errp[0]);
 		close(errp[1]);
 		close(cntp[0]);
-		alarm(30);
+		alarm(oom_probe_timeout_seconds());
 		qwe_oom_arm(n);
 		if (child_n)
 			qwe_oom_arm_child(child_n);
