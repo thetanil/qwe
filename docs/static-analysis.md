@@ -52,7 +52,7 @@ it. It is a measurement, not a gate: it exits 0 whatever it finds.
 
 Each check's row says what hid it from the gate: `excluded` (a `-check` line
 in `Checks`) or `option` (a check the gate runs, narrowed by a `CheckOptions`
-entry; there is none right now, so `option` counts 0). The last line totals the two.
+entry such as `bugprone-reserved-identifier.AllowedIdentifiers`). The last line totals the two.
 The options are dropped by passing `--config-file` a copy of `.clang-tidy`
 without its `CheckOptions:` block: clang-tidy cannot blank an option on the
 command line (`--config` replaces the file rather than merging with it). The
@@ -64,8 +64,8 @@ At `acb416d` it counted 619 findings, none in a header;
 At `dcc74d8` it counts 427: 254 hidden by an exclusion, every one in a class the
 exclusion table below still lists, and 173 hidden by `cert-err33-c`'s
 `CheckedFunctions` (all `fprintf`/`fputs`/`fputc`). `.scratch/sca-exclusions`
-works through what is left: with `CheckedFunctions` gone, the count is 256, all
-hidden by an exclusion.
+works through what is left: with `CheckedFunctions` gone, the count is 256,
+181 hidden by an exclusion and 75 by the reserved-identifier allow list.
 
 ## No compile_commands.json, no Python
 
@@ -94,7 +94,8 @@ specific, checked reason:
 
 | Check(s) | Why excluded |
 |---|---|
-| `bugprone-reserved-identifier`, `cert-dcl37-c`, `cert-dcl51-cpp` | Flags `_POSIX_C_SOURCE`/`_GNU_SOURCE` (a required feature-test-macro idiom) and `__real_*`/`__wrap_*` (required by the `-Wl,--wrap=` OOM-test harness, `docs/ci-checks.md`'s "Allocation checks"). Both are reserved-namespace by necessity, not a defect. |
+| `cert-dcl51-cpp` | A C++ rule (reserved names in a C++ translation unit). It never fires on C, so excluding it hides nothing. |
+| `bugprone-reserved-identifier`, `cert-dcl37-c` (narrowed, not excluded) | `AllowedIdentifiers` lets through the five reserved names this code has to use, anchored: `_POSIX_C_SOURCE` and `_GNU_SOURCE` (the feature-test macros, required before the first include), `__wrap_*` and `__real_*` (what the `-Wl,--wrap=` OOM-test harness links against, `docs/ci-checks.md`'s "Allocation checks"), and `__executable_start` (a linker-defined symbol `oom_shim.c` reads to print call-site offsets). Any other reserved name (a `_Foo` type, a `__helper`) is a finding. |
 | `bugprone-multi-level-implicit-pointer-conversion` | Fires on every `calloc`/`free` call (`void *` &harr; `T **`) — the standard, recommended C idiom of not casting `malloc`/`calloc`/`free`. |
 | `bugprone-implicit-widening-of-multiplication-result` | Every hit multiplies small compile-time-constant macros (`1024 * 1024`, `64 * 1024`, `2 * QWE_YAML_MAX_DEPTH`); the check does not special-case a constant-folded multiplication that cannot overflow. |
 | `concurrency-mt-unsafe` | qwe has no threads — concurrency is one process per plugin step (`docs/adr/0001-fork-per-plugin-step.md`) — so "not thread-safe" does not apply. |

@@ -13,8 +13,6 @@ Checks: >
   concurrency-*,
   performance-*,
   portability-*,
-  -bugprone-reserved-identifier,
-  -cert-dcl37-c,
   -cert-dcl51-cpp,
   -bugprone-multi-level-implicit-pointer-conversion,
   -bugprone-implicit-widening-of-multiplication-result,
@@ -34,3 +32,10 @@ WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'
 ExcludeHeaderFilterRegex: '(^|/)(third_party|bazel-out|external)/'
 FormatStyle: none
+# The reserved names the code has to use (docs/static-analysis.md): the feature
+# test macros, the -Wl,--wrap= pairs of the OOM harness, and one linker symbol.
+# Anything else in the reserved namespace is still a finding. The regexes are
+# not anchored by the check, so they are anchored here.
+CheckOptions:
+  bugprone-reserved-identifier.AllowedIdentifiers: '^_POSIX_C_SOURCE$;^_GNU_SOURCE$;^__wrap_.*$;^__real_.*$;^__executable_start$'
+  cert-dcl37-c.AllowedIdentifiers: '^_POSIX_C_SOURCE$;^_GNU_SOURCE$;^__wrap_.*$;^__real_.*$;^__executable_start$'

@@ -1,6 +1,6 @@
 # 05: Reserved identifiers: an allow list, not an exclusion
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 Blocked by: 01
@@ -31,9 +31,30 @@ allowed by an option.
 
 ## Acceptance criteria
 
-- [ ] `.clang-tidy` enables `bugprone-reserved-identifier` and `cert-dcl37-c` with `AllowedIdentifiers` set to the five anchored patterns, and the gate exits 0. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
-- [ ] A new reserved name fails the gate. `manual: add a throwaway static int __qwe_tmp; to a src/kernel/*.c file, run the gate, see it exit non-zero naming bugprone-reserved-identifier; revert`
-- [ ] The doc row says "narrowed to …" and lists the allowed names with the reason for each. `manual: docs/static-analysis.md`
-- [ ] `bazel test //...` is green. `unit: bazel test //...`
+- [x] `.clang-tidy` enables `bugprone-reserved-identifier` and `cert-dcl37-c` with `AllowedIdentifiers` set to the five anchored patterns, and the gate exits 0. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
+- [x] A new reserved name fails the gate. `manual: add a throwaway static int __qwe_tmp; to a src/kernel/*.c file, run the gate, see it exit non-zero naming bugprone-reserved-identifier; revert`
+- [x] The doc row says "narrowed to …" and lists the allowed names with the reason for each. `manual: docs/static-analysis.md`
+- [x] `bazel test //...` is green. `unit: bazel test //...`
 
 ## Comments
+
+`bugprone-reserved-identifier` and `cert-dcl37-c` are enabled, each with
+`AllowedIdentifiers` set to `^_POSIX_C_SOURCE$;^_GNU_SOURCE$;^__wrap_.*$;^__real_.*$;^__executable_start$`
+(the check does not anchor its regexes, so they are anchored here). `cert-dcl51-cpp`
+stays excluded; its doc row now says it is a C++ rule that cannot fire on C.
+
+Both options are needed: the alias reads its own option name, so setting only
+`bugprone-reserved-identifier.AllowedIdentifiers` would leave `cert-dcl37-c`
+reporting the names. Gate exit 0.
+
+Negative check: `int __qwe_tmp(void) { return 0; }` appended to
+`src/kernel/clock_test.c` failed the gate with `declaration uses identifier
+'__qwe_tmp', which is a reserved identifier [bugprone-reserved-identifier,cert-dcl37-c]`.
+Reverted. (A first try with `static int __qwe_tmp;` never reached the analyzer,
+since gcc's `-Werror=unused-variable` failed the Bazel build first.)
+
+`run.sh --raw` now reports `bugprone-reserved-identifier` as `option`: 75 (the
+ticket's 74 plus the `_POSIX_C_SOURCE` define in `put_test.c` from ticket 04),
+and "hidden by a CheckOptions narrowing: 75".
+
+`bazel test //...` 258 pass, 3 skipped; coverage check green.
