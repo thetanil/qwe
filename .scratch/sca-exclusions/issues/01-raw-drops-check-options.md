@@ -1,6 +1,6 @@
 # 01: `--raw` sees what `CheckOptions` narrows
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 
@@ -36,10 +36,15 @@ marker comment around it.
 
 ## Acceptance criteria
 
-- [ ] `run.sh --raw` at this ticket's base reports 427 findings (or the count after intervening fixes, with the difference explained), including 173 `cert-err33-c`. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh --raw`
-- [ ] The output tells findings hidden by a `CheckOptions` narrowing apart from findings hidden by an exclusion. `manual: the same run`
-- [ ] The default gate is unchanged and exits 0. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
-- [ ] `docs/static-analysis.md`'s `--raw` section drops the "One blind spot" paragraph and says that raw mode ignores `CheckOptions`. `manual: docs/static-analysis.md`
-- [ ] `bazel test //...` is green. `unit: bazel test //...`
+- [x] `run.sh --raw` at this ticket's base reports 427 findings (or the count after intervening fixes, with the difference explained), including 173 `cert-err33-c`. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh --raw`
+- [x] The output tells findings hidden by a `CheckOptions` narrowing apart from findings hidden by an exclusion. `manual: the same run`
+- [x] The default gate is unchanged and exits 0. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
+- [x] `docs/static-analysis.md`'s `--raw` section drops the "One blind spot" paragraph and says that raw mode ignores `CheckOptions`. `manual: docs/static-analysis.md`
+- [x] `bazel test //...` is green. `unit: bazel test //...`
 
 ## Comments
+
+- `--raw` writes a copy of `.clang-tidy` without its `CheckOptions:` block (awk: skip from `CheckOptions:` to the next top-level key, so the block need not be last) to a temp file and passes it with `--config-file`. Checked: `--config` cannot do it. With `--config`, `--dump-config` shows `HeaderFilterRegex: ''`, so it replaces the file rather than merging, and `--config-file` plus `--config` is an error.
+- Excluded vs narrowed is one pass, not two. Each check is classified by `.clang-tidy`'s own `Checks` list: a check matched by a `-` line is `excluded`, and any other check is `option`. An enabled check can only be hidden from a green gate by an option. The doc states that this assumes the gate is at exit 0. The exclusions are matched as anchored globs, so a future `-group-*` line works.
+- Output at `dcc74d8`: total 427 (281 src+tools, 146 `*_test.c`); `hidden by an exclusion: 254; by a CheckOptions narrowing: 173`. `cert-err33-c` 144 + 29, marked `option`. It matches the hand-built scan the spec was measured with.
+- Gate exits 0 (default mode untouched). `bazel test //...` green (257 pass, 3 skipped). shellcheck clean.

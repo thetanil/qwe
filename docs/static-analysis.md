@@ -45,18 +45,26 @@ tools/clang-tidy/run.sh --raw
 The default mode is a pass/fail gate, and its `--quiet` output ("N warnings
 generated", about 1,000 of them) is just what the exclusions below and system
 headers suppressed: it says nothing about which checks. `--raw` runs every group
-`.clang-tidy` enables with none of its exclusions, and prints a per-check
-tally split into `src/`+`tools/` and `*_test.c`. A header finding is counted
-once, not once per file that includes it. It is a measurement, not a gate: it
-exits 0 whatever it finds. At `acb416d` it counted 619 findings, none in a
-header; `.scratch/archive/sca-findings/spec.md` worked through the bug-finding
-classes. At `a298da0` it counts 254, every one in a class the exclusion table below
-still lists.
+`.clang-tidy` enables with none of its exclusions and none of its
+`CheckOptions`, and prints a per-check tally split into `src/`+`tools/` and
+`*_test.c`. A header finding is counted once, not once per file that includes
+it. It is a measurement, not a gate: it exits 0 whatever it finds.
 
-One blind spot: `--raw` resets `Checks` but keeps `.clang-tidy`'s `CheckOptions`,
-so `cert-err33-c` is tallied with its narrowed `CheckedFunctions`, and the
-`fprintf`/`fputs`/`fputc` findings left for the next feature (166 at `acb416d`)
-do not appear. The next feature has to count that class some other way.
+Each check's row says what hid it from the gate: `excluded` (a `-check` line
+in `Checks`) or `option` (a check the gate runs, narrowed by a `CheckOptions`
+entry such as `cert-err33-c.CheckedFunctions`). The last line totals the two.
+The options are dropped by passing `--config-file` a copy of `.clang-tidy`
+without its `CheckOptions:` block: clang-tidy cannot blank an option on the
+command line (`--config` replaces the file rather than merging with it). The
+`option` label assumes the gate is at exit 0. Run on a tree that fails the
+gate, a finding in an enabled check shows as `option` whatever the cause.
+
+At `acb416d` it counted 619 findings, none in a header;
+`.scratch/archive/sca-findings/spec.md` worked through the bug-finding classes.
+At `dcc74d8` it counts 427: 254 hidden by an exclusion, every one in a class the
+exclusion table below still lists, and 173 hidden by `cert-err33-c`'s
+`CheckedFunctions` (all `fprintf`/`fputs`/`fputc`). `.scratch/sca-exclusions`
+works through what is left.
 
 ## No compile_commands.json, no Python
 

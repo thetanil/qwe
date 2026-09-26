@@ -3,8 +3,10 @@
 #
 # Default: the pass/fail gate, .clang-tidy as written.
 # --raw:   the backlog, not a gate. Every check group .clang-tidy turns on, with
-#          none of its exclusions, tallied per check and split into
-#          src/+tools/ and *_test.c. Always exits 0 once it has run.
+#          none of its exclusions and none of its CheckOptions, tallied per
+#          check, split into src/+tools/ and *_test.c, and marked with what hid
+#          it from the gate (an exclusion or an option). Always exits 0 once it
+#          has run.
 #
 # The LLVM Static Analyzer (clang-analyzer-*, run through clang-tidy) plus a
 # popular bugprone/cert/performance/portability ruleset for C -- see
@@ -75,28 +77,44 @@ if [ "$raw" = 1 ]; then
 	# reset: --checks appends to the config's list, so '-*' drops every
 	# exclusion and the groups come back whole.
 	groups=$(sed -n '/^Checks:/,/^[A-Za-z]/{/^  [a-z]/p}' .clang-tidy | tr -d ' \n')
+	# ...and the exclusions, to say which one hid each finding.
+	excluded=$(sed -n '/^Checks:/,/^[A-Za-z]/{/^  -[a-z]/p}' .clang-tidy | sed -E 's/^ *-//; s/,$//' | tr '\n' ' ')
 	out=$(mktemp)
-	trap 'rm -f "$out"' EXIT
+	# A copy of .clang-tidy without its CheckOptions block, so a check an option
+	# narrows (cert-err33-c's CheckedFunctions) runs with its defaults. The
+	# options cannot be blanked on the command line: clang-tidy takes
+	# --config-file or --config, not both, and --config replaces the file.
+	config=$(mktemp)
+	trap 'rm -f "$out" "$config"' EXIT
+	awk '/^CheckOptions:/ { skip = 1; next } skip && /^[A-Za-z]/ { skip = 0 } !skip' .clang-tidy >"$config"
 	for file in "${files[@]}"; do
 		mapfile -t flags < <(flags_for_file "$file")
-		"$CLANG_TIDY" --quiet --checks="-*,${groups%,}" --warnings-as-errors='-*' \
-			"$file" -- "${flags[@]}" 2>/dev/null >>"$out" || true
+		"$CLANG_TIDY" --quiet --config-file="$config" --checks="-*,${groups%,}" \
+			--warnings-as-errors='-*' "$file" -- "${flags[@]}" 2>/dev/null >>"$out" || true
 	done
 	# A header finding repeats once per file that includes it: count each
 	# file:line:col:check once. Paths are made repo-relative first (headers
-	# come back absolute).
+	# come back absolute). A check .clang-tidy excludes is "excluded"; one it
+	# enables can only have been hidden from the gate by a CheckOptions entry.
 	grep -E '^[^ ]+:[0-9]+:[0-9]+: (warning|error): .* \[[^]]+\]$' "$out" |
 		sed -E "s|^$here/||; s|^\./||" |
 		sed -E 's/^([^:]+:[0-9]+:[0-9]+):.*\[([^],]+)[^]]*\]$/\1 \2/' |
 		sort -u |
-		awk '
+		awk -v excluded="$excluded" '
+		BEGIN {
+			# .clang-tidy globs (a-b.*) as anchored regexes
+			n_ex = split(excluded, ex, " ")
+			for (i = 1; i <= n_ex; i++) { gsub(/\./, "\\.", ex[i]); gsub(/\*/, ".*", ex[i]); ex[i] = "^" ex[i] "$" }
+		}
+		function why(c,   i) { for (i = 1; i <= n_ex; i++) if (c ~ ex[i]) return "excluded"; return "option" }
 		{ split($1, loc, ":"); bucket = (loc[1] ~ /_test\.c$/) ? "test" : "src"
-		  n[$2, bucket]++; seen[$2] = 1; total[bucket]++ }
+		  n[$2, bucket]++; seen[$2] = 1; total[bucket]++; hidden[why($2)]++ }
 		END {
-			printf "%-60s %8s %8s\n", "check", "src+tools", "*_test.c"
-			for (c in seen) printf "%-60s %8d %8d\n", c, n[c, "src"], n[c, "test"] | "sort"
+			printf "%-60s %9s %8s  %s\n", "check", "src+tools", "*_test.c", "hidden by"
+			for (c in seen) printf "%-60s %9d %8d  %s\n", c, n[c, "src"], n[c, "test"], why(c) | "sort"
 			close("sort")
-			printf "%-60s %8d %8d\n", "total (" total["src"] + total["test"] ")", total["src"], total["test"]
+			printf "%-60s %9d %8d\n", "total (" total["src"] + total["test"] ")", total["src"], total["test"]
+			printf "hidden by an exclusion: %d; by a CheckOptions narrowing: %d\n", hidden["excluded"], hidden["option"]
 		}'
 	exit 0
 fi
