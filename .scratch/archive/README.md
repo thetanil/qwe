@@ -36,6 +36,7 @@ statement of where it is.
 | `quality` | 2026-09-20 | Making the C trustworthy: every exit path frees, every allocation is checked (`alloc.h`, and an audit of the bare calls), ASan/LSan, UBSan and Valgrind gates, coverage measurement for C and Lua with a ratchet, fuzzing the YAML edge, OOM injection over validate and run, and closing the C coverage gaps. 10 tickets, 64 acceptance criteria. |
 | `release-smoke` | 2026-09-23 | Making a release trustworthy end to end: job/step `duration_ms`, the run summary and its hardening, the `--config=release` build, `smoke.yml`'s clean-runner smoke workflows and the negative-case pattern, four more built-in plugins (`file.read`, `assert`, `file.line`, `apt.package`) each with a smoke workflow and a negative, `become`/secrets smoke with real redaction verification, the job-graph/`--job`-selection smoke workflow, a coverage floor that guards every built-in plugin has a smoke workflow, an A/B perf gate (median/p90/ratio/delta floors, a Bonferroni-corrected paired sign test, a per-version allow list) and its `smoke.yml` job, `release.yml`/`nightly.yml` calling `smoke.yml`, PCRE2 for JSON Schema `pattern`/`patternProperties`, and graceful Lua panic handling. 18 tickets, 103 acceptance criteria (96 checked; the 7 manual ones left are tracked in `.scratch/release-smoke-verification`). |
 | `ci` | 2026-09-21 | GitHub Actions for everything `quality` defined: a workflow and badge per check (tests, ASan, UBSan, Valgrind, coverage), an ssh target on the runner, a coverage report and percentage badge on Pages, a hand-started fuzz workflow with a persistent corpus, a nightly that refreshes the caches and runs all of it plus an hour of fuzzing, and a release built from a pushed tag after every gate reruns. 12 tickets, 65 acceptance criteria (45 checked; the 20 manual ones left are tracked in `.scratch/ci-verification`). |
+| `sca-findings` | 2026-09-26 | Re-enabling the static-analysis exclusions most likely to hide real bugs, one class per ticket, each fixed in code rather than suppressed: a header filter that never matched and `run.sh --raw` to tally the backlog, greatest failure messages on dead stack frames, the analyzer on test code (the `owned.h` teardown owner, fixtures that abort), `cert-err33-c` narrowed to resource/syscall returns and then `snprintf`/`sprintf` (`fmt.h`: `qwe_fmt`/`qwe_xfmt`/`qwe_msg`), checked string-to-number parses and no unchecked `rewind`, no `strcpy`/`strcat`, and a size cap on `bcembed`'s input. Seven checks re-enabled, the test-only narrowing removed, no `NOLINT` added; the raw tally went from 619 to 254. 7 tickets, 33 acceptance criteria. |
 
 What was promoted out of `quality` when it was archived: nothing new. Its decisions were written as each ticket closed, into `docs/ci-checks.md` (the commands and cadence CI should run), `docs/sanitizers.md`, `docs/valgrind.md`, `docs/fuzzing.md` and `docs/coverage.md` (how coverage is measured, and why each remaining miss is left), and the allocation policy in `src/kernel/alloc.h`. The pointer from `src/kernel/alloc_audit.txt` was repointed to the archived ticket.
 
@@ -87,3 +88,17 @@ because of anything `--config=release` regressed. The 7 still-open manual criter
 scratch-branch negative for `smoke_run.yml` and for `neg_file_ensure_denied.yml`, `baseline:
 self` x5, a deliberate perf regression, a corrupted baseline checksum, and the two that need
 a real pre-release tag) are ticket 01 of `.scratch/release-smoke-verification`.
+
+What was promoted out of `sca-findings` when it was archived: nothing new. Each ticket
+wrote its decisions into `docs/static-analysis.md` as it closed: the header filter, `--raw`,
+the narrowed `cert-err33-c`, the `snprintf` helpers ("say what a cut means"), the two idioms
+for test code ("same checks, two idioms"), and every real bug under "What re-enabling
+excluded checks found". Its coverage cost, the defensive branches the fixes added, is in
+`docs/coverage.md`, and the per-file 85% floor that replaced the ratchet (2026-09-25) covers
+those branches with tests (`clock_test`, `alloc_test`, `bcembed_test.sh`) rather than a
+raised floor. At archive time `docs/static-analysis.md`'s two references were repointed, and
+it gained one note: `--raw` keeps `.clang-tidy`'s `CheckOptions`, so the 166
+`fprintf`/`fputs`/`fputc` findings left for the next feature no longer show in its tally.
+Also left for the next feature: the `bugprone-unsafe-functions`/`cert-msc24-c`/`cert-msc33-c`
+exclusion now has nothing to flag (ticket 06 removed the last `rewind`), so its row's
+justification is stale.

@@ -49,7 +49,14 @@ headers suppressed: it says nothing about which checks. `--raw` runs every group
 tally split into `src/`+`tools/` and `*_test.c`. A header finding is counted
 once, not once per file that includes it. It is a measurement, not a gate: it
 exits 0 whatever it finds. At `acb416d` it counted 619 findings, none in a
-header; `.scratch/sca-findings/spec.md` works through them one class at a time.
+header; `.scratch/archive/sca-findings/spec.md` worked through the bug-finding
+classes. At `a298da0` it counts 254, every one in a class the exclusion table below
+still lists.
+
+One blind spot: `--raw` resets `Checks` but keeps `.clang-tidy`'s `CheckOptions`,
+so `cert-err33-c` is tallied with its narrowed `CheckedFunctions`, and the
+`fprintf`/`fputs`/`fputc` findings left for the next feature (166 at `acb416d`)
+do not appear. The next feature has to count that class some other way.
 
 ## No compile_commands.json, no Python
 
@@ -156,7 +163,7 @@ suppressed to get a green run:
 ## What re-enabling excluded checks found
 
 Real bugs behind checks that had been excluded as false positives, found by
-`.scratch/sca-findings` as each class was switched back on:
+`.scratch/archive/sca-findings` as each class was switched back on:
 
 - **`lifecycle_test.c` handed greatest stack buffers as failure messages.**
   `ASSERTm(where, ...)` keeps the message pointer in a global and prints it
