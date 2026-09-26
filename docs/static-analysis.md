@@ -64,8 +64,8 @@ At `acb416d` it counted 619 findings, none in a header;
 At `dcc74d8` it counts 427: 254 hidden by an exclusion, every one in a class the
 exclusion table below still lists, and 173 hidden by `cert-err33-c`'s
 `CheckedFunctions` (all `fprintf`/`fputs`/`fputc`). `.scratch/sca-exclusions`
-works through what is left: with `CheckedFunctions` gone, the count is 192,
-86 hidden by an exclusion and 106 by an option (the reserved-identifier allow
+works through what is left: with `CheckedFunctions` gone, the count is 181,
+80 hidden by an exclusion and 101 by an option (the reserved-identifier allow
 list, and `concurrency-mt-unsafe`'s `FunctionSet`, which `--raw` widens to `any`).
 
 ## No compile_commands.json, no Python
@@ -100,7 +100,6 @@ specific, checked reason:
 | `bugprone-multi-level-implicit-pointer-conversion` | Fires on every `calloc`/`free` call (`void *` &harr; `T **`) — the standard, recommended C idiom of not casting `malloc`/`calloc`/`free`. |
 | `concurrency-mt-unsafe` (narrowed, not excluded) | `FunctionSet: glibc`: only what glibc documents as thread-unsafe, not the POSIX list (79 findings under the default `any`, 49 under `glibc`; `getenv` and `readdir` are glibc-safe as long as nothing calls `setenv`, and `setenv` is confined to tests below). The 49 were fixed, not waved through: `strerror` (18 in `src/` and `tools/`, 2 in tests) is `qwe_strerror` (`src/kernel/errstr.h`, `strerror_r` into a thread-local buffer), `sigprocmask` (4 and 8) is `pthread_sigmask`, `sleep` (1) is `nanosleep`, and the 14 `setenv`/`unsetenv` in tests go through `src/testing/env.h`. Two `NOLINTNEXTLINE(concurrency-mt-unsafe)` remain, both on the same premise: `qwe_test_setenv`/`qwe_test_unsetenv` there, and the `exit` in `luavm.c`'s Lua panic handler. The premise, that qwe has no threads (`docs/adr/0001-fork-per-plugin-step.md`), is tested: `//src/cli:no_threads_test` fails if the `qwe-debug` binary links `pthread_create` or `thrd_create`, the only way glibc starts a thread, and shows the check can tell by running it on a probe binary that does. |
 | `bugprone-easily-swappable-parameters` | A subjective refactor suggestion (reorder or wrap parameters), not a correctness check. |
-| `cert-msc30-c`, `cert-msc32-c`, `cert-msc50-cpp`, `cert-msc51-cpp` | `rand()`'s "insufficient randomness" — only used for test-only scheduling-jitter simulation; the actual crypto (`src/secrets`) is libsodium's, not `rand()`'s. |
 
 ### snprintf: say what a cut means
 

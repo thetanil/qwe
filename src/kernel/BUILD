@@ -388,6 +388,7 @@ cc_test(
     size = "small",
     srcs = ["sched_test.c"],
     deps = [
+        ":fmt",
         ":lifecycle",
         ":sched",
         "//third_party/greatest",

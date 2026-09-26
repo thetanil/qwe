@@ -1,9 +1,38 @@
 #include "greatest.h"
+#include "src/kernel/fmt.h"
 #include "src/kernel/sched.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 
 #define MAXJ 12
+
+/* A xorshift32 of this file's own, not libc's rand, so the graphs a run sees
+ * are the same on every libc and a failure found on one reproduces on another.
+ * A failure names the seed and the generator state its trial started from. */
+#define SEED 20260919u
+static uint32_t rng_state;
+
+/* greatest keeps the pointer it is given as a failure message until the run
+ * reports it, so the message lives here, not in the test's frame. */
+static char where[96];
+
+static uint32_t rng_next(void)
+{
+	uint32_t x = rng_state;
+
+	x ^= x << 13;
+	x ^= x >> 17;
+	x ^= x << 5;
+	rng_state = x;
+	return x;
+}
+
+/* 0 to n - 1. */
+static uint32_t rng_below(uint32_t n)
+{
+	return rng_next() % n;
+}
 
 struct graph {
 	enum qwe_lc_state state[MAXJ];
@@ -17,7 +46,7 @@ static void random_graph(struct graph *g)
 {
 	size_t i, k;
 
-	g->n = 1 + (size_t)rand() % MAXJ;
+	g->n = 1 + rng_below(MAXJ);
 	for (i = 0; i < g->n; i++) {
 		g->state[i] = QWE_LC_PENDING;
 		g->jobs[i].state = &g->state[i];
@@ -25,7 +54,7 @@ static void random_graph(struct graph *g)
 		g->jobs[i].nneeds = 0;
 		g->jobs[i].group = 0;
 		for (k = 0; k < i; k++)
-			if (rand() % 3 == 0)
+			if (rng_below(3) == 0)
 				g->needs[i][g->jobs[i].nneeds++] = k;
 	}
 }
@@ -52,12 +81,15 @@ TEST never_exceeds_max_parallel(void)
 {
 	int trial;
 
-	srand(20260919);
+	rng_state = SEED;
 	for (trial = 0; trial < 2000; trial++) {
 		struct graph g;
-		long max = rand() % 5; /* 0 is unlimited */
+		long max;
 		size_t i, guard;
 
+		qwe_xfmt(where, sizeof where, "seed %u, trial %d, generator state %u at its start", SEED, trial,
+			 (unsigned)rng_state);
+		max = rng_below(5); /* 0 is unlimited */
 		random_graph(&g);
 		for (guard = 0; guard < 1000; guard++) {
 			struct qwe_sched_event evs[MAXJ];
@@ -68,19 +100,19 @@ TEST never_exceeds_max_parallel(void)
 				for (e = 0; e < got; e++)
 					send(&g, &evs[e]);
 				if (max > 0)
-					ASSERT(count_running(&g) <= (size_t)max);
+					ASSERTm(where, count_running(&g) <= (size_t)max);
 			}
 
 			/* Something running finishes, at random: success or failure. */
 			for (i = 0; i < g.n; i++)
-				if (qwe_lc_state_is_running(g.state[i]) && rand() % 2 == 0)
-					g.state[i] = rand() % 4 ? QWE_LC_SUCCESS : QWE_LC_FAILED;
+				if (qwe_lc_state_is_running(g.state[i]) && rng_below(2) == 0)
+					g.state[i] = rng_below(4) ? QWE_LC_SUCCESS : QWE_LC_FAILED;
 			for (i = 0; i < g.n; i++)
 				all_final = all_final && qwe_lc_state_is_final(g.state[i]);
 			if (all_final)
 				break;
 		}
-		ASSERT(guard < 1000); /* it always makes progress */
+		ASSERTm(where, guard < 1000); /* it always makes progress */
 	}
 	PASS();
 }
