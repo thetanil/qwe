@@ -16,6 +16,8 @@
 #ifndef QWE_KERNEL_FMT_H
 #define QWE_KERNEL_FMT_H
 
+#include "src/kernel/put.h"
+
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -52,7 +54,7 @@ static inline void qwe_xfmt_at(const char *file, int line, char *buf, size_t siz
 	rc = qwe_vfmt(buf, size, fmt, ap);
 	va_end(ap);
 	if (rc < 0) {
-		fprintf(stderr, "%s:%d: formatted text truncated (%lu bytes)\n", file, line, (unsigned long)size);
+		qwe_diag("%s:%d: formatted text truncated (%lu bytes)\n", file, line, (unsigned long)size);
 		abort();
 	}
 }

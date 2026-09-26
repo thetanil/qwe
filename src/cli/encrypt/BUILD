@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["encrypt.h"],
     visibility = ["//src/cli:__pkg__"],
     deps = [
+        "//src/kernel:put",
         "//src/kernel",
         "//src/secrets",
         "//third_party/libsodium",
@@ -26,6 +27,7 @@ cc_test(
     srcs = ["oom_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
+        "//src/kernel:put",
         "//src/kernel:fmt",
         ":encrypt",
         "//src/kernel",

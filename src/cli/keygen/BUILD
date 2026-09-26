@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["keygen.h"],
     visibility = ["//src/cli:__pkg__"],
     deps = [
+        "//src/kernel:put",
         "//src/kernel",
         "//src/secrets",
         "//third_party/libsodium",

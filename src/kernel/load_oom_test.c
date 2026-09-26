@@ -98,7 +98,7 @@ static enum greatest_test_res sweep(const char *workflow, int expect_ok)
 			break;
 		}
 		if (rc != 2 || !strstr(err, "memory") || !strstr(err, dir)) {
-			fprintf(stderr, "allocation %d failed: exit %d, stderr:\n%s\n", at, rc, err);
+			qwe_diag("allocation %d failed: exit %d, stderr:\n%s\n", at, rc, err);
 			FAIL();
 		}
 	}

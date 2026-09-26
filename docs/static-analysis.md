@@ -52,7 +52,7 @@ it. It is a measurement, not a gate: it exits 0 whatever it finds.
 
 Each check's row says what hid it from the gate: `excluded` (a `-check` line
 in `Checks`) or `option` (a check the gate runs, narrowed by a `CheckOptions`
-entry such as `cert-err33-c.CheckedFunctions`). The last line totals the two.
+entry; there is none right now, so `option` counts 0). The last line totals the two.
 The options are dropped by passing `--config-file` a copy of `.clang-tidy`
 without its `CheckOptions:` block: clang-tidy cannot blank an option on the
 command line (`--config` replaces the file rather than merging with it). The
@@ -64,7 +64,8 @@ At `acb416d` it counted 619 findings, none in a header;
 At `dcc74d8` it counts 427: 254 hidden by an exclusion, every one in a class the
 exclusion table below still lists, and 173 hidden by `cert-err33-c`'s
 `CheckedFunctions` (all `fprintf`/`fputs`/`fputc`). `.scratch/sca-exclusions`
-works through what is left.
+works through what is left: with `CheckedFunctions` gone, the count is 256, all
+hidden by an exclusion.
 
 ## No compile_commands.json, no Python
 
@@ -95,7 +96,6 @@ specific, checked reason:
 |---|---|
 | `bugprone-reserved-identifier`, `cert-dcl37-c`, `cert-dcl51-cpp` | Flags `_POSIX_C_SOURCE`/`_GNU_SOURCE` (a required feature-test-macro idiom) and `__real_*`/`__wrap_*` (required by the `-Wl,--wrap=` OOM-test harness, `docs/ci-checks.md`'s "Allocation checks"). Both are reserved-namespace by necessity, not a defect. |
 | `bugprone-multi-level-implicit-pointer-conversion` | Fires on every `calloc`/`free` call (`void *` &harr; `T **`) — the standard, recommended C idiom of not casting `malloc`/`calloc`/`free`. |
-| `cert-err33-c` (narrowed, not excluded) | `CheckedFunctions` is set to `fclose`, `fflush`, `fwrite`, `fseek`, `clock_gettime`, `gmtime_r`, `strftime`, `timerfd_settime`, `signal`, `snprintf` and `sprintf`, whose failure loses written data or yields a wrong value. `snprintf` goes through `src/kernel/fmt.h` (below). The default list is nearly all of `<stdio.h>` and `<string.h>`. Allocation returns are enforced by this repo's OOM-injection gate (`quality/02`, `quality/08`), and `fprintf`/`fputs`/`fputc` to a data stream go through `src/kernel/put.h` (below). Those to `stderr` are left for the next ticket. An `fclose` on a read-only stream is cast to `(void)` with a comment saying so. |
 | `bugprone-implicit-widening-of-multiplication-result` | Every hit multiplies small compile-time-constant macros (`1024 * 1024`, `64 * 1024`, `2 * QWE_YAML_MAX_DEPTH`); the check does not special-case a constant-folded multiplication that cannot overflow. |
 | `concurrency-mt-unsafe` | qwe has no threads — concurrency is one process per plugin step (`docs/adr/0001-fork-per-plugin-step.md`) — so "not thread-safe" does not apply. |
 | `bugprone-easily-swappable-parameters` | A subjective refactor suggestion (reorder or wrap parameters), not a correctness check. |
@@ -131,6 +131,14 @@ reports its own final flush, so a block lost in the middle of the stream and a
 tail that flushed cleanly look like success. `result.c`, `summary.c`,
 `bcembed.c`, `report_disabled` and the test fixture writers all follow it. A
 write whose failure the next step depends on checks its own return instead.
+
+### Diagnostics: `qwe_diag`
+
+A failed write to `stderr` has no one to report to, so ignoring it is right, and
+it is decided once. Every `fprintf(stderr, ...)` is `qwe_diag(...)`
+(`src/kernel/put.h`, next to the data-stream helpers), which writes the same
+bytes and carries the one `(void)` cast. `cert-err33-c` runs with its full
+default function list: there is no `CheckedFunctions` option any more.
 
 ### Test code: same checks, two idioms
 

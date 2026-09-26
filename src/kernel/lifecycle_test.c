@@ -5,6 +5,7 @@
 #include "src/kernel/lifecycle_model.h"
 #include "src/kernel/trace.h"
 #include "src/testing/owned.h"
+#include "src/kernel/put.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -56,7 +57,7 @@ TEST every_cell_classified(void)
 		if (c->kind != QWE_LC_TRANSITION && c->kind != QWE_LC_IGNORE && c->kind != QWE_LC_IMPOSSIBLE)
 			FAILm(qwe_lc_state_name(s)); /* an unset cell */
 		if (c->kind == QWE_LC_IGNORE && (!c->why || !*c->why)) {
-			fprintf(stderr, "ignore cell %s x %s has no justification\n", qwe_lc_state_name(s),
+			qwe_diag("ignore cell %s x %s has no justification\n", qwe_lc_state_name(s),
 				qwe_lc_event_name(e));
 			FAIL();
 		}
@@ -172,7 +173,7 @@ static void explore(void)
 			reached[s][e] = 1;
 			if (c->kind == QWE_LC_IMPOSSIBLE || c->kind == QWE_LC_UNSET) {
 				hit_impossible = 1;
-				fprintf(stderr, "the model reaches %s x %s, which is not decided\n",
+				qwe_diag("the model reaches %s x %s, which is not decided\n",
 					qwe_lc_state_name(s), qwe_lc_event_name(e));
 				continue;
 			}
@@ -203,7 +204,7 @@ TEST every_possible_cell_reachable(void)
 	explore();
 	for (s = 0; s < QWE_LC_NSTATES; s++) {
 		if (!state_seen[s]) {
-			fprintf(stderr, "state %s is never reached\n", qwe_lc_state_name(s));
+			qwe_diag("state %s is never reached\n", qwe_lc_state_name(s));
 			FAIL();
 		}
 		for (e = 0; e < QWE_LC_NEVENTS; e++) {
@@ -212,7 +213,7 @@ TEST every_possible_cell_reachable(void)
 			if (reached[s][e])
 				events_used |= 1u << e;
 			if (c->kind != QWE_LC_IMPOSSIBLE && !reached[s][e]) {
-				fprintf(stderr, "%s x %s is decided but the model never reaches it\n",
+				qwe_diag("%s x %s is decided but the model never reaches it\n",
 					qwe_lc_state_name(s), qwe_lc_event_name(e));
 				FAIL();
 			}

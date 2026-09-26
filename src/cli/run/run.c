@@ -1,5 +1,6 @@
 #include "src/cli/run/run.h"
 #include "src/kernel/qwe.h"
+#include "src/kernel/put.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,9 +8,8 @@
 
 static int usage(void)
 {
-	fprintf(stderr,
-		"usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]... [--debug] "
-		"[--summary <file>]\n");
+	qwe_diag("usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]... [--debug] "
+		 "[--summary <file>]\n");
 	return QWE_EXIT_USAGE;
 }
 
@@ -22,7 +22,7 @@ int qwe_cmd_run(int argc, char **argv)
 	int i, rc;
 
 	if (!jobs) {
-		fprintf(stderr, "qwe run: out of memory\n");
+		qwe_diag("qwe run: out of memory\n");
 		return QWE_EXIT_USAGE;
 	}
 

@@ -182,25 +182,25 @@ TEST run_survives_every_injection(void)
 
 		inject(at, 0, dir, sizeof dir, &r);
 		if (!r.fired && r.exited) { /* an abort leaves no report, and had to fire to abort */
-			fprintf(stderr, "allocation %ld of %ld: never reached: exited %d code %d signal %d count %ld\n%s\n", at, o.count, r.exited, r.code, r.signal, r.count, r.err);
+			qwe_diag("allocation %ld of %ld: never reached: exited %d code %d signal %d count %ld\n%s\n", at, o.count, r.exited, r.code, r.signal, r.count, r.err);
 			FAIL();
 		}
 		if (r.exited && r.code == 0) {
 			/* a success despite the failure has done all of its work */
 			read_result(dir, result, sizeof result);
 			if (!all_work_done(dir) || strstr(result, "failed") || strstr(result, "skipped")) {
-				fprintf(stderr, "allocation %ld: exit 0 with work missing:\n%s\n%s\n", at, r.err, result);
+				qwe_diag("allocation %ld: exit 0 with work missing:\n%s\n%s\n", at, r.err, result);
 				FAIL();
 			}
 		} else if (r.exited && (r.code == QWE_EXIT_FAILED || r.code == QWE_EXIT_USAGE)) {
 			if (!r.err[0]) {
-				fprintf(stderr, "allocation %ld: exit %d with no message\n", at, r.code);
+				qwe_diag("allocation %ld: exit %d with no message\n", at, r.code);
 				FAIL();
 			}
 		} else if (!r.exited && r.signal == SIGABRT && strstr(r.err, "out of memory")) {
 			; /* allocation policy rule 2: nowhere to report, so name it and stop */
 		} else {
-			fprintf(stderr, "allocation %ld of %ld: exited %d code %d signal %d\n%s\n",
+			qwe_diag("allocation %ld of %ld: exited %d code %d signal %d\n%s\n",
 			    at, o.count, r.exited, r.code, r.signal, r.err);
 			FAIL();
 		}
@@ -222,7 +222,7 @@ TEST run_survives_every_injection(void)
 		 * backend that forked it) and not a bare exit code, and nothing hung */
 		if (!o.exited || o.code != QWE_EXIT_FAILED || !(strstr(res, "\"reason\": \"engine-error\"") || strstr(res, "\"reason\": \"plugin-error\"")) ||
 		    strstr(res, "\"reason\": \"exit-code\"")) {
-			fprintf(stderr, "child allocation %ld: exited %d code %d signal %d\n%s\n%s\n",
+			qwe_diag("child allocation %ld: exited %d code %d signal %d\n%s\n%s\n",
 			    m, o.exited, o.code, o.signal, o.err, res);
 			FAIL();
 		}
@@ -277,19 +277,19 @@ TEST select_job_survives_every_injection(void)
 		fresh_select_case(dir, sizeof dir);
 		ASSERT_EQ(0, qwe_oom_probe(at, 0, select_case, dir, &r));
 		if (!r.fired && r.exited) {
-			fprintf(stderr, "allocation %ld of %ld: never reached\n%s\n", at, o.count, r.err);
+			qwe_diag("allocation %ld of %ld: never reached\n%s\n", at, o.count, r.err);
 			FAIL();
 		}
 		if (r.exited && r.code == 0) {
 			if (!has_file(dir, "build.out", "built\n") || has_file(dir, "test.out", "tested\n")) {
-				fprintf(stderr, "allocation %ld: exit 0 with the wrong work done\n%s\n", at, r.err);
+				qwe_diag("allocation %ld: exit 0 with the wrong work done\n%s\n", at, r.err);
 				FAIL();
 			}
 		} else if ((r.exited && (r.code == QWE_EXIT_FAILED || r.code == QWE_EXIT_USAGE) && r.err[0]) ||
 			   (!r.exited && r.signal == SIGABRT && strstr(r.err, "out of memory"))) {
 			; /* a message and a non-zero exit, or allocation policy rule 2 */
 		} else {
-			fprintf(stderr, "allocation %ld of %ld: exited %d code %d signal %d\n%s\n", at, o.count,
+			qwe_diag("allocation %ld of %ld: exited %d code %d signal %d\n%s\n", at, o.count,
 			    r.exited, r.code, r.signal, r.err);
 			FAIL();
 		}

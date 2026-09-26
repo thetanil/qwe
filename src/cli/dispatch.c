@@ -6,6 +6,7 @@
 #include "src/cli/serve/serve.h"
 #include "src/cli/validate/validate.h"
 #include "src/kernel/qwe.h"
+#include "src/kernel/put.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -30,13 +31,12 @@ const struct qwe_subcommand *qwe_find_subcommand(const char *name)
 
 static int usage(void)
 {
-	fputs("usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]...\n"
-	      "       qwe validate <workflow.yaml> [-i <inventory.yaml>]\n"
-	      "       qwe encrypt\n"
-	      "       qwe keygen\n"
-	      "       qwe serve\n"
-	      "       qwe --version\n",
-	      stderr);
+	qwe_diag("usage: qwe run <workflow.yaml> [-i <inventory.yaml>] [--job <id>]...\n"
+	         "       qwe validate <workflow.yaml> [-i <inventory.yaml>]\n"
+	         "       qwe encrypt\n"
+	         "       qwe keygen\n"
+	         "       qwe serve\n"
+	         "       qwe --version\n");
 	return QWE_EXIT_USAGE;
 }
 
@@ -52,7 +52,7 @@ int qwe_dispatch(int argc, char **argv)
 	}
 	cmd = qwe_find_subcommand(argv[1]);
 	if (!cmd) {
-		fprintf(stderr, "qwe: unknown subcommand '%s'\n", argv[1]);
+		qwe_diag("qwe: unknown subcommand '%s'\n", argv[1]);
 		return usage();
 	}
 	return cmd->fn(argc - 1, argv + 1);

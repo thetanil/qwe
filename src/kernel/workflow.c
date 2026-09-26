@@ -67,7 +67,7 @@ static int send_result(lua_State *L, int idx, int fd)
 	char err[128];
 
 	if (qwe_lua_to_cbor(L, idx, &buf, &len, err, sizeof err) < 0) {
-		fprintf(stderr, "qwe: cannot encode the step result: %s\n", err);
+		qwe_diag("qwe: cannot encode the step result: %s\n", err);
 		return -1;
 	}
 	while (off < len) {
@@ -152,7 +152,7 @@ static char **child_argv(void *arg, int result_fd)
 		_exit(ok ? 0 : 1);
 	}
 	if (!lua_istable(L, -2)) {
-		fprintf(stderr, "qwe: the plugin returned no argv\n");
+		qwe_diag("qwe: the plugin returned no argv\n");
 		return NULL;
 	}
 	/* Built before "exec" is sent: a failure here reports itself, and the parent
@@ -168,7 +168,7 @@ static char **child_argv(void *arg, int result_fd)
 	}
 	if (!argv || (n > 0 && !argv[n - 1])) {
 		free_argv(argv, i);
-		fprintf(stderr, "qwe: out of memory building the step's command\n");
+		qwe_diag("qwe: out of memory building the step's command\n");
 		send_status(L, result_fd, "failed", "engine-error");
 		return NULL;
 	}
@@ -186,7 +186,7 @@ static char **child_argv(void *arg, int result_fd)
 
 		/* the bootstrap shell reads exactly the preamble; the rest is the command's */
 		if (fd < 0 || write(fd, s, sl) != (ssize_t)sl || lseek(fd, 0, SEEK_SET) < 0 || dup2(fd, 0) < 0) {
-			fprintf(stderr, "qwe: cannot set up the step's stdin: %s\n", strerror(errno));
+			qwe_diag("qwe: cannot set up the step's stdin: %s\n", strerror(errno));
 			free_argv(argv, n);
 			return NULL;
 		}
@@ -194,7 +194,7 @@ static char **child_argv(void *arg, int result_fd)
 	}
 	return argv;
 fail:
-	fprintf(stderr, "qwe: plugin failed: %s\n", lua_tostring(L, -1));
+	qwe_diag("qwe: plugin failed: %s\n", lua_tostring(L, -1));
 	if (is_plugin) {
 		send_status(L, result_fd, "failed", "plugin-error");
 		(void)fflush(stdout); /* failing already: a lost line cannot make it worse */
@@ -445,7 +445,7 @@ static int load_inventory(lua_State *L, const char *cmd, const char *wf_path, co
 
 		default_path = malloc(dir_len + sizeof "inventory.yaml");
 		if (!default_path) {
-			fprintf(stderr, "%s: %s: out of memory\n", cmd, wf_path);
+			qwe_diag("%s: %s: out of memory\n", cmd, wf_path);
 			goto fail;
 		}
 		memcpy(default_path, wf_path, dir_len);
@@ -457,24 +457,24 @@ static int load_inventory(lua_State *L, const char *cmd, const char *wf_path, co
 		inv_path = default_path;
 	}
 	if (read_file(inv_path, &yaml, &yaml_len) < 0) {
-		fprintf(stderr, "%s: cannot read %s: %s\n", cmd, inv_path, strerror(errno));
+		qwe_diag("%s: cannot read %s: %s\n", cmd, inv_path, strerror(errno));
 		goto fail;
 	}
 	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, &pos, err, sizeof err) < 0) {
-		fprintf(stderr, "%s: %s:%s\n", cmd, inv_path, err);
+		qwe_diag("%s: %s:%s\n", cmd, inv_path, err);
 		free(yaml);
 		goto fail;
 	}
 	free(yaml);
 	if (qwe_cbor_to_lua(L, cbor, cbor_len, err, sizeof err) < 0) {
-		fprintf(stderr, "%s: %s: %s\n", cmd, inv_path, err);
+		qwe_diag("%s: %s: %s\n", cmd, inv_path, err);
 		free(cbor);
 		qwe_positions_free(pos);
 		goto fail;
 	}
 	free(cbor);
 	if (!lua_istable(L, -1)) {
-		fprintf(stderr, "%s: %s:1:1: an inventory is a map with targets: and secrets:\n", cmd, inv_path);
+		qwe_diag("%s: %s:1:1: an inventory is a map with targets: and secrets:\n", cmd, inv_path);
 		qwe_positions_free(pos);
 		goto fail;
 	}
@@ -512,11 +512,11 @@ static int load_workflow(const char *cmd, const char *path, const char *inventor
 	int errors;
 
 	if (read_file(path, &yaml, &yaml_len) < 0) {
-		fprintf(stderr, "%s: cannot read %s: %s\n", cmd, path, strerror(errno));
+		qwe_diag("%s: cannot read %s: %s\n", cmd, path, strerror(errno));
 		return QWE_EXIT_USAGE;
 	}
 	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, &pos, err, sizeof err) < 0) {
-		fprintf(stderr, "%s: %s:%s\n", cmd, path, err);
+		qwe_diag("%s: %s:%s\n", cmd, path, err);
 		free(yaml);
 		return QWE_EXIT_USAGE;
 	}
@@ -524,11 +524,11 @@ static int load_workflow(const char *cmd, const char *path, const char *inventor
 
 	L = qwe_lua_new();
 	if (!L) {
-		fprintf(stderr, "%s: cannot start the Lua runtime\n", cmd);
+		qwe_diag("%s: cannot start the Lua runtime\n", cmd);
 		return QWE_EXIT_USAGE;
 	}
 	if (qwe_cbor_to_lua(L, cbor, cbor_len, err, sizeof err) < 0) {
-		fprintf(stderr, "%s: %s: %s\n", cmd, path, err);
+		qwe_diag("%s: %s: %s\n", cmd, path, err);
 		lua_close(L);
 		free(cbor);
 		qwe_positions_free(pos);
@@ -639,7 +639,7 @@ static void owe_start_failed(struct job *job, const char *what, const char *op, 
 {
 	struct job_run *r = &job->run;
 
-	fprintf(stderr, "qwe run: cannot start %s of job %s: %s failed: %s\n", what, job->id, op, strerror(err));
+	qwe_diag("qwe run: cannot start %s of job %s: %s failed: %s\n", what, job->id, op, strerror(err));
 	r->fail_op = op;
 	r->fail_errno = err;
 	r->have_followup = 1;
@@ -792,7 +792,7 @@ static long resolve_step(struct run_ctx *ctx, struct job *job)
 	lua_settop(L, top);
 	return ms;
 fail:
-	fprintf(stderr, "qwe run: job %s: cannot prepare step %lu: %s\n", job->id, (unsigned long)r->cur + 1,
+	qwe_diag("qwe run: job %s: cannot prepare step %lu: %s\n", job->id, (unsigned long)r->cur + 1,
 		lua_tostring(L, -1));
 	lua_settop(L, top);
 	return -1;
@@ -998,7 +998,7 @@ static void step_spawn(struct run_ctx *ctx, struct job *job)
 		int refused;
 
 		if (remote_ensure(job, msg, sizeof msg, &refused) < 0) {
-			fprintf(stderr, "qwe run: job %s: target %s: %s\n", job->id, r->step_target, msg);
+			qwe_diag("qwe run: job %s: target %s: %s\n", job->id, r->step_target, msg);
 			if (refused) {
 				op = "ssh-master";
 				err = ECONNREFUSED;
@@ -1560,11 +1560,11 @@ static void preconnect(struct run_ctx *ctx)
 			lua_pushstring(L, target);
 			lua_pushstring(L, host);
 			if (lua_pcall(L, 2, 3, 0) != 0)
-				fprintf(stderr, "qwe run: target %s: %s\n", target, lua_tostring(L, -1));
+				qwe_diag("qwe run: target %s: %s\n", target, lua_tostring(L, -1));
 			else if (!lua_toboolean(L, -3) && !lua_isstring(L, -1)) /* a refusal is reported when its job starts */
-				fprintf(stderr, "qwe run: target %s: %s\n", target, lua_tostring(L, -2));
+				qwe_diag("qwe run: target %s: %s\n", target, lua_tostring(L, -2));
 		} else {
-			fprintf(stderr, "qwe run: target %s: %s\n", target, lua_tostring(L, -1));
+			qwe_diag("qwe run: target %s: %s\n", target, lua_tostring(L, -1));
 		}
 		lua_settop(L, top);
 	}
@@ -1660,7 +1660,7 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 			/* Jobs are left and none is running or can be started. Validation
 			 * rejects a needs: cycle, so this means the graph was not what it
 			 * checked: say so, because this line is all the operator will get. */
-			fprintf(stderr, "qwe run: internal error: %lu of %lu jobs are neither finished nor runnable "
+			qwe_diag("qwe run: internal error: %lu of %lu jobs are neither finished nor runnable "
 					"(their needs: never resolve)\n",
 				(unsigned long)(n - final), (unsigned long)n);
 			rc = -1;
@@ -1702,7 +1702,7 @@ static int select_jobs(struct job *jobs, long *n, const struct qwe_run_options *
 	int changed;
 
 	if (!keep) {
-		fprintf(stderr, "qwe run: --job: out of memory\n");
+		qwe_diag("qwe run: --job: out of memory\n");
 		return -1;
 	}
 
@@ -1710,7 +1710,7 @@ static int select_jobs(struct job *jobs, long *n, const struct qwe_run_options *
 		struct job *j = find_job(jobs, total, opts->jobs[i]);
 
 		if (!j) {
-			fprintf(stderr, "qwe run: --job %s: the workflow has no such job\n", opts->jobs[i]);
+			qwe_diag("qwe run: --job %s: the workflow has no such job\n", opts->jobs[i]);
 			free(keep);
 			return -1;
 		}
@@ -1777,7 +1777,7 @@ static void report_disabled(const struct job *jobs, size_t n)
 			 * are only set once it closes cleanly */
 			bad = ferror(mem);
 			if (fclose(mem) == 0 && !bad)
-				fprintf(stderr, "%s\n", line);
+				qwe_diag("%s\n", line);
 			free(line);
 		}
 	}
@@ -1823,26 +1823,26 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	run_dir_size = dir ? strlen(dir) + strlen(run_id) + 32 : 0;
 	run_dir = dir ? malloc(run_dir_size) : NULL;
 	if (!run_dir) {
-		fprintf(stderr, "qwe run: %s: out of memory\n", path);
+		qwe_diag("qwe run: %s: out of memory\n", path);
 		rc = QWE_EXIT_USAGE;
 		goto out;
 	}
 	qwe_xfmt(run_dir, run_dir_size, "%s/.qwe/runs/%s", dir, run_id);
 	if (mkdir_p(run_dir, 0700) < 0) {
-		fprintf(stderr, "qwe run: cannot create %s: %s\n", run_dir, strerror(errno));
+		qwe_diag("qwe run: cannot create %s: %s\n", run_dir, strerror(errno));
 		rc = QWE_EXIT_USAGE;
 		goto out;
 	}
 	trace_size = strlen(run_dir) + 32;
 	trace_path = malloc(trace_size);
 	if (!trace_path) {
-		fprintf(stderr, "qwe run: %s: out of memory\n", path);
+		qwe_diag("qwe run: %s: out of memory\n", path);
 		rc = QWE_EXIT_USAGE;
 		goto out;
 	}
 	qwe_xfmt(trace_path, trace_size, "%s/lifecycle.trace", run_dir);
 	if (qwe_trace_open(&ctx.trace, trace_path, opts && opts->debug) < 0) {
-		fprintf(stderr, "qwe run: cannot create %s: %s\n", trace_path, strerror(errno));
+		qwe_diag("qwe run: cannot create %s: %s\n", trace_path, strerror(errno));
 		rc = QWE_EXIT_USAGE;
 		goto out;
 	}
@@ -1861,7 +1861,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	/* A step's orphans come back to qwe, so that a step ends only when its whole
 	 * group is empty. */
 	if (qwe_proc_become_subreaper() < 0)
-		fprintf(stderr, "qwe run: warning: cannot become a subreaper: %s\n", strerror(errno));
+		qwe_diag("qwe run: warning: cannot become a subreaper: %s\n", strerror(errno));
 	ctx.cancel_fd = signalfd(-1, &cancel_set, SFD_CLOEXEC | SFD_NONBLOCK);
 	ctx.chld_fd = signalfd(-1, &ctx.chld_mask, SFD_CLOEXEC | SFD_NONBLOCK);
 	/* The grace period is fixed at 10 seconds; the override is for tests only. */
@@ -1875,7 +1875,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 		ms = strtol(grace_env, &end, 10);
 		/* a typo must not become 0 ms of grace: say so and keep the default */
 		if (end == grace_env || *end != '\0' || errno == ERANGE || ms < 0)
-			fprintf(stderr, "qwe run: warning: ignoring QWE_TEST_GRACE_MS=%s: not a whole number of milliseconds\n",
+			qwe_diag("qwe run: warning: ignoring QWE_TEST_GRACE_MS=%s: not a whole number of milliseconds\n",
 				grace_env);
 		else
 			ctx.grace_ms = ms;
@@ -1931,7 +1931,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	if (fp && fclose(fp) != 0) /* closed whether or not the write failed */
 		wrote = 0;
 	if (!wrote) {
-		fprintf(stderr, "qwe run: cannot write %s: %s\n", run_dir, strerror(errno));
+		qwe_diag("qwe run: cannot write %s: %s\n", run_dir, strerror(errno));
 		rc = QWE_EXIT_FAILED;
 	}
 	if (opts && opts->summary) {
@@ -1939,7 +1939,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 
 		if (qwe_summary_write(opts->summary, ctx.run_dir_abs, path, outcome, run_duration_ms, results,
 				      (size_t)n) < 0)
-			fprintf(stderr, "qwe run: cannot write summary %s: %s\n", opts->summary, strerror(errno));
+			qwe_diag("qwe run: cannot write summary %s: %s\n", opts->summary, strerror(errno));
 	}
 	report_disabled(jobs, (size_t)n);
 	qwe_lc_set_abort_hook(NULL, NULL);

@@ -3,6 +3,7 @@
 #include "src/kernel/fmt.h"
 
 #include "src/kernel/dag.h"
+#include "src/kernel/put.h"
 
 #include <lauxlib.h>
 #include <stdio.h>
@@ -233,7 +234,7 @@ static size_t print_plugin_problems(lua_State *L, const char *cmd, int idx)
 		lua_rawgeti(L, idx, (int)i);
 		lua_getfield(L, -1, "where");
 		lua_getfield(L, -2, "message");
-		fprintf(stderr, "%s: %s: %s\n", cmd, lua_tostring(L, -2), lua_tostring(L, -1));
+		qwe_diag("%s: %s: %s\n", cmd, lua_tostring(L, -2), lua_tostring(L, -1));
 		lua_pop(L, 3);
 	}
 	return n;
@@ -315,12 +316,12 @@ static void print_problems(struct problems *ps, const char *cmd, const char *pat
 	if (ps->n > 1) /* qsort of a null array is undefined, even for zero elements */
 		qsort(ps->v, ps->n, sizeof *ps->v, cmp_problem);
 	for (i = 0; i < ps->n; i++) {
-		fprintf(stderr, "%s: %s:%u:%u: %s\n", cmd, path, ps->v[i].pos.line, ps->v[i].pos.col, ps->v[i].message);
+		qwe_diag("%s: %s:%u:%u: %s\n", cmd, path, ps->v[i].pos.line, ps->v[i].pos.col, ps->v[i].message);
 		free(ps->v[i].message);
 	}
 	free(ps->v);
 	if (ps->oom)
-		fprintf(stderr, "%s: %s: out of memory while checking the workflow\n", cmd, path);
+		qwe_diag("%s: %s: out of memory while checking the workflow\n", cmd, path);
 }
 
 /* A Lua error that escaped the validator's own pcalls: a real bug, unless the
@@ -336,9 +337,9 @@ static void report_internal_error(lua_State *L, const char *cmd, const char *lab
 	const char *msg = lua_tostring(L, -1);
 
 	if (msg && (strstr(msg, "malloc failed") || strstr(msg, "memory")))
-		fprintf(stderr, "%s: %s: out of memory while checking the workflow\n", cmd, path);
+		qwe_diag("%s: %s: out of memory while checking the workflow\n", cmd, path);
 	else
-		fprintf(stderr, "%s: %s: internal error in the %s: %s\n", cmd, path, label, msg ? msg : "unknown error");
+		qwe_diag("%s: %s: internal error in the %s: %s\n", cmd, path, label, msg ? msg : "unknown error");
 }
 
 int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const struct qwe_positions *pos)
@@ -356,7 +357,7 @@ int qwe_validate_doc(lua_State *L, const char *cmd, const char *path, const stru
 	lua_pushvalue(L, doc);
 	dir = workflow_dir(path);
 	if (!dir) {
-		fprintf(stderr, "%s: %s: out of memory\n", cmd, path);
+		qwe_diag("%s: %s: out of memory\n", cmd, path);
 		lua_settop(L, doc);
 		return 1;
 	}

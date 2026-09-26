@@ -6,6 +6,7 @@ cc_library(
     srcs = ["dispatch.c"],
     hdrs = ["dispatch.h"],
     deps = [
+        "//src/kernel:put",
         "//src/cli/encrypt",
         "//src/cli/keygen",
         "//src/cli/run",

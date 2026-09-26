@@ -34,7 +34,3 @@ WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'
 ExcludeHeaderFilterRegex: '(^|/)(third_party|bazel-out|external)/'
 FormatStyle: none
-# cert-err33-c, narrowed to the calls whose failure loses data or yields a wrong
-# result (docs/static-analysis.md). Its default list is nearly all of <stdio.h>.
-CheckOptions:
-  cert-err33-c.CheckedFunctions: '^::fclose$;^::fflush$;^::fwrite$;^::fseek$;^::clock_gettime$;^::gmtime_r$;^::strftime$;^::timerfd_settime$;^::signal$;^::snprintf$;^::sprintf$'

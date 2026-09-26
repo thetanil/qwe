@@ -76,26 +76,26 @@ static enum greatest_test_res sweep(const struct scenario *sc)
 
 		ASSERT_EQ(0, qwe_oom_probe(at, 0, validate, (void *)sc, &r));
 		if (!r.exited || (r.code != 0 && r.code != 2) || !r.fired) {
-			fprintf(stderr, "allocation %ld of %ld: exited %d code %d signal %d fired %d\n%s\n",
+			qwe_diag("allocation %ld of %ld: exited %d code %d signal %d fired %d\n%s\n",
 			    at, o.count, r.exited, r.code, r.signal, r.fired, r.err);
 			FAIL();
 		}
 		if (sc->expect == 0 && r.code == 0) {
 			/* a success despite the failure must be a whole one */
 			if (r.err[0]) {
-				fprintf(stderr, "allocation %ld: succeeded but wrote:\n%s\n", at, r.err);
+				qwe_diag("allocation %ld: succeeded but wrote:\n%s\n", at, r.err);
 				FAIL();
 			}
 		} else if (sc->expect != 0 && r.code == 0) {
-			fprintf(stderr, "allocation %ld: an invalid workflow was reported valid\n", at);
+			qwe_diag("allocation %ld: an invalid workflow was reported valid\n", at);
 			FAIL();
 		}
 		if (r.code != 0 && !strstr(r.err, dir)) {
-			fprintf(stderr, "allocation %ld: failure names no file (expected one under %s):\n%s\n", at, dir, r.err);
+			qwe_diag("allocation %ld: failure names no file (expected one under %s):\n%s\n", at, dir, r.err);
 			FAIL();
 		}
 		if (r.code != 0 && sc->expect == 0 && !strstr(r.err, "memory")) {
-			fprintf(stderr, "allocation %ld: failure does not say memory:\n%s\n", at, r.err);
+			qwe_diag("allocation %ld: failure does not say memory:\n%s\n", at, r.err);
 			FAIL();
 		}
 	}

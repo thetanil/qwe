@@ -1,4 +1,5 @@
 #include "src/kernel/lifecycle.h"
+#include "src/kernel/put.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -296,7 +297,7 @@ struct qwe_lc_result qwe_lc_lookup(enum qwe_lc_state s, enum qwe_lc_event e, con
 	    table[s][e].kind == QWE_LC_UNSET) {
 		if (abort_hook)
 			abort_hook(s, e, abort_arg);
-		fprintf(stderr, "qwe: internal error: event %s cannot happen in state %s\n", qwe_lc_event_name(e),
+		qwe_diag("qwe: internal error: event %s cannot happen in state %s\n", qwe_lc_event_name(e),
 			qwe_lc_state_name(s));
 		abort();
 	}

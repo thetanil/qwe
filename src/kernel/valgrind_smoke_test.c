@@ -4,6 +4,8 @@
  * --config=valgrind (see the BUILD target); a plain run would pass the fault
  * silently. ASan does not model uninitialised reads, so this is the class of
  * finding the gate exists for. */
+#include "src/kernel/put.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -39,7 +41,7 @@ int main(int argc, char **argv)
 	if (waitpid(pid, &status, 0) < 0)
 		return 2;
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-		fprintf(stderr, "valgrind_smoke: the uninitialised read went unnoticed; the gate is not live\n");
+		qwe_diag("valgrind_smoke: the uninitialised read went unnoticed; the gate is not live\n");
 		return 1;
 	}
 	return 0;

@@ -6,6 +6,7 @@
 #include "src/kernel/luaexec.h"
 #include "src/kernel/luafs.h"
 #include "src/kernel/luasecrets.h"
+#include "src/kernel/put.h"
 
 #include <lauxlib.h>
 #include <lualib.h>
@@ -76,7 +77,7 @@ static int lua_panic(lua_State *L)
 {
 	const char *msg = lua_tostring(L, -1);
 
-	fprintf(stderr, "qwe: internal error: %s\n", msg ? msg : "unknown error");
+	qwe_diag("qwe: internal error: %s\n", msg ? msg : "unknown error");
 	exit(1); /* QWE_EXIT_FAILED (src/kernel/qwe.h): luavm sits below :kernel and can't include it */
 }
 
@@ -112,7 +113,7 @@ lua_State *qwe_lua_new(void)
 	lua_setfield(L, -2, "qwe.secrets");
 	for (m = qwe_embedded_modules; m->name; m++) {
 		if (luaL_loadbuffer(L, (const char *)m->data, m->len, m->name) != 0) {
-			fprintf(stderr, "qwe: built-in module %s: %s\n", m->name, lua_tostring(L, -1));
+			qwe_diag("qwe: built-in module %s: %s\n", m->name, lua_tostring(L, -1));
 			lua_close(L);
 			return NULL;
 		}

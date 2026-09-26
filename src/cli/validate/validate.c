@@ -1,12 +1,13 @@
 #include "src/cli/validate/validate.h"
 #include "src/kernel/qwe.h"
+#include "src/kernel/put.h"
 
 #include <stdio.h>
 #include <string.h>
 
 static int usage(void)
 {
-	fprintf(stderr, "usage: qwe validate <workflow.yaml> [-i <inventory.yaml>]\n");
+	qwe_diag("usage: qwe validate <workflow.yaml> [-i <inventory.yaml>]\n");
 	return QWE_EXIT_USAGE;
 }
 

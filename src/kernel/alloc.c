@@ -1,12 +1,14 @@
 #include "alloc.h"
 
+#include "src/kernel/put.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 static void die(const char *file, int line, size_t n)
 {
-	fprintf(stderr, "%s:%d: out of memory (%zu bytes)\n", file, line, n);
+	qwe_diag("%s:%d: out of memory (%zu bytes)\n", file, line, n);
 	abort();
 }
 

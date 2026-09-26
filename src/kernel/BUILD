@@ -204,6 +204,7 @@ cc_library(
         "//src/kernel/lua:shipped",
     ],
     deps = [
+        ":put",
         ":gcov",
         ":clock",
         ":redact",
@@ -254,6 +255,7 @@ cc_binary(
     srcs = ["luarun.c"],
     visibility = ["//visibility:public"],
     deps = [
+        ":put",
         ":luavm",
         "//third_party/luajit",
     ],
@@ -279,17 +281,30 @@ sh_test(
     data = [":luarun"],
 )
 
-# fputs/fputc/fprintf for a writer that checks ferror once, before fclose (put.h).
+# Writes whose failure is checked once at the end (a data stream), or has nobody
+# to tell (a diagnostic to stderr) -- put.h.
 cc_library(
     name = "put",
     hdrs = ["put.h"],
     visibility = ["//visibility:public"],
 )
 
+cc_test(
+    name = "put_test",
+    size = "small",
+    srcs = ["put_test.c"],
+    deps = [
+        ":put",
+        "//src/testing:owned",
+        "//third_party/greatest",
+    ],
+)
+
 # snprintf that says what a cut-short result means (fmt.h).
 cc_library(
     name = "fmt",
     hdrs = ["fmt.h"],
+    deps = [":put"],
 )
 
 cc_test(
@@ -361,6 +376,7 @@ cc_library(
     name = "lifecycle",
     srcs = ["lifecycle.c"],
     hdrs = ["lifecycle.h"],
+    deps = [":put"],
 )
 
 # The event model is written apart from the table and only the test links it.
@@ -373,6 +389,7 @@ cc_test(
         "lifecycle_test.c",
     ],
     deps = [
+        ":put",
         ":fmt",
         ":lifecycle",
         ":trace",
@@ -442,6 +459,7 @@ cc_library(
     name = "alloc",
     srcs = ["alloc.c"],
     hdrs = ["alloc.h"],
+    deps = [":put"],
 )
 
 # The failing allocator (ticket quality/07). testonly: no shipping target can
@@ -541,6 +559,7 @@ cc_test(
         "//tools/sanitizers:ubsan": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
+    deps = [":put"],
 )
 
 cc_test(
@@ -552,6 +571,7 @@ cc_test(
         "//tools/sanitizers:asan": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
+    deps = [":put"],
 )
 
 # trace.c as a libc without strerrorname_np builds it (musl, glibc < 2.32): the
@@ -589,6 +609,7 @@ cc_test(
         "//tools/valgrind:valgrind": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
+    deps = [":put"],
 )
 
 # Fails every allocation of a qwe run in turn, in the engine and in the step child (ticket quality/07).
@@ -653,6 +674,7 @@ cc_test(
     srcs = ["sites_oom_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
+        ":put",
         ":kernel",
         ":luavm",
         ":oom_shim",

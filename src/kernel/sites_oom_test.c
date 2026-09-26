@@ -8,6 +8,7 @@
 #include "src/kernel/luavm.h"
 #include "src/kernel/oom_shim.h"
 #include "src/kernel/redact.h"
+#include "src/kernel/put.h"
 
 #include <lauxlib.h>
 #include <stdio.h>
@@ -43,7 +44,7 @@ static int lua_case(void *arg)
 		return 1;
 	if (res && strstr(res, "memory"))
 		return 0;
-	fprintf(stderr, "%s\n", res ? res : "(no message)");
+	qwe_diag("%s\n", res ? res : "(no message)");
 	return 2;
 }
 
@@ -60,7 +61,7 @@ static enum greatest_test_res sweep(int (*fn)(void *), void *arg)
 	for (at = 1; at <= count; at++) {
 		ASSERT_EQ(0, qwe_oom_probe(at, 0, fn, arg, &o));
 		if (!o.exited || o.code != 0 || !o.fired) {
-			fprintf(stderr, "allocation %ld of %ld: exited %d code %d signal %d fired %d\n%s\n", at, count,
+			qwe_diag("allocation %ld of %ld: exited %d code %d signal %d fired %d\n%s\n", at, count,
 			    o.exited, o.code, o.signal, o.fired, o.err);
 			FAIL();
 		}

@@ -2,6 +2,8 @@
  * must stop, and the test passes only if the child dies. Built only under
  * --config=ubsan or --config=asan (see the BUILD target), where a build that
  * silently dropped the flags would otherwise pass everything. */
+#include "src/kernel/put.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -44,7 +46,7 @@ int main(int argc, char **argv)
 	if (waitpid(pid, &status, 0) < 0)
 		return 2;
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-		fprintf(stderr, "sanitizer_smoke: the fault went unnoticed; the config is not live\n");
+		qwe_diag("sanitizer_smoke: the fault went unnoticed; the config is not live\n");
 		return 1;
 	}
 	return 0;

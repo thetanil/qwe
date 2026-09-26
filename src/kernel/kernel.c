@@ -1,4 +1,5 @@
 #include "src/kernel/qwe.h"
+#include "src/kernel/put.h"
 
 #include <stdio.h>
 
@@ -9,6 +10,6 @@ const char *qwe_version_string(void)
 
 int qwe_not_implemented(const char *cmd)
 {
-	fprintf(stderr, "qwe %s: not implemented\n", cmd);
+	qwe_diag("qwe %s: not implemented\n", cmd);
 	return QWE_EXIT_USAGE;
 }

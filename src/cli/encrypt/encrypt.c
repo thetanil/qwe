@@ -2,6 +2,7 @@
 #include "src/kernel/qwe.h"
 #include "src/secrets/envelope.h"
 #include "src/secrets/keyfile.h"
+#include "src/kernel/put.h"
 
 #include <sodium.h>
 #include <stdio.h>
@@ -51,24 +52,24 @@ int qwe_cmd_encrypt(int argc, char **argv)
 
 	(void)argv;
 	if (argc != 1) {
-		fprintf(stderr, "qwe encrypt: takes no arguments: the plaintext is read from stdin, so it never\n"
+		qwe_diag("qwe encrypt: takes no arguments: the plaintext is read from stdin, so it never\n"
 				"appears in a command line (echo -n \"...\" | qwe encrypt)\n");
 		return QWE_EXIT_USAGE;
 	}
 	if (qwe_secrets_init() < 0) {
-		fprintf(stderr, "qwe encrypt: cannot initialize libsodium\n");
+		qwe_diag("qwe encrypt: cannot initialize libsodium\n");
 		return QWE_EXIT_FAILED;
 	}
 	if (qwe_key_load(NULL, key, err, sizeof err) < 0) {
-		fprintf(stderr, "qwe encrypt: %s\n", err);
+		qwe_diag("qwe encrypt: %s\n", err);
 		return QWE_EXIT_USAGE;
 	}
 	n = read_stdin(&plain);
 	if (n < 0) {
 		if (n == -2)
-			fprintf(stderr, "qwe encrypt: the secret is longer than %d bytes\n", MAX_PLAIN);
+			qwe_diag("qwe encrypt: the secret is longer than %d bytes\n", MAX_PLAIN);
 		else
-			fprintf(stderr, "qwe encrypt: cannot read stdin\n");
+			qwe_diag("qwe encrypt: cannot read stdin\n");
 		sodium_memzero(key, sizeof key);
 		return QWE_EXIT_USAGE;
 	}
@@ -79,7 +80,7 @@ int qwe_cmd_encrypt(int argc, char **argv)
 	sodium_memzero(key, sizeof key);
 	free(plain);
 	if (!envelope) {
-		fprintf(stderr, "qwe encrypt: encryption failed\n");
+		qwe_diag("qwe encrypt: encryption failed\n");
 		return QWE_EXIT_FAILED;
 	}
 	puts(envelope);

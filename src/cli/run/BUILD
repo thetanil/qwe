@@ -5,7 +5,7 @@ cc_library(
     srcs = ["run.c"],
     hdrs = ["run.h"],
     visibility = ["//src/cli:__pkg__"],
-    deps = ["//src/kernel"],
+    deps = ["//src/kernel", "//src/kernel:put"],
 )
 
 cc_test(

@@ -70,7 +70,7 @@ int main(int argc, char **argv)
 	int i, bad;
 
 	if (argc < 2 || !(out = fopen(argv[1], "w"))) {
-		fprintf(stderr, "usage: bcembed <out.c> <module>=<file> ...\n");
+		qwe_diag("usage: bcembed <out.c> <module>=<file> ...\n");
 		return 2;
 	}
 	qwe_out_str(out, "#include \"src/kernel/lua/embedded.h\"\n\n");
@@ -81,14 +81,14 @@ int main(int argc, char **argv)
 		int is_json;
 
 		if (!eq) {
-			fprintf(stderr, "bcembed: bad argument %s\n", argv[i]);
+			qwe_diag("bcembed: bad argument %s\n", argv[i]);
 			(void)fclose(out); /* failing already */
 			return 2;
 		}
 		name = strndup(argv[i], (size_t)(eq - argv[i]));
 		src = slurp(eq + 1, &len);
 		if (!src) {
-			fprintf(stderr, "bcembed: cannot read %s: %s\n", eq + 1, strerror(errno));
+			qwe_diag("bcembed: cannot read %s: %s\n", eq + 1, strerror(errno));
 			free(name);
 			(void)fclose(out); /* failing already */
 			return 1;
@@ -101,7 +101,7 @@ int main(int argc, char **argv)
 			chunk = malloc(len + 32);
 			w = chunk ? snprintf(chunk, len + 32, "return [=====[\n%s]=====]", src) : -1;
 			if (w < 0 || (size_t)w >= len + 32) {
-				fprintf(stderr, "bcembed: cannot wrap %s\n", eq + 1);
+				qwe_diag("bcembed: cannot wrap %s\n", eq + 1);
 				free(chunk);
 				free(src);
 				free(name);
@@ -119,7 +119,7 @@ int main(int argc, char **argv)
 
 			/* the chunk name is what a Lua error names the module by */
 			if (w < 0 || (size_t)w >= sizeof chunkname) {
-				fprintf(stderr, "bcembed: module name too long: %.64s...\n", name);
+				qwe_diag("bcembed: module name too long: %.64s...\n", name);
 				if (is_json)
 					free(src);
 				free(chunk);
@@ -128,7 +128,7 @@ int main(int argc, char **argv)
 				return 1;
 			}
 			if (luaL_loadbuffer(L, chunk, n, chunkname) != 0) {
-				fprintf(stderr, "bcembed: %s\n", lua_tostring(L, -1));
+				qwe_diag("bcembed: %s\n", lua_tostring(L, -1));
 				if (is_json)
 					free(src);
 				free(chunk);
@@ -155,7 +155,7 @@ int main(int argc, char **argv)
 	/* A truncated table can still compile: a write that failed must fail the build. */
 	bad = ferror(out);
 	if (fclose(out) != 0 || bad) {
-		fprintf(stderr, "bcembed: cannot write %s\n", argv[1]);
+		qwe_diag("bcembed: cannot write %s\n", argv[1]);
 		return 1;
 	}
 	return 0;

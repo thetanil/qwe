@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "src/kernel/jobs.h"
+#include "src/kernel/put.h"
 
 #include <lauxlib.h>
 #include <stdio.h>
@@ -40,12 +41,12 @@ static const char *const unimplemented_step_keys[] = {NULL};
 
 static void oom(const char *path)
 {
-	fprintf(stderr, "qwe run: %s: out of memory\n", path);
+	qwe_diag("qwe run: %s: out of memory\n", path);
 }
 
 static int refuse(const char *path, const char *what, const char *id, const char *key, const char *why)
 {
-	fprintf(stderr, "qwe run: %s: %s %s: %s: %s\n", path, what, id, key, why);
+	qwe_diag("qwe run: %s: %s %s: %s: %s\n", path, what, id, key, why);
 	return -1;
 }
 

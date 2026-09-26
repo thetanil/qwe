@@ -8,6 +8,7 @@
 #include "src/cli/encrypt/encrypt.h"
 #include "src/kernel/oom_shim.h"
 #include "src/kernel/qwe.h"
+#include "src/kernel/put.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,7 +35,7 @@ TEST encrypt_survives_every_injection(void)
 	for (at = 1; at <= count; at++) {
 		ASSERT_EQ(0, qwe_oom_probe(at, 0, encrypt_stdin, NULL, &o));
 		if (!o.exited || o.code == QWE_EXIT_OK || !o.fired || !strstr(o.err, "qwe encrypt:")) {
-			fprintf(stderr, "allocation %ld of %ld: exited %d code %d signal %d fired %d\n%s\n", at, count,
+			qwe_diag("allocation %ld of %ld: exited %d code %d signal %d fired %d\n%s\n", at, count,
 			    o.exited, o.code, o.signal, o.fired, o.err);
 			FAIL();
 		}
