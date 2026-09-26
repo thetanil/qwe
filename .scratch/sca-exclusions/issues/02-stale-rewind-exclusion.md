@@ -1,6 +1,6 @@
 # 02: Remove the stale `rewind` exclusion
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 
@@ -20,9 +20,21 @@ tree, not just the three files `rewind` used to be in.
 
 ## Acceptance criteria
 
-- [ ] `.clang-tidy` no longer excludes `bugprone-unsafe-functions`, `cert-msc24-c` or `cert-msc33-c`, and the gate exits 0. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
-- [ ] A `rewind` call fails the gate. `manual: add a throwaway rewind(fp) to src/kernel/summary.c's log_tail, run the gate, see it exit non-zero naming bugprone-unsafe-functions; revert`
-- [ ] The exclusion-table row is gone. `manual: docs/static-analysis.md`
-- [ ] `bazel test //...` is green. `unit: bazel test //...`
+- [x] `.clang-tidy` no longer excludes `bugprone-unsafe-functions`, `cert-msc24-c` or `cert-msc33-c`, and the gate exits 0. `manual: CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`
+- [x] A `rewind` call fails the gate. `manual: add a throwaway rewind(fp) to src/kernel/summary.c's log_tail, run the gate, see it exit non-zero naming bugprone-unsafe-functions; revert`
+- [x] The exclusion-table row is gone. `manual: docs/static-analysis.md`
+- [x] `bazel test //...` is green. `unit: bazel test //...`
 
 ## Comments
+
+Removed `-bugprone-unsafe-functions`, `-cert-msc24-c` and `-cert-msc33-c` from
+`.clang-tidy`, and their row from `docs/static-analysis.md`. The gate
+(`CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh`) exits 0 on the whole
+tree, so nothing else in it uses an unsafe function.
+
+Negative check: a throwaway `rewind(fp);` in `summary.c`'s `log_tail` made the
+gate exit 1 with `function 'rewind' has no error detection; 'fseek' should be
+used instead [bugprone-unsafe-functions,cert-msc24-c,cert-msc33-c]`. Reverted.
+
+`bazel test //...`: 257 pass, 3 skipped (the sanitizer/valgrind smoke tests).
+Coverage check: every file at least 85%.

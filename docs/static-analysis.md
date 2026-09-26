@@ -101,7 +101,6 @@ specific, checked reason:
 | `bugprone-easily-swappable-parameters` | A subjective refactor suggestion (reorder or wrap parameters), not a correctness check. |
 | `bugprone-assignment-in-if-condition` | A deliberate, common idiom in this codebase (`if ((out = fopen(...)))`-style single-read checks). |
 | `bugprone-misplaced-widening-cast` | Its only hits are test-only `rlim_t` fd-limit setup with values nowhere near overflow. |
-| `bugprone-unsafe-functions`, `cert-msc24-c`, `cert-msc33-c` | Only ever `rewind()` (no `gets()` anywhere in the tree) — a `fseek`-has-error-detection style preference, not a defect. |
 | `cert-msc30-c`, `cert-msc32-c`, `cert-msc50-cpp`, `cert-msc51-cpp` | `rand()`'s "insufficient randomness" — only used for test-only scheduling-jitter simulation; the actual crypto (`src/secrets`) is libsodium's, not `rand()`'s. |
 | `clang-analyzer-optin.performance.Padding` | A performance-only field-order suggestion, not a bug; opt-in for a reason. |
 
