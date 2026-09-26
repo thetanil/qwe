@@ -28,6 +28,7 @@ cc_test(
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
         "//src/kernel:fmt",
+        "//src/kernel:put",
         ":validate",
         "//src/kernel",
         "//src/kernel:oom_shim",

@@ -1,6 +1,6 @@
 # 03: `cert-err33-c` on data streams
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 Blocked by: 01
@@ -46,10 +46,40 @@ write aborts).
 
 ## Acceptance criteria
 
-- [ ] `summary.c`'s write-error handling is decided and recorded: a real bug with a red-then-green test, or a comment proving why `fclose` alone is enough. `unit: src/kernel/summary_test.c::<a new mid-stream write failure case>`
-- [ ] Every writer that ignores a per-call return checks `ferror` before `fclose`, and a comment at the ignore says so. `manual: grep -n ferror src/kernel/result.c src/kernel/summary.c tools/bcembed.c`
-- [ ] With `fprintf`, `fputs` and `fputc` added to `CheckedFunctions`, the gate reports no finding in any data-stream site listed above. `manual: add the three to CheckedFunctions locally; CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh names only stderr sites (ticket 04's); revert or leave for 04`
-- [ ] Real bugs are listed under "What re-enabling excluded checks found". `manual: docs/static-analysis.md`
-- [ ] `bazel test //...` and the coverage check are green. `unit: bazel test //...`; `manual: bazel run //tools/coverage:check`
+- [x] `summary.c`'s write-error handling is decided and recorded: a real bug with a red-then-green test, or a comment proving why `fclose` alone is enough. `unit: src/kernel/summary_test.c::<a new mid-stream write failure case>`
+- [x] Every writer that ignores a per-call return checks `ferror` before `fclose`, and a comment at the ignore says so. `manual: grep -n ferror src/kernel/result.c src/kernel/summary.c tools/bcembed.c`
+- [x] With `fprintf`, `fputs` and `fputc` added to `CheckedFunctions`, the gate reports no finding in any data-stream site listed above. `manual: add the three to CheckedFunctions locally; CLANG_TIDY=clang-tidy-20 bash tools/clang-tidy/run.sh names only stderr sites (ticket 04's); revert or leave for 04`
+- [x] Real bugs are listed under "What re-enabling excluded checks found". `manual: docs/static-analysis.md`
+- [x] `bazel test //...` and the coverage check are green. `unit: bazel test //...`; `manual: bazel run //tools/coverage:check`
 
 ## Comments
+
+**The suspected `summary.c` bug is real.** `qwe_summary_write` only checked
+`fclose`. To reach a mid-stream failure the body moved into
+`qwe_summary_render(FILE *, ...)` (the path version is that plus the open and
+the close, the same split as `qwe_result_write`). `summary_test`'s
+`mid_stream_write_failure_fails` writes 80 jobs to a `fopencookie` stream whose
+first write fails and every later one succeeds. Red first, with the render
+returning 0 after the writes: `fclose` returned 0 and the render reported
+success, failing on `-1 != rc`. Green once it ends with `return ferror(fp) ? -1 : 0`.
+
+**Shape chosen:** `src/kernel/put.h` (`//src/kernel:put`, public so
+`tools/bcembed` can use it) with `qwe_out_str`, `qwe_out_ch` and `qwe_out_fmt`.
+Each returns nothing and carries the one `(void)` cast with a comment saying
+`ferror(fp)` is checked before `fclose`. `result.c` (already ended in `ferror`),
+`summary.c` and `bcembed.c` (already did `bad = ferror(out)`) use them, as do
+the five test fixture writers (`write_file` in `workflow_test`, `oom_test`,
+`load_oom_test`, `validate/oom_test`, and the log fixtures in `summary_test`,
+which now `ASSERT(!ferror(fp))` before `fclose`).
+
+`report_disabled`'s memstream also checks `ferror` now, not just `fclose`.
+
+**Corrections to the ticket's table:** the `src/cli/dispatch.c` site is the
+usage text to `stderr`, not an `out` stream, so it stays for 04. With
+`fprintf`, `fputs` and `fputc` added to `CheckedFunctions` locally, the gate's
+remaining `cert-err33-c` findings are all `stderr` sites (I checked each
+finding's source line; the only one without `stderr` on its first line is
+`dispatch.c`'s multi-line `fputs(..., stderr)`). Reverted the local edit.
+
+Gate exit 0, `bazel test //...` 257 pass and 3 skipped, coverage check: every
+file at least 85%.

@@ -2,6 +2,7 @@
  * reaches the parent as a step result with a reason. */
 #include "greatest.h"
 #include "src/kernel/fmt.h"
+#include "src/kernel/put.h"
 #include "src/kernel/qwe.h"
 
 #include <dirent.h>
@@ -32,7 +33,7 @@ static void write_file(const char *name, const char *body)
 	fp = fopen(path, "w");
 	if (!fp)
 		abort();
-	fputs(body, fp);
+	qwe_out_str(fp, body);
 	if (ferror(fp) || fclose(fp) != 0)
 		abort(); /* the fixture was not fully written */
 }

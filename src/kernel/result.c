@@ -1,23 +1,25 @@
 #define _POSIX_C_SOURCE 200809L
 #include "src/kernel/result.h"
 
+#include "src/kernel/put.h"
+
 static void put_time(FILE *fp, time_t t)
 {
 	char buf[32];
 	struct tm tm;
 
 	if (t == 0) { /* never started */
-		fputs("null", fp);
+		qwe_out_str(fp, "null");
 		return;
 	}
 
 	/* A time gmtime cannot break down (a year past INT_MAX) has no ISO 8601
 	 * form: write the epoch seconds, still a string, rather than an unset buffer. */
 	if (!gmtime_r(&t, &tm) || strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", &tm) == 0) {
-		fprintf(fp, "\"%lld\"", (long long)t);
+		qwe_out_fmt(fp, "\"%lld\"", (long long)t);
 		return;
 	}
-	fprintf(fp, "\"%s\"", buf);
+	qwe_out_fmt(fp, "\"%s\"", buf);
 }
 
 static void put_opt(FILE *fp, const char *s)
@@ -25,96 +27,96 @@ static void put_opt(FILE *fp, const char *s)
 	if (s)
 		qwe_json_string(fp, s);
 	else
-		fputs("null", fp);
+		qwe_out_str(fp, "null");
 }
 
 static void put_duration(FILE *fp, long ms)
 {
 	if (ms < 0)
-		fputs("null", fp);
+		qwe_out_str(fp, "null");
 	else
-		fprintf(fp, "%ld", ms);
+		qwe_out_fmt(fp, "%ld", ms);
 }
 
 void qwe_json_string(FILE *fp, const char *s)
 {
-	fputc('"', fp);
+	qwe_out_ch(fp, '"');
 	for (; *s; s++) {
 		unsigned char c = (unsigned char)*s;
 		switch (c) {
 		case '"':
-			fputs("\\\"", fp);
+			qwe_out_str(fp, "\\\"");
 			break;
 		case '\\':
-			fputs("\\\\", fp);
+			qwe_out_str(fp, "\\\\");
 			break;
 		case '\n':
-			fputs("\\n", fp);
+			qwe_out_str(fp, "\\n");
 			break;
 		case '\r':
-			fputs("\\r", fp);
+			qwe_out_str(fp, "\\r");
 			break;
 		case '\t':
-			fputs("\\t", fp);
+			qwe_out_str(fp, "\\t");
 			break;
 		default:
 			if (c < 0x20)
-				fprintf(fp, "\\u%04x", c);
+				qwe_out_fmt(fp, "\\u%04x", c);
 			else
-				fputc(c, fp);
+				qwe_out_ch(fp, c);
 		}
 	}
-	fputc('"', fp);
+	qwe_out_ch(fp, '"');
 }
 
 int qwe_result_write(FILE *fp, const char *run_id, const struct qwe_job_result *jobs, size_t njobs)
 {
 	size_t i, k;
 
-	fputs("{\n  \"run_id\": ", fp);
+	qwe_out_str(fp, "{\n  \"run_id\": ");
 	qwe_json_string(fp, run_id);
-	fputs(",\n  \"jobs\": {", fp);
+	qwe_out_str(fp, ",\n  \"jobs\": {");
 	for (i = 0; i < njobs; i++) {
 		const struct qwe_job_result *j = &jobs[i];
-		fputs(i ? ",\n    " : "\n    ", fp);
+		qwe_out_str(fp, i ? ",\n    " : "\n    ");
 		qwe_json_string(fp, j->id);
-		fputs(": {\n      \"outcome\": ", fp);
+		qwe_out_str(fp, ": {\n      \"outcome\": ");
 		qwe_json_string(fp, j->outcome);
-		fputs(",\n      \"reason\": ", fp);
+		qwe_out_str(fp, ",\n      \"reason\": ");
 		put_opt(fp, j->reason);
 		if (j->detail) {
-			fputs(",\n      \"detail\": ", fp);
+			qwe_out_str(fp, ",\n      \"detail\": ");
 			qwe_json_string(fp, j->detail);
 		}
-		fputs(",\n      \"started\": ", fp);
+		qwe_out_str(fp, ",\n      \"started\": ");
 		put_time(fp, j->started);
-		fputs(",\n      \"ended\": ", fp);
+		qwe_out_str(fp, ",\n      \"ended\": ");
 		put_time(fp, j->ended);
-		fputs(",\n      \"duration_ms\": ", fp);
+		qwe_out_str(fp, ",\n      \"duration_ms\": ");
 		put_duration(fp, j->duration_ms);
-		fprintf(fp, ",\n      \"dropped_bytes\": %lu", j->dropped_bytes);
-		fputs(",\n      \"steps\": [", fp);
+		qwe_out_fmt(fp, ",\n      \"dropped_bytes\": %lu", j->dropped_bytes);
+		qwe_out_str(fp, ",\n      \"steps\": [");
 		for (k = 0; k < j->nsteps; k++) {
 			const struct qwe_step_result *s = &j->steps[k];
-			fputs(k ? ",\n        {\n          \"id\": " : "\n        {\n          \"id\": ", fp);
+			qwe_out_str(fp, k ? ",\n        {\n          \"id\": " : "\n        {\n          \"id\": ");
 			put_opt(fp, s->id);
-			fputs(",\n          \"outcome\": ", fp);
+			qwe_out_str(fp, ",\n          \"outcome\": ");
 			qwe_json_string(fp, s->outcome);
-			fputs(",\n          \"reason\": ", fp);
+			qwe_out_str(fp, ",\n          \"reason\": ");
 			put_opt(fp, s->reason);
-			fprintf(fp, ",\n          \"changed\": %s", s->changed ? "true" : "false");
-			fputs(",\n          \"started\": ", fp);
+			qwe_out_fmt(fp, ",\n          \"changed\": %s", s->changed ? "true" : "false");
+			qwe_out_str(fp, ",\n          \"started\": ");
 			put_time(fp, s->started);
-			fputs(",\n          \"ended\": ", fp);
+			qwe_out_str(fp, ",\n          \"ended\": ");
 			put_time(fp, s->ended);
-			fputs(",\n          \"duration_ms\": ", fp);
+			qwe_out_str(fp, ",\n          \"duration_ms\": ");
 			put_duration(fp, s->duration_ms);
 			if (s->outputs_json)
-				fprintf(fp, ",\n          \"outputs\": %s", s->outputs_json);
-			fputs("\n        }", fp);
+				qwe_out_fmt(fp, ",\n          \"outputs\": %s", s->outputs_json);
+			qwe_out_str(fp, "\n        }");
 		}
-		fputs(j->nsteps ? "\n      ]\n    }" : "]\n    }", fp);
+		qwe_out_str(fp, j->nsteps ? "\n      ]\n    }" : "]\n    }");
 	}
-	fputs(njobs ? "\n  }\n}\n" : "}\n}\n", fp);
+	qwe_out_str(fp, njobs ? "\n  }\n}\n" : "}\n}\n");
 	return ferror(fp) ? -1 : 0;
 }

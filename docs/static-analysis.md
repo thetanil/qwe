@@ -95,7 +95,7 @@ specific, checked reason:
 |---|---|
 | `bugprone-reserved-identifier`, `cert-dcl37-c`, `cert-dcl51-cpp` | Flags `_POSIX_C_SOURCE`/`_GNU_SOURCE` (a required feature-test-macro idiom) and `__real_*`/`__wrap_*` (required by the `-Wl,--wrap=` OOM-test harness, `docs/ci-checks.md`'s "Allocation checks"). Both are reserved-namespace by necessity, not a defect. |
 | `bugprone-multi-level-implicit-pointer-conversion` | Fires on every `calloc`/`free` call (`void *` &harr; `T **`) — the standard, recommended C idiom of not casting `malloc`/`calloc`/`free`. |
-| `cert-err33-c` (narrowed, not excluded) | `CheckedFunctions` is set to `fclose`, `fflush`, `fwrite`, `fseek`, `clock_gettime`, `gmtime_r`, `strftime`, `timerfd_settime`, `signal`, `snprintf` and `sprintf`, whose failure loses written data or yields a wrong value. `snprintf` goes through `src/kernel/fmt.h` (below). The default list is nearly all of `<stdio.h>` and `<string.h>`. Allocation returns are enforced by this repo's OOM-injection gate (`quality/02`, `quality/08`), and `fprintf`/`fputs`/`fputc` to a diagnostic stream are left for the next feature. An `fclose` on a read-only stream is cast to `(void)` with a comment saying so. |
+| `cert-err33-c` (narrowed, not excluded) | `CheckedFunctions` is set to `fclose`, `fflush`, `fwrite`, `fseek`, `clock_gettime`, `gmtime_r`, `strftime`, `timerfd_settime`, `signal`, `snprintf` and `sprintf`, whose failure loses written data or yields a wrong value. `snprintf` goes through `src/kernel/fmt.h` (below). The default list is nearly all of `<stdio.h>` and `<string.h>`. Allocation returns are enforced by this repo's OOM-injection gate (`quality/02`, `quality/08`), and `fprintf`/`fputs`/`fputc` to a data stream go through `src/kernel/put.h` (below). Those to `stderr` are left for the next ticket. An `fclose` on a read-only stream is cast to `(void)` with a comment saying so. |
 | `bugprone-implicit-widening-of-multiplication-result` | Every hit multiplies small compile-time-constant macros (`1024 * 1024`, `64 * 1024`, `2 * QWE_YAML_MAX_DEPTH`); the check does not special-case a constant-folded multiplication that cannot overflow. |
 | `concurrency-mt-unsafe` | qwe has no threads — concurrency is one process per plugin step (`docs/adr/0001-fork-per-plugin-step.md`) — so "not thread-safe" does not apply. |
 | `bugprone-easily-swappable-parameters` | A subjective refactor suggestion (reorder or wrap parameters), not a correctness check. |
@@ -119,6 +119,18 @@ would mean:
 
 `sprintf` is not used anywhere. `tools/bcembed.c` builds without `src/` and
 checks its two `snprintf` calls inline.
+
+### Data streams: check `ferror` once, before `fclose`
+
+A writer of many small pieces does not test each `fputs`. A stdio stream's
+error flag is sticky, so it writes freely through `qwe_out_str`, `qwe_out_ch`
+and `qwe_out_fmt` (`src/kernel/put.h`, `//src/kernel:put`), which return
+nothing and carry the one `(void)` cast, and then checks `ferror(fp)` before
+`fclose(fp)`, and `fclose`'s own result. `fclose` alone is not enough: it
+reports its own final flush, so a block lost in the middle of the stream and a
+tail that flushed cleanly look like success. `result.c`, `summary.c`,
+`bcembed.c`, `report_disabled` and the test fixture writers all follow it. A
+write whose failure the next step depends on checks its own return instead.
 
 ### Test code: same checks, two idioms
 
@@ -215,6 +227,15 @@ Real bugs behind checks that had been excluded as false positives, found by
   writes the epoch seconds as the string (`result_test`'s
   `time_past_gmtime_written_as_seconds`), and the run id falls back to them.
   Found by `cert-err33-c`.
+- **`qwe_summary_write` reported a summary as written when a block in the
+  middle was lost.** It checked only `fclose`, which reports a failure of its
+  own final flush and not an earlier failed write, so a stream that failed one
+  write and took every later one returned 0. `summary_test`'s
+  `mid_stream_write_failure_fails` writes through a `fopencookie` stream whose
+  first write fails (red against the `fclose`-only check, green with
+  `ferror`), through the new `qwe_summary_render(FILE *, ...)`. `report_disabled`
+  now checks `ferror` on its memstream as well. Found by `cert-err33-c`
+  (`fputs`, `fprintf`).
 - **`report_disabled` printed a memstream's buffer after an unchecked
   `fclose`.** `open_memstream` sets the buffer only on a clean close, so a
   failure there passed NULL to `%s`. And a plugin step's child reported

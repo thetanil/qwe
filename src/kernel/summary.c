@@ -2,6 +2,7 @@
 #include "src/kernel/summary.h"
 
 #include "src/kernel/alloc.h"
+#include "src/kernel/put.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -26,7 +27,7 @@ static const char *marker(const char *outcome)
 static void put_ms(FILE *fp, long ms)
 {
 	if (ms >= 0)
-		fprintf(fp, "%ld", ms);
+		qwe_out_fmt(fp, "%ld", ms);
 }
 
 /* "changed" for a success that changed something, "unchanged" for a success that
@@ -75,7 +76,7 @@ static void put_cell(FILE *fp, const char *s)
 {
 	char *esc = escape_cell(s ? s : "");
 
-	fputs(esc, fp);
+	qwe_out_str(fp, esc);
 	free(esc);
 }
 
@@ -148,34 +149,30 @@ static char *log_tail(const char *run_dir, const char *job_id, int n)
 	return buf;
 }
 
-int qwe_summary_write(const char *path, const char *run_dir, const char *workflow_file,
-		      const char *overall_outcome, long run_duration_ms,
-		      const struct qwe_job_result *jobs, size_t njobs)
+int qwe_summary_render(FILE *fp, const char *run_dir, const char *workflow_file,
+		       const char *overall_outcome, long run_duration_ms,
+		       const struct qwe_job_result *jobs, size_t njobs)
 {
-	FILE *fp = fopen(path, "a");
 	size_t i, k;
 
-	if (!fp)
-		return -1;
-
-	fprintf(fp, "### %s: %s (", workflow_file, marker(overall_outcome));
+	qwe_out_fmt(fp, "### %s: %s (", workflow_file, marker(overall_outcome));
 	put_ms(fp, run_duration_ms);
-	fputs(" ms)\n\n", fp);
+	qwe_out_str(fp, " ms)\n\n");
 
-	fputs("| job | outcome | reason | duration (ms) |\n", fp);
-	fputs("| --- | --- | --- | --- |\n", fp);
+	qwe_out_str(fp, "| job | outcome | reason | duration (ms) |\n");
+	qwe_out_str(fp, "| --- | --- | --- | --- |\n");
 	for (i = 0; i < njobs; i++) {
 		const struct qwe_job_result *j = &jobs[i];
 
-		fputs("| ", fp);
+		qwe_out_str(fp, "| ");
 		put_cell(fp, j->id);
-		fprintf(fp, " | %s | ", marker(j->outcome));
+		qwe_out_fmt(fp, " | %s | ", marker(j->outcome));
 		put_cell(fp, j->reason ? j->reason : "");
-		fputs(" | ", fp);
+		qwe_out_str(fp, " | ");
 		put_ms(fp, j->duration_ms);
-		fputs(" |\n", fp);
+		qwe_out_str(fp, " |\n");
 	}
-	fputc('\n', fp);
+	qwe_out_ch(fp, '\n');
 
 	for (i = 0; i < njobs; i++) {
 		const struct qwe_job_result *j = &jobs[i];
@@ -183,28 +180,28 @@ int qwe_summary_write(const char *path, const char *run_dir, const char *workflo
 
 		if (!j->nsteps)
 			continue;
-		fputs("#### ", fp);
+		qwe_out_str(fp, "#### ");
 		put_cell(fp, j->id);
-		fputs("\n\n", fp);
-		fputs("| # | id | plugin | outcome | changed | reason | duration (ms) |\n", fp);
-		fputs("| --- | --- | --- | --- | --- | --- | --- |\n", fp);
+		qwe_out_str(fp, "\n\n");
+		qwe_out_str(fp, "| # | id | plugin | outcome | changed | reason | duration (ms) |\n");
+		qwe_out_str(fp, "| --- | --- | --- | --- | --- | --- | --- |\n");
 		for (k = 0; k < j->nsteps; k++) {
 			const struct qwe_step_result *s = &j->steps[k];
 			const char *label = s->id ? s->id : (s->name ? s->name : "");
 
-			fprintf(fp, "| %lu | ", (unsigned long)(k + 1));
+			qwe_out_fmt(fp, "| %lu | ", (unsigned long)(k + 1));
 			put_cell(fp, label);
-			fputs(" | ", fp);
+			qwe_out_str(fp, " | ");
 			put_cell(fp, s->plugin ? s->plugin : "run");
-			fprintf(fp, " | %s | %s | ", marker(s->outcome), changed_cell(s));
+			qwe_out_fmt(fp, " | %s | %s | ", marker(s->outcome), changed_cell(s));
 			put_cell(fp, s->reason ? s->reason : "");
-			fputs(" | ", fp);
+			qwe_out_str(fp, " | ");
 			put_ms(fp, s->duration_ms);
-			fputs(" |\n", fp);
+			qwe_out_str(fp, " |\n");
 			if (strcmp(s->outcome, "failed") == 0 || strcmp(s->outcome, "cancelled") == 0)
 				has_failure = 1;
 		}
-		fputc('\n', fp);
+		qwe_out_ch(fp, '\n');
 
 		if (has_failure && run_dir) {
 			char *tail = log_tail(run_dir, j->id, LOG_TAIL_LINES);
@@ -215,22 +212,35 @@ int qwe_summary_write(const char *path, const char *run_dir, const char *workflo
 
 				if (fence_len < 3)
 					fence_len = 3;
-				fputs("<details><summary>log tail</summary>\n\n", fp);
+				qwe_out_str(fp, "<details><summary>log tail</summary>\n\n");
 				for (f = 0; f < fence_len; f++)
-					fputc('`', fp);
-				fputc('\n', fp);
-				fputs(tail, fp);
+					qwe_out_ch(fp, '`');
+				qwe_out_ch(fp, '\n');
+				qwe_out_str(fp, tail);
 				if (tail[strlen(tail) - 1] != '\n')
-					fputc('\n', fp);
+					qwe_out_ch(fp, '\n');
 				for (f = 0; f < fence_len; f++)
-					fputc('`', fp);
-				fputs("\n\n</details>\n\n", fp);
+					qwe_out_ch(fp, '`');
+				qwe_out_str(fp, "\n\n</details>\n\n");
 			}
 			free(tail);
 		}
 	}
 
+	return ferror(fp) ? -1 : 0;
+}
+
+int qwe_summary_write(const char *path, const char *run_dir, const char *workflow_file,
+		      const char *overall_outcome, long run_duration_ms,
+		      const struct qwe_job_result *jobs, size_t njobs)
+{
+	FILE *fp = fopen(path, "a");
+	int rc;
+
+	if (!fp)
+		return -1;
+	rc = qwe_summary_render(fp, run_dir, workflow_file, overall_outcome, run_duration_ms, jobs, njobs);
 	if (fclose(fp) != 0)
 		return -1;
-	return 0;
+	return rc;
 }

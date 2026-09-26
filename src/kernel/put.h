@@ -1,0 +1,40 @@
+/* Writing to a stream whose error is checked once, at the end.
+ *
+ * A stdio stream's error flag is sticky: once any write to it fails, ferror(fp)
+ * stays true, and no later write clears it. So a writer of many small pieces
+ * (result.json, the run summary, the bcembed table) need not test each one. It
+ * writes freely through these three, which return nothing, and then does what
+ * only it can do: check ferror(fp) before fclose(fp), and fclose's own result.
+ * The one cast to (void) lives here, not at every call.
+ *
+ * Use them only where that check follows. A write whose failure has to be seen
+ * at once (a length prefix, a size the next step depends on) checks its own
+ * return.
+ */
+#ifndef QWE_KERNEL_PUT_H
+#define QWE_KERNEL_PUT_H
+
+#include <stdarg.h>
+#include <stdio.h>
+
+static inline void qwe_out_str(FILE *fp, const char *s)
+{
+	(void)fputs(s, fp); /* ferror(fp) is checked before fclose */
+}
+
+static inline void qwe_out_ch(FILE *fp, int c)
+{
+	(void)fputc(c, fp); /* ferror(fp) is checked before fclose */
+}
+
+static inline void qwe_out_fmt(FILE *fp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+static inline void qwe_out_fmt(FILE *fp, const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	(void)vfprintf(fp, fmt, ap); /* ferror(fp) is checked before fclose */
+	va_end(ap);
+}
+
+#endif

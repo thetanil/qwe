@@ -5,6 +5,8 @@
  *
  * A file ending in .json is not code: it is embedded as a module that returns
  * its text as one string. */
+#include "src/kernel/put.h"
+
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
@@ -26,7 +28,7 @@ static int writer(lua_State *L, const void *p, size_t sz, void *ud)
 
 	(void)L;
 	for (i = 0; i < sz; i++)
-		fprintf(out, "%u,%s", b[i], (i % 24 == 23) ? "\n" : "");
+		qwe_out_fmt(out, "%u,%s", b[i], (i % 24 == 23) ? "\n" : "");
 	return 0;
 }
 
@@ -71,7 +73,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "usage: bcembed <out.c> <module>=<file> ...\n");
 		return 2;
 	}
-	fputs("#include \"src/kernel/lua/embedded.h\"\n\n", out);
+	qwe_out_str(out, "#include \"src/kernel/lua/embedded.h\"\n\n");
 	for (i = 2; i < argc; i++) {
 		char *eq = strchr(argv[i], '=');
 		size_t len, n;
@@ -135,21 +137,21 @@ int main(int argc, char **argv)
 				return 1;
 			}
 		}
-		fprintf(out, "static const unsigned char data%d[] = {\n", i);
+		qwe_out_fmt(out, "static const unsigned char data%d[] = {\n", i);
 		lua_dump(L, writer, out);
-		fputs("0};\n", out);
+		qwe_out_str(out, "0};\n");
 		lua_pop(L, 1);
 		if (is_json)
 			free(src);
 		free(chunk);
 		free(name);
 	}
-	fputs("\nconst struct qwe_embedded qwe_embedded_modules[] = {\n", out);
+	qwe_out_str(out, "\nconst struct qwe_embedded qwe_embedded_modules[] = {\n");
 	for (i = 2; i < argc; i++) {
 		char *eq = strchr(argv[i], '=');
-		fprintf(out, "\t{\"%.*s\", \"%s\", data%d, sizeof data%d - 1},\n", (int)(eq - argv[i]), argv[i], eq + 1, i, i);
+		qwe_out_fmt(out, "\t{\"%.*s\", \"%s\", data%d, sizeof data%d - 1},\n", (int)(eq - argv[i]), argv[i], eq + 1, i, i);
 	}
-	fputs("\t{0, 0, 0, 0},\n};\n", out);
+	qwe_out_str(out, "\t{0, 0, 0, 0},\n};\n");
 	/* A truncated table can still compile: a write that failed must fail the build. */
 	bad = ferror(out);
 	if (fclose(out) != 0 || bad) {

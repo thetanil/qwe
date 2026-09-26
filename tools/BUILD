@@ -6,7 +6,10 @@ cc_binary(
     srcs = ["bcembed.c"],
     copts = ["-std=gnu99"],
     visibility = ["//visibility:public"],
-    deps = ["//third_party/luajit"],
+    deps = [
+        "//src/kernel:put",
+        "//third_party/luajit",
+    ],
 )
 
 # The sources, for //src/kernel:alloc_audit_test.

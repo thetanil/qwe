@@ -28,6 +28,7 @@ cc_library(
         ":luacbor",
         ":luavm",
         ":proc",
+        ":put",
         ":timer",
         ":result",
         ":summary",
@@ -144,6 +145,7 @@ cc_library(
     name = "result",
     srcs = ["result.c"],
     hdrs = ["result.h"],
+    deps = [":put"],
 )
 
 cc_test(
@@ -162,6 +164,7 @@ cc_library(
     hdrs = ["summary.h"],
     deps = [
         ":alloc",
+        ":put",
         ":result",
     ],
 )
@@ -172,6 +175,7 @@ cc_test(
     srcs = ["summary_test.c"],
     deps = [
         ":fmt",
+        ":put",
         ":summary",
         "//src/testing:owned",
         "//third_party/greatest",
@@ -273,6 +277,13 @@ sh_test(
     srcs = ["luarun_test.sh"],
     args = ["$(location :luarun)"],
     data = [":luarun"],
+)
+
+# fputs/fputc/fprintf for a writer that checks ferror once, before fclose (put.h).
+cc_library(
+    name = "put",
+    hdrs = ["put.h"],
+    visibility = ["//visibility:public"],
 )
 
 # snprintf that says what a cut-short result means (fmt.h).
@@ -497,6 +508,7 @@ cc_test(
     ],
     deps = [
         ":fmt",
+        ":put",
         ":kernel",
         "//third_party/greatest",
     ],
@@ -511,6 +523,7 @@ cc_test(
     linkopts = ["-Wl,--wrap=calloc"],
     deps = [
         ":fmt",
+        ":put",
         ":kernel",
         "//third_party/greatest",
     ],
@@ -587,6 +600,7 @@ cc_test(
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
         ":fmt",
+        ":put",
         ":kernel",
         ":oom_shim",
         "//third_party/greatest",

@@ -9,6 +9,7 @@
 #include "src/kernel/lifecycle.h"
 #include "src/kernel/luacbor.h"
 #include "src/kernel/luavm.h"
+#include "src/kernel/put.h"
 #include "src/kernel/validate.h"
 #include "src/kernel/proc.h"
 #include "src/kernel/redact.h"
@@ -1765,14 +1766,17 @@ static void report_disabled(const struct job *jobs, size_t n)
 	}
 	if (skipped) {
 		FILE *mem = open_memstream(&line, &len);
+		int bad;
 
 		if (mem) {
-			fprintf(mem, "qwe run: %lu job%s skipped, target%s disabled:", (unsigned long)skipped,
+			qwe_out_fmt(mem, "qwe run: %lu job%s skipped, target%s disabled:", (unsigned long)skipped,
 				skipped == 1 ? "" : "s", targets == 1 ? "" : "s");
 			for (k = 0; k < targets; k++)
-				fprintf(mem, "%s %s (%s)", k ? "," : "", seen[k]->target, seen[k]->detail);
-			/* line and len are only set once the stream closes cleanly */
-			if (fclose(mem) == 0)
+				qwe_out_fmt(mem, "%s %s (%s)", k ? "," : "", seen[k]->target, seen[k]->detail);
+			/* a memstream fails by its error flag (a failed grow), and line and len
+			 * are only set once it closes cleanly */
+			bad = ferror(mem);
+			if (fclose(mem) == 0 && !bad)
 				fprintf(stderr, "%s\n", line);
 			free(line);
 		}

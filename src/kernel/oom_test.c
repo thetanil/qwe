@@ -6,6 +6,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
 #include "src/kernel/fmt.h"
+#include "src/kernel/put.h"
 #include "src/kernel/oom_shim.h"
 #include "src/kernel/qwe.h"
 
@@ -26,7 +27,7 @@ static void write_file(const char *path, const char *body)
 
 	if (!fp)
 		abort();
-	fputs(body, fp);
+	qwe_out_str(fp, body);
 	if (ferror(fp) || fclose(fp) != 0)
 		abort(); /* the fixture was not fully written */
 }
@@ -244,7 +245,7 @@ static void fresh_select_case(char *dir, size_t cap)
 	if (!fp)
 		abort();
 	for (i = 0; i < 80; i++)
-		fputs("# padding, so that the file is longer than the reader's first buffer, and then some\n", fp);
+		qwe_out_str(fp, "# padding, so that the file is longer than the reader's first buffer, and then some\n");
 	if (ferror(fp) || fclose(fp) != 0)
 		abort();
 }

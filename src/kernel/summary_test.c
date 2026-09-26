@@ -1,9 +1,11 @@
-#define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
 #include "greatest.h"
 #include "src/kernel/fmt.h"
+#include "src/kernel/put.h"
 #include "src/kernel/summary.h"
 #include "src/testing/owned.h"
 
+#include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -170,6 +172,45 @@ TEST write_failure_after_open_fails(void)
 	PASS();
 }
 
+/* A stream that fails its first write and takes every one after it. */
+static int cookie_writes;
+
+static ssize_t flaky_write(void *cookie, const char *buf, size_t size)
+{
+	(void)cookie;
+	(void)buf;
+	if (cookie_writes++ == 0) {
+		errno = EIO;
+		return -1;
+	}
+	return (ssize_t)size;
+}
+
+/* The error flag is sticky: a write that failed in the middle is reported even
+ * though the write after it, and the final flush, went through. fclose alone
+ * cannot tell (it reports only its own flush), so the report has to come from
+ * ferror. */
+TEST mid_stream_write_failure_fails(void)
+{
+	struct qwe_step_result step = {.id = "s", .outcome = "success", .duration_ms = 1};
+	struct qwe_job_result jobs[80];
+	cookie_io_functions_t io = {.write = flaky_write};
+	FILE *fp;
+	int i, rc, closed;
+
+	for (i = 0; i < 80; i++)
+		jobs[i] = (struct qwe_job_result){.id = "job", .outcome = "success", .steps = &step, .nsteps = 1};
+	cookie_writes = 0;
+	fp = fopencookie(NULL, "w", io);
+	ASSERT(fp != NULL);
+	rc = qwe_summary_render(fp, NULL, "w.yaml", "success", 0, jobs, 80);
+	closed = fclose(fp);
+	ASSERT(cookie_writes > 1); /* the report outran the stdio buffer: a later write did go through */
+	ASSERT_EQ(0, closed);
+	ASSERT_EQ(-1, rc);
+	PASS();
+}
+
 /* A pipe is escaped, an embedded newline folds to a space, and a cell past 200
  * (escaped) bytes is cut with an ellipsis appended. */
 TEST cell_escaping(void)
@@ -213,8 +254,9 @@ TEST log_tail_block(void)
 	fp = fopen(logpath, "w");
 	ASSERT(fp != NULL);
 	for (i = 0; i < 25; i++)
-		fprintf(fp, "line %d\n", i);
-	fputs("a ``` run\n", fp); /* a 3-backtick run: the fence must beat it */
+		qwe_out_fmt(fp, "line %d\n", i);
+	qwe_out_str(fp, "a ``` run\n"); /* a 3-backtick run: the fence must beat it */
+	ASSERT(!ferror(fp));
 	ASSERT_EQ(0, fclose(fp));
 
 	jobs[0] = (struct qwe_job_result){.id = "j", .outcome = "failed", .steps = &step, .nsteps = 1};
@@ -268,7 +310,8 @@ TEST log_tail_without_trailing_newline(void)
 	qwe_xfmt(logpath, sizeof logpath, "%s/j.log", dir);
 	fp = fopen(logpath, "w");
 	ASSERT(fp != NULL);
-	fputs("no newline at the end", fp);
+	qwe_out_str(fp, "no newline at the end");
+	ASSERT(!ferror(fp));
 	ASSERT_EQ(0, fclose(fp));
 
 	out = qwe_own(written_in(dir, "w.yaml", "failed", 1, &job, 1));
@@ -288,6 +331,7 @@ SUITE(summary)
 	RUN_TEST(unwritable_path_fails);
 	RUN_TEST(every_outcome_marker);
 	RUN_TEST(write_failure_after_open_fails);
+	RUN_TEST(mid_stream_write_failure_fails);
 	RUN_TEST(cell_escaping);
 	RUN_TEST(log_tail_block);
 	RUN_TEST(log_tail_missing_file_is_silent);
