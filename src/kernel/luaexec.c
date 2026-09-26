@@ -3,6 +3,7 @@
 #include "src/kernel/clock.h"
 #include "src/kernel/gcov.h"
 #include "src/kernel/preamble.h"
+#include "src/kernel/errstr.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -113,7 +114,7 @@ static int exec_run(lua_State *L)
 
 		/* the parent blocks SIGCHLD, SIGINT and SIGTERM to read them from signalfds */
 		sigemptyset(&none);
-		sigprocmask(SIG_SETMASK, &none, NULL);
+		pthread_sigmask(SIG_SETMASK, &none, NULL);
 		sigaction(SIGPIPE, &old_pipe, NULL);
 		dup2(in_p[0], 0);
 		dup2(out_p[1], 1);
@@ -272,7 +273,7 @@ spawn_failed:
 		free(argv[i]);
 	free(argv);
 	lua_pushnil(L);
-	lua_pushstring(L, strerror(saved));
+	lua_pushstring(L, qwe_strerror(saved));
 	return 2;
 }
 

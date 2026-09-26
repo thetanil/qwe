@@ -1,4 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("//tools/strip:defs.bzl", "stripped_binary")
 
 cc_library(
@@ -47,6 +48,34 @@ stripped_binary(
     src = ":qwe-debug",
     keep_symbols = select(DYNAMIC),
     visibility = ["//visibility:public"],
+)
+
+# What "qwe has no threads" (ADR-0001) rests on, checked: the binary does not link
+# pthread_create. The probe does, to show the check can tell.
+cc_binary(
+    name = "threads_probe",
+    testonly = True,
+    srcs = ["threads_probe.c"],
+    linkopts = select({
+        "//tools/sanitizers:asan": [],
+        "//tools/sanitizers:ubsan": [],
+        "//tools/valgrind:valgrind": [],
+        "//conditions:default": ["-static"],
+    }),
+)
+
+sh_test(
+    name = "no_threads_test",
+    size = "small",
+    srcs = ["no_threads_test.sh"],
+    args = [
+        "$(location :qwe-debug)",
+        "$(location :threads_probe)",
+    ],
+    data = [
+        ":qwe-debug",
+        ":threads_probe",
+    ],
 )
 
 cc_test(

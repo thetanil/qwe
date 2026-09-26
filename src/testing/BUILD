@@ -7,3 +7,10 @@ cc_library(
     hdrs = ["owned.h"],
     visibility = ["//src:__subpackages__"],
 )
+
+cc_library(
+    name = "env",
+    testonly = True,
+    hdrs = ["env.h"],
+    visibility = ["//src:__subpackages__"],
+)

@@ -48,7 +48,7 @@ int qwe_proc_spawn(struct qwe_proc *p, qwe_child_fn fn, void *arg)
 
 		setpgid(0, 0);
 		sigemptyset(&none);
-		sigprocmask(SIG_SETMASK, &none, NULL);
+		pthread_sigmask(SIG_SETMASK, &none, NULL);
 		null = open("/dev/null", O_RDONLY);
 		if (null >= 0) {
 			dup2(null, 0);

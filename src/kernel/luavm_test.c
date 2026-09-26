@@ -7,6 +7,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
 #include "src/kernel/luavm.h"
+#include "src/testing/env.h"
 
 #include <lauxlib.h>
 #include <lua.h>
@@ -67,7 +68,7 @@ TEST starts_and_flushes_with_lua_coverage_off(void)
 	const char *was = getenv("QWE_LUA_COVERAGE");
 	char *saved = was ? strdup(was) : NULL;
 	lua_State *L = NULL;
-	int ok = (!was || saved) && unsetenv("QWE_LUA_COVERAGE") == 0;
+	int ok = (!was || saved) && qwe_test_unsetenv("QWE_LUA_COVERAGE") == 0;
 
 	if (ok)
 		L = qwe_lua_new();
@@ -76,7 +77,7 @@ TEST starts_and_flushes_with_lua_coverage_off(void)
 		lua_close(L);
 	}
 	if (saved)
-		(void)setenv("QWE_LUA_COVERAGE", saved, 1);
+		(void)qwe_test_setenv("QWE_LUA_COVERAGE", saved);
 	free(saved);
 	ASSERT(ok);
 	ASSERT(L != NULL);

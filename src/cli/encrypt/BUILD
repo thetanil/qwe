@@ -27,6 +27,7 @@ cc_test(
     srcs = ["oom_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
+        "//src/testing:env",
         "//src/kernel:put",
         "//src/kernel:fmt",
         ":encrypt",

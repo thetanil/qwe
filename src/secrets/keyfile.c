@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "src/secrets/keyfile.h"
 #include "src/kernel/fmt.h"
+#include "src/kernel/errstr.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -64,7 +65,7 @@ int qwe_key_load(const char *path, uint8_t key[QWE_KEY_BYTES], char *err, size_t
 	fd = open(path, O_RDONLY | O_CLOEXEC);
 	if (fd < 0) {
 		qwe_msg(err, err_size, "cannot read the key file %s: %s (make one with qwe keygen)", path,
-			 strerror(errno));
+			 qwe_strerror(errno));
 		return -1;
 	}
 	/* the mode of the file we read, not of whatever the name points at now */
@@ -127,7 +128,7 @@ int qwe_key_generate(const char *path, char *err, size_t err_size)
 
 				*p = '\0';
 				if (mkdir(dir, 0700) < 0 && errno != EEXIST) {
-					qwe_msg(err, err_size, "cannot create %s: %s", dir, strerror(errno));
+					qwe_msg(err, err_size, "cannot create %s: %s", dir, qwe_strerror(errno));
 					return -1;
 				}
 				*p = saved;
@@ -141,7 +142,7 @@ int qwe_key_generate(const char *path, char *err, size_t err_size)
 	if (fd < 0) {
 		qwe_msg(err, err_size, errno == EEXIST ? "the key file %s already exists: not overwriting it"
 							 : "cannot create the key file %s: %s",
-			 path, strerror(errno));
+			 path, qwe_strerror(errno));
 		return -1;
 	}
 	randombytes_buf(key, sizeof key);
@@ -151,7 +152,7 @@ int qwe_key_generate(const char *path, char *err, size_t err_size)
 		if (n < 0 && errno == EINTR)
 			continue;
 		if (n < 0) {
-			qwe_msg(err, err_size, "cannot write %s: %s", path, strerror(errno));
+			qwe_msg(err, err_size, "cannot write %s: %s", path, qwe_strerror(errno));
 			sodium_memzero(key, sizeof key);
 			close(fd);
 			unlink(path);

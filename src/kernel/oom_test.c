@@ -9,6 +9,7 @@
 #include "src/kernel/put.h"
 #include "src/kernel/oom_shim.h"
 #include "src/kernel/qwe.h"
+#include "src/testing/env.h"
 
 #include <dirent.h>
 #include <signal.h>
@@ -306,7 +307,7 @@ int main(int argc, char **argv)
 	qwe_xfmt(root, sizeof root, "%s", tmp ? tmp : "/tmp");
 	qwe_xfmt(childlog, sizeof childlog, "%s/child.log", root);
 	/* the coverage flush allocates, which would move the injection points it is counting */
-	unsetenv("QWE_LUA_COVERAGE");
+	qwe_test_unsetenv("QWE_LUA_COVERAGE");
 	GREATEST_MAIN_BEGIN();
 	RUN_TEST(injection_is_deterministic);
 	RUN_TEST(run_survives_every_injection);

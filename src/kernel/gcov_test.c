@@ -5,6 +5,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "greatest.h"
 #include "src/kernel/gcov.h"
+#include "src/testing/env.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -13,17 +14,17 @@ TEST dump_runs_with_and_without_lua_coverage(void)
 {
 	const char *was = getenv("QWE_LUA_COVERAGE");
 	char *saved = was ? strdup(was) : NULL;
-	int ok = (!was || saved) && unsetenv("QWE_LUA_COVERAGE") == 0;
+	int ok = (!was || saved) && qwe_test_unsetenv("QWE_LUA_COVERAGE") == 0;
 
 	if (ok) {
 		qwe_gcov_dump();
-		ok = setenv("QWE_LUA_COVERAGE", "1", 1) == 0;
+		ok = qwe_test_setenv("QWE_LUA_COVERAGE", "1") == 0;
 		qwe_gcov_dump();
 	}
 	if (saved)
-		ok = setenv("QWE_LUA_COVERAGE", saved, 1) == 0 && ok;
+		ok = qwe_test_setenv("QWE_LUA_COVERAGE", saved) == 0 && ok;
 	else
-		ok = unsetenv("QWE_LUA_COVERAGE") == 0 && ok;
+		ok = qwe_test_unsetenv("QWE_LUA_COVERAGE") == 0 && ok;
 	free(saved);
 	ASSERT(ok);
 	PASS();

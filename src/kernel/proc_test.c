@@ -34,7 +34,7 @@ TEST child_is_group_leader(void)
 
 	sigemptyset(&set);
 	sigaddset(&set, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &set, &old);
+	pthread_sigmask(SIG_BLOCK, &set, &old);
 
 	ASSERT_EQ(0, qwe_proc_spawn(&p, argv_true, NULL));
 	ASSERT(p.pid > 0);
@@ -45,7 +45,7 @@ TEST child_is_group_leader(void)
 	ASSERT_EQ(p.pid, waitpid(p.pid, &st, 0));
 	ASSERT(WIFEXITED(st) && WEXITSTATUS(st) == 0);
 	close(p.out_fd);
-	sigprocmask(SIG_SETMASK, &old, NULL);
+	pthread_sigmask(SIG_SETMASK, &old, NULL);
 	PASS();
 }
 
@@ -124,7 +124,7 @@ TEST master_outside_step_groups(void)
 	close(fd);
 	sigemptyset(&set);
 	sigaddset(&set, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &set, &old);
+	pthread_sigmask(SIG_BLOCK, &set, &old);
 	ASSERT_EQ(0, qwe_proc_spawn(&step, argv_sleep_long, NULL));
 
 	/* the stand-in master records its own /proc stat, then exits */
@@ -134,7 +134,7 @@ TEST master_outside_step_groups(void)
 		"assert(code == 0, code)\n",
 		path);
 	ASSERT_EQ(0, luaL_dostring(L, src));
-	sigprocmask(SIG_SETMASK, &old, NULL);
+	pthread_sigmask(SIG_SETMASK, &old, NULL);
 	qwe_proc_kill_group(&step, SIGKILL);
 	waitpid(step.pid, &st, 0);
 	close(step.out_fd);
@@ -204,7 +204,7 @@ TEST group_kill_no_orphans(void)
 
 	sigemptyset(&set);
 	sigaddset(&set, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &set, &old);
+	pthread_sigmask(SIG_BLOCK, &set, &old);
 
 	ASSERT_EQ(0, qwe_proc_spawn(&p, argv_two_sleeps, NULL));
 	/* Wait for the shell to have started both sleeps: the group has 3 members
@@ -224,7 +224,7 @@ TEST group_kill_no_orphans(void)
 	ASSERT_EQ(0, live_in_group(p.pid));
 
 	close(p.out_fd);
-	sigprocmask(SIG_SETMASK, &old, NULL);
+	pthread_sigmask(SIG_SETMASK, &old, NULL);
 	PASS();
 }
 
@@ -271,7 +271,7 @@ TEST subreaper_reaps_orphans(void)
 
 	sigemptyset(&set);
 	sigaddset(&set, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &set, &old);
+	pthread_sigmask(SIG_BLOCK, &set, &old);
 	ASSERT_EQ(0, qwe_proc_become_subreaper());
 
 	ASSERT_EQ(0, qwe_proc_spawn(&p, argv_orphan, NULL));
@@ -301,7 +301,7 @@ TEST subreaper_reaps_orphans(void)
 	ASSERT_EQ(-1, waitpid(orphan, &st, WNOHANG));
 
 	close(p.out_fd);
-	sigprocmask(SIG_SETMASK, &old, NULL);
+	pthread_sigmask(SIG_SETMASK, &old, NULL);
 	PASS();
 }
 

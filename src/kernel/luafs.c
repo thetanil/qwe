@@ -2,6 +2,7 @@
 #include "src/kernel/luafs.h"
 
 #include "src/secrets/keyfile.h"
+#include "src/kernel/errstr.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -26,7 +27,7 @@ static int fs_list(lua_State *L)
 
 	if (!d) {
 		lua_pushnil(L);
-		lua_pushstring(L, strerror(errno));
+		lua_pushstring(L, qwe_strerror(errno));
 		return 2;
 	}
 	while ((e = readdir(d))) {
@@ -62,7 +63,7 @@ nomem:
 		free(names[n]);
 	free(names);
 	lua_pushnil(L);
-	lua_pushstring(L, strerror(ENOMEM));
+	lua_pushstring(L, qwe_strerror(ENOMEM));
 	return 2;
 }
 
@@ -82,7 +83,7 @@ static int fs_private_dir(lua_State *L)
 
 	if (mkdir(path, 0700) < 0 && errno != EEXIST) {
 		lua_pushnil(L);
-		lua_pushfstring(L, "cannot create %s %s: %s", what, path, strerror(errno));
+		lua_pushfstring(L, "cannot create %s %s: %s", what, path, qwe_strerror(errno));
 		lua_pushstring(L, "create");
 		return 3;
 	}

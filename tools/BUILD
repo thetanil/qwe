@@ -7,6 +7,7 @@ cc_binary(
     copts = ["-std=gnu99"],
     visibility = ["//visibility:public"],
     deps = [
+        "//src/kernel:errstr",
         "//src/kernel:put",
         "//third_party/luajit",
     ],

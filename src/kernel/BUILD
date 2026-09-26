@@ -18,6 +18,7 @@ cc_library(
         "validate.h",
     ],
     deps = [
+        ":errstr",
         ":alloc",
         ":clock",
         ":fmt",
@@ -78,6 +79,7 @@ cc_test(
     size = "small",
     srcs = ["gcov_test.c"],
     deps = [
+        "//src/testing:env",
         ":gcov",
         "//third_party/greatest",
     ],
@@ -204,6 +206,7 @@ cc_library(
         "//src/kernel/lua:shipped",
     ],
     deps = [
+        ":errstr",
         ":put",
         ":gcov",
         ":clock",
@@ -224,6 +227,7 @@ cc_test(
     size = "small",
     srcs = ["luavm_test.c"],
     deps = [
+        "//src/testing:env",
         ":luavm",
         "//third_party/greatest",
         "//third_party/luajit",
@@ -279,6 +283,25 @@ sh_test(
     srcs = ["luarun_test.sh"],
     args = ["$(location :luarun)"],
     data = [":luarun"],
+)
+
+# strerror without the shared buffer (errstr.h).
+cc_library(
+    name = "errstr",
+    srcs = ["errstr.c"],
+    hdrs = ["errstr.h"],
+    visibility = ["//visibility:public"],
+    deps = [":fmt"],
+)
+
+cc_test(
+    name = "errstr_test",
+    size = "small",
+    srcs = ["errstr_test.c"],
+    deps = [
+        ":errstr",
+        "//third_party/greatest",
+    ],
 )
 
 # Writes whose failure is checked once at the end (a data stream), or has nobody
@@ -503,6 +526,7 @@ cc_test(
     srcs = ["oom_shim_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
+        "//src/testing:env",
         ":fmt",
         ":gcov",
         ":oom_shim",
@@ -620,6 +644,7 @@ cc_test(
     srcs = ["oom_test.c"],
     linkstatic = True,  # --wrap only reaches objects linked into the binary
     deps = [
+        "//src/testing:env",
         ":fmt",
         ":put",
         ":kernel",
@@ -690,6 +715,7 @@ cc_test(
     size = "small",
     srcs = ["luaexec_test.c"],
     deps = [
+        ":errstr",
         ":luavm",
         "//third_party/greatest",
         "//third_party/luajit",

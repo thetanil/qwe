@@ -13,7 +13,7 @@ cc_library(
         "envelope.h",
         "keyfile.h",
     ],
-    deps = ["//src/kernel:fmt", "//third_party/libsodium"],
+    deps = ["//src/kernel:fmt", "//third_party/libsodium", "//src/kernel:errstr"],
 )
 
 cc_test(

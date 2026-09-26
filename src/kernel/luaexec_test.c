@@ -3,6 +3,7 @@
  * (ticket quality/09); the happy paths are the e2e cases. */
 #include "greatest.h"
 #include "src/kernel/luavm.h"
+#include "src/kernel/errstr.h"
 
 #include <errno.h>
 #include <lauxlib.h>
@@ -91,7 +92,7 @@ TEST run_reports_a_failed_spawn(void)
 	lua_getglobal(L, "r1");
 	ASSERT(lua_isnil(L, -1));
 	lua_getglobal(L, "r2");
-	ASSERT_STR_EQ(strerror(EMFILE), lua_tostring(L, -1));
+	ASSERT_STR_EQ(qwe_strerror(EMFILE), lua_tostring(L, -1));
 	lua_settop(L, 0);
 	ASSERT_EQ(first, dup(0)); /* nothing leaked */
 	close(first);
@@ -109,7 +110,7 @@ TEST run_reports_a_failed_spawn(void)
 		lua_getglobal(L, "f1");
 		ASSERT(lua_isnil(L, -1));
 		lua_getglobal(L, "f2");
-		ASSERT_STR_EQ(strerror(EAGAIN), lua_tostring(L, -1));
+		ASSERT_STR_EQ(qwe_strerror(EAGAIN), lua_tostring(L, -1));
 	}
 	lua_close(L);
 	PASS();

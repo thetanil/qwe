@@ -9,6 +9,7 @@
 #include "src/kernel/oom_shim.h"
 #include "src/kernel/qwe.h"
 #include "src/kernel/put.h"
+#include "src/testing/env.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,7 +54,7 @@ int main(int argc, char **argv)
 
 	qwe_xfmt(path, sizeof path, "%s/home", tmp ? tmp : "/tmp");
 	mkdir(path, 0700);
-	setenv("HOME", path, 1);
+	qwe_test_setenv("HOME", path);
 	strncat(path, "/.config", sizeof path - strlen(path) - 1);
 	mkdir(path, 0700);
 	strncat(path, "/qwe", sizeof path - strlen(path) - 1);

@@ -20,6 +20,7 @@
 #include "src/kernel/sched.h"
 #include "src/kernel/sink.h"
 #include "src/kernel/summary.h"
+#include "src/kernel/errstr.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -186,7 +187,7 @@ static char **child_argv(void *arg, int result_fd)
 
 		/* the bootstrap shell reads exactly the preamble; the rest is the command's */
 		if (fd < 0 || write(fd, s, sl) != (ssize_t)sl || lseek(fd, 0, SEEK_SET) < 0 || dup2(fd, 0) < 0) {
-			qwe_diag("qwe: cannot set up the step's stdin: %s\n", strerror(errno));
+			qwe_diag("qwe: cannot set up the step's stdin: %s\n", qwe_strerror(errno));
 			free_argv(argv, n);
 			return NULL;
 		}
@@ -457,7 +458,7 @@ static int load_inventory(lua_State *L, const char *cmd, const char *wf_path, co
 		inv_path = default_path;
 	}
 	if (read_file(inv_path, &yaml, &yaml_len) < 0) {
-		qwe_diag("%s: cannot read %s: %s\n", cmd, inv_path, strerror(errno));
+		qwe_diag("%s: cannot read %s: %s\n", cmd, inv_path, qwe_strerror(errno));
 		goto fail;
 	}
 	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, &pos, err, sizeof err) < 0) {
@@ -512,7 +513,7 @@ static int load_workflow(const char *cmd, const char *path, const char *inventor
 	int errors;
 
 	if (read_file(path, &yaml, &yaml_len) < 0) {
-		qwe_diag("%s: cannot read %s: %s\n", cmd, path, strerror(errno));
+		qwe_diag("%s: cannot read %s: %s\n", cmd, path, qwe_strerror(errno));
 		return QWE_EXIT_USAGE;
 	}
 	if (qwe_yaml_to_cbor(yaml, yaml_len, &cbor, &cbor_len, &pos, err, sizeof err) < 0) {
@@ -639,7 +640,7 @@ static void owe_start_failed(struct job *job, const char *what, const char *op, 
 {
 	struct job_run *r = &job->run;
 
-	qwe_diag("qwe run: cannot start %s of job %s: %s failed: %s\n", what, job->id, op, strerror(err));
+	qwe_diag("qwe run: cannot start %s of job %s: %s failed: %s\n", what, job->id, op, qwe_strerror(err));
 	r->fail_op = op;
 	r->fail_errno = err;
 	r->have_followup = 1;
@@ -1829,7 +1830,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	}
 	qwe_xfmt(run_dir, run_dir_size, "%s/.qwe/runs/%s", dir, run_id);
 	if (mkdir_p(run_dir, 0700) < 0) {
-		qwe_diag("qwe run: cannot create %s: %s\n", run_dir, strerror(errno));
+		qwe_diag("qwe run: cannot create %s: %s\n", run_dir, qwe_strerror(errno));
 		rc = QWE_EXIT_USAGE;
 		goto out;
 	}
@@ -1842,7 +1843,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	}
 	qwe_xfmt(trace_path, trace_size, "%s/lifecycle.trace", run_dir);
 	if (qwe_trace_open(&ctx.trace, trace_path, opts && opts->debug) < 0) {
-		qwe_diag("qwe run: cannot create %s: %s\n", trace_path, strerror(errno));
+		qwe_diag("qwe run: cannot create %s: %s\n", trace_path, qwe_strerror(errno));
 		rc = QWE_EXIT_USAGE;
 		goto out;
 	}
@@ -1856,12 +1857,12 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	sigemptyset(&cancel_set);
 	sigaddset(&cancel_set, SIGINT);
 	sigaddset(&cancel_set, SIGTERM);
-	sigprocmask(SIG_BLOCK, &ctx.chld_mask, NULL);
-	sigprocmask(SIG_BLOCK, &cancel_set, NULL);
+	pthread_sigmask(SIG_BLOCK, &ctx.chld_mask, NULL);
+	pthread_sigmask(SIG_BLOCK, &cancel_set, NULL);
 	/* A step's orphans come back to qwe, so that a step ends only when its whole
 	 * group is empty. */
 	if (qwe_proc_become_subreaper() < 0)
-		qwe_diag("qwe run: warning: cannot become a subreaper: %s\n", strerror(errno));
+		qwe_diag("qwe run: warning: cannot become a subreaper: %s\n", qwe_strerror(errno));
 	ctx.cancel_fd = signalfd(-1, &cancel_set, SFD_CLOEXEC | SFD_NONBLOCK);
 	ctx.chld_fd = signalfd(-1, &ctx.chld_mask, SFD_CLOEXEC | SFD_NONBLOCK);
 	/* The grace period is fixed at 10 seconds; the override is for tests only. */
@@ -1931,7 +1932,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	if (fp && fclose(fp) != 0) /* closed whether or not the write failed */
 		wrote = 0;
 	if (!wrote) {
-		qwe_diag("qwe run: cannot write %s: %s\n", run_dir, strerror(errno));
+		qwe_diag("qwe run: cannot write %s: %s\n", run_dir, qwe_strerror(errno));
 		rc = QWE_EXIT_FAILED;
 	}
 	if (opts && opts->summary) {
@@ -1939,7 +1940,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 
 		if (qwe_summary_write(opts->summary, ctx.run_dir_abs, path, outcome, run_duration_ms, results,
 				      (size_t)n) < 0)
-			qwe_diag("qwe run: cannot write summary %s: %s\n", opts->summary, strerror(errno));
+			qwe_diag("qwe run: cannot write summary %s: %s\n", opts->summary, qwe_strerror(errno));
 	}
 	report_disabled(jobs, (size_t)n);
 	qwe_lc_set_abort_hook(NULL, NULL);

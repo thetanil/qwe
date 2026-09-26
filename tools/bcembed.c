@@ -6,6 +6,7 @@
  * A file ending in .json is not code: it is embedded as a module that returns
  * its text as one string. */
 #include "src/kernel/put.h"
+#include "src/kernel/errstr.h"
 
 #include <lauxlib.h>
 #include <lua.h>
@@ -88,7 +89,7 @@ int main(int argc, char **argv)
 		name = strndup(argv[i], (size_t)(eq - argv[i]));
 		src = slurp(eq + 1, &len);
 		if (!src) {
-			qwe_diag("bcembed: cannot read %s: %s\n", eq + 1, strerror(errno));
+			qwe_diag("bcembed: cannot read %s: %s\n", eq + 1, qwe_strerror(errno));
 			free(name);
 			(void)fclose(out); /* failing already */
 			return 1;

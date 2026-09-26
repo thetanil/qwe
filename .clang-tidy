@@ -16,7 +16,6 @@ Checks: >
   -cert-dcl51-cpp,
   -bugprone-multi-level-implicit-pointer-conversion,
   -bugprone-implicit-widening-of-multiplication-result,
-  -concurrency-mt-unsafe,
   -bugprone-easily-swappable-parameters,
   -bugprone-assignment-in-if-condition,
   -bugprone-misplaced-widening-cast,
@@ -39,3 +38,4 @@ FormatStyle: none
 CheckOptions:
   bugprone-reserved-identifier.AllowedIdentifiers: '^_POSIX_C_SOURCE$;^_GNU_SOURCE$;^__wrap_.*$;^__real_.*$;^__executable_start$'
   cert-dcl37-c.AllowedIdentifiers: '^_POSIX_C_SOURCE$;^_GNU_SOURCE$;^__wrap_.*$;^__real_.*$;^__executable_start$'
+  concurrency-mt-unsafe.FunctionSet: glibc

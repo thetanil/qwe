@@ -78,7 +78,12 @@ static int lua_panic(lua_State *L)
 	const char *msg = lua_tostring(L, -1);
 
 	qwe_diag("qwe: internal error: %s\n", msg ? msg : "unknown error");
-	exit(1); /* QWE_EXIT_FAILED (src/kernel/qwe.h): luavm sits below :kernel and can't include it */
+	/* exit is thread-unsafe only against another thread running the atexit handlers
+	 * or reading what they free; qwe has no threads (//src/cli:no_threads_test).
+	 * 1 is QWE_EXIT_FAILED (src/kernel/qwe.h): luavm sits below :kernel and can't
+	 * include it. */
+	// NOLINTNEXTLINE(concurrency-mt-unsafe)
+	exit(1);
 }
 
 lua_State *qwe_lua_new(void)

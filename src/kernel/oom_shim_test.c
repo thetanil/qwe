@@ -3,8 +3,10 @@
 #include "src/kernel/fmt.h"
 #include "src/kernel/gcov.h"
 #include "src/kernel/oom_shim.h"
+#include "src/testing/env.h"
 
 #include <signal.h>
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,9 +23,9 @@ static void restore_timeout_env(void *arg)
 	struct saved_env *saved = arg;
 
 	if (saved->had_value)
-		(void)setenv("QWE_OOM_PROBE_TIMEOUT", saved->value, 1);
+		(void)qwe_test_setenv("QWE_OOM_PROBE_TIMEOUT", saved->value);
 	else
-		(void)unsetenv("QWE_OOM_PROBE_TIMEOUT");
+		(void)qwe_test_unsetenv("QWE_OOM_PROBE_TIMEOUT");
 	free(saved->value);
 	saved->value = NULL;
 	saved->had_value = 0;
@@ -31,7 +33,9 @@ static void restore_timeout_env(void *arg)
 
 static int sleep_case(void *arg)
 {
-	sleep(*(unsigned *)arg);
+	struct timespec ts = {.tv_sec = *(unsigned *)arg};
+
+	nanosleep(&ts, NULL);
 	return 7;
 }
 
@@ -50,18 +54,18 @@ TEST probe_timeout_defaults_can_be_overridden(void)
 	}
 	SET_TEARDOWN(restore_timeout_env, &saved);
 
-	ASSERT_EQ(0, setenv("QWE_OOM_PROBE_TIMEOUT", "1", 1));
+	ASSERT_EQ(0, qwe_test_setenv("QWE_OOM_PROBE_TIMEOUT", "1"));
 	ASSERT_EQ(0, qwe_oom_probe(0, 0, sleep_case, &secs, &o));
 	ASSERT(!o.exited);
 	ASSERT_EQ(SIGALRM, o.signal);
 
-	ASSERT_EQ(0, setenv("QWE_OOM_PROBE_TIMEOUT", "3", 1));
+	ASSERT_EQ(0, qwe_test_setenv("QWE_OOM_PROBE_TIMEOUT", "3"));
 	ASSERT_EQ(0, qwe_oom_probe(0, 0, sleep_case, &secs, &o));
 	ASSERT(o.exited);
 	ASSERT_EQ(7, o.code);
 
 	secs = 1;
-	ASSERT_EQ(0, setenv("QWE_OOM_PROBE_TIMEOUT", "bogus", 1));
+	ASSERT_EQ(0, qwe_test_setenv("QWE_OOM_PROBE_TIMEOUT", "bogus"));
 	ASSERT_EQ(0, qwe_oom_probe(0, 0, sleep_case, &secs, &o));
 	ASSERT(o.exited);
 	ASSERT_EQ(7, o.code);
@@ -95,7 +99,7 @@ TEST forked_child_fails_its_nth_allocation_and_logs_it(void)
 	qwe_xfmt(sitelog, sizeof sitelog, "%s/site.log", tmp ? tmp : "/tmp");
 	(void)unlink(childlog);
 	(void)unlink(sitelog);
-	ASSERT_EQ(0, setenv("QWE_OOM_SITE_LOG", sitelog, 1));
+	ASSERT_EQ(0, qwe_test_setenv("QWE_OOM_SITE_LOG", sitelog));
 	qwe_oom_child_log(childlog);
 	qwe_oom_arm_child(2);
 	pid = fork();
@@ -111,7 +115,7 @@ TEST forked_child_fails_its_nth_allocation_and_logs_it(void)
 	}
 	qwe_oom_arm_child(0);
 	qwe_oom_child_log(NULL);
-	(void)unsetenv("QWE_OOM_SITE_LOG");
+	(void)qwe_test_unsetenv("QWE_OOM_SITE_LOG");
 	ASSERT_EQ(pid, waitpid(pid, &status, 0));
 	ASSERTm("the child's 2nd allocation, and only that one, fails", WIFEXITED(status) && WEXITSTATUS(status) == 0);
 
