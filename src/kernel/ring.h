@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#define QWE_RING_CAPACITY (1024 * 1024) /* spec: fixed at 1 MiB per job */
+#define QWE_RING_CAPACITY ((size_t)1024 * 1024) /* spec: fixed at 1 MiB per job */
 
 struct qwe_ring {
 	unsigned char *buf;

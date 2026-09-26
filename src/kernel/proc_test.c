@@ -174,7 +174,8 @@ static int live_in_group(pid_t pgid)
 		if (whole_number(e->d_name, &pid) < 0)
 			continue;
 		qwe_xfmt(path, sizeof path, "/proc/%ld/stat", pid);
-		if (!(fp = fopen(path, "r")))
+		fp = fopen(path, "r");
+		if (!fp)
 			continue;
 		if (fgets(buf, sizeof buf, fp)) {
 			char state;
@@ -315,7 +316,7 @@ static int spawn_with_fd_room(int room, struct qwe_proc *p, int *open_before, in
 	close(first);
 	getrlimit(RLIMIT_NOFILE, &old);
 	lim = old;
-	lim.rlim_cur = (rlim_t)(first + room);
+	lim.rlim_cur = (rlim_t)first + room;
 	setrlimit(RLIMIT_NOFILE, &lim);
 	*open_before = dup(0);
 	close(*open_before);

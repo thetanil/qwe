@@ -15,7 +15,7 @@
 #include <stdint.h>
 
 #define QWE_YAML_MAX_DEPTH 64
-#define QWE_YAML_MAX_SIZE (1024 * 1024)
+#define QWE_YAML_MAX_SIZE ((size_t)1024 * 1024)
 
 /* On success returns 0 and a malloc'd CBOR buffer the caller frees; if pos is
  * not NULL it also receives the position table (free with

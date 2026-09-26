@@ -405,7 +405,7 @@ int qwe_yaml_to_cbor(const char *yaml, size_t len, uint8_t **out, size_t *out_le
 	int rc;
 
 	if (len > QWE_YAML_MAX_SIZE) {
-		qwe_msg(err, err_size, "1:1: document is larger than %d bytes", QWE_YAML_MAX_SIZE);
+		qwe_msg(err, err_size, "1:1: document is larger than %lu bytes", (unsigned long)QWE_YAML_MAX_SIZE);
 		return -1;
 	}
 	c = calloc(1, sizeof *c);

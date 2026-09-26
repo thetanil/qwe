@@ -15,15 +15,11 @@ Checks: >
   portability-*,
   -cert-dcl51-cpp,
   -bugprone-multi-level-implicit-pointer-conversion,
-  -bugprone-implicit-widening-of-multiplication-result,
   -bugprone-easily-swappable-parameters,
-  -bugprone-assignment-in-if-condition,
-  -bugprone-misplaced-widening-cast,
   -cert-msc30-c,
   -cert-msc32-c,
   -cert-msc50-cpp,
-  -cert-msc51-cpp,
-  -clang-analyzer-optin.performance.Padding
+  -cert-msc51-cpp
 WarningsAsErrors: '*'
 # clang-tidy matches these against the header's path as it resolved it, which is
 # './src/...' for Bazel's `-iquote .` includes -- an anchored '^src/' never matches.

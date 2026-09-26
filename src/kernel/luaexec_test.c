@@ -81,7 +81,7 @@ TEST run_reports_a_failed_spawn(void)
 	close(first);
 	getrlimit(RLIMIT_NOFILE, &old);
 	lim = old;
-	lim.rlim_cur = (rlim_t)(first + 2); /* the first pipe fits, the second does not */
+	lim.rlim_cur = (rlim_t)first + 2; /* the first pipe fits, the second does not */
 	setrlimit(RLIMIT_NOFILE, &lim);
 	{
 		int rc = luaL_dostring(L, "r1, r2 = exec.run({ 'true' })");

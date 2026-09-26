@@ -335,7 +335,7 @@ static void drain_flush(struct qwe_ring *ring, struct qwe_sink *sink, struct qwe
 
 /* The result pipe carries a few hundred bytes. A step that sends more than this
  * is broken, and its result is treated as missing. */
-#define RESULT_MAX (1024 * 1024)
+#define RESULT_MAX ((size_t)1024 * 1024)
 
 /* Reads whatever is on the step's result pipe into the job's buffer. Returns 1
  * at end of file, 0 if it would block. */

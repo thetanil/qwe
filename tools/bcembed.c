@@ -70,7 +70,8 @@ int main(int argc, char **argv)
 	FILE *out;
 	int i, bad;
 
-	if (argc < 2 || !(out = fopen(argv[1], "w"))) {
+	out = argc < 2 ? NULL : fopen(argv[1], "w");
+	if (!out) {
 		qwe_diag("usage: bcembed <out.c> <module>=<file> ...\n");
 		return 2;
 	}

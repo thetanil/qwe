@@ -54,13 +54,15 @@ static const char *convert_string(lua_State *L, CborValue *it, int bytes)
 
 	if (bytes) {
 		uint8_t *s;
-		if ((e = cbor_value_dup_byte_string(it, &s, &n, it)) != CborNoError)
+		e = cbor_value_dup_byte_string(it, &s, &n, it);
+		if (e != CborNoError)
 			return cbor_error_string(e);
 		lua_pushlstring(L, (const char *)s, n);
 		free(s);
 	} else {
 		char *s;
-		if ((e = cbor_value_dup_text_string(it, &s, &n, it)) != CborNoError)
+		e = cbor_value_dup_text_string(it, &s, &n, it);
+		if (e != CborNoError)
 			return cbor_error_string(e);
 		lua_pushlstring(L, s, n);
 		free(s);
@@ -85,10 +87,12 @@ static const char *convert_container(lua_State *L, CborValue *it, int depth, int
 		if (is_map) {
 			if (!cbor_value_is_text_string(&inner))
 				return "map key is not a string";
-			if ((err = convert_string(L, &inner, 0)) != NULL)
+			err = convert_string(L, &inner, 0);
+			if (err)
 				return err;
 		}
-		if ((err = convert(L, &inner, depth + 1)) != NULL)
+		err = convert(L, &inner, depth + 1);
+		if (err)
 			return err;
 		if (is_map)
 			lua_settable(L, -3);
@@ -111,7 +115,8 @@ static const char *convert_tagged(lua_State *L, CborValue *it)
 	if (cbor_value_skip_tag(it) != CborNoError || !cbor_value_is_text_string(it))
 		return "a secret must wrap a text string";
 	lua_newtable(L);
-	if ((err = convert_string(L, it, 0)) != NULL)
+	err = convert_string(L, it, 0);
+	if (err)
 		return err;
 	lua_setfield(L, -2, "value");
 	luaL_getmetatable(L, SECRET_MT);

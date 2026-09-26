@@ -223,25 +223,29 @@ TEST every_possible_cell_reachable(void)
 	PASS();
 }
 
-/* Layer 4: named scenarios. */
+/* Layer 4: named scenarios. Widest field first, so the struct carries no
+ * padding to speak of (clang-analyzer-optin.performance.Padding). The macros
+ * below name the fields, so their order is free to change. */
 struct step {
-	enum qwe_lc_event event;
 	struct qwe_lc_payload payload;
-	enum qwe_lc_state want_next;
 	const char *want_reason;
+	enum qwe_lc_event event;
+	enum qwe_lc_state want_next;
 	enum qwe_lc_kind want_kind;
 };
 
 #define EVT(e) QWE_LC_EV_##e
 #define ST(s) QWE_LC_##s
 /* An event, the state it leads to, and the reason recorded. */
-#define GO(e, next, reason) {EVT(e), {0, NULL, NULL}, ST(next), reason, QWE_LC_TRANSITION}
-#define GO_P(e, pl, next, reason) {EVT(e), pl, ST(next), reason, QWE_LC_TRANSITION}
-#define STALE(e, state) {EVT(e), {0, NULL, NULL}, ST(state), NULL, QWE_LC_IGNORE}
-#define COE {1, NULL, NULL}
-#define PLAIN {0, NULL, NULL}
-#define FAILS(r) {0, r, NULL}
-#define CARRY(r) {0, NULL, r}
+#define GO(e, next, reason) \
+	{.event = EVT(e), .want_next = ST(next), .want_reason = (reason), .want_kind = QWE_LC_TRANSITION}
+#define GO_P(e, pl, next, reason) \
+	{.event = EVT(e), .payload = (pl), .want_next = ST(next), .want_reason = (reason), .want_kind = QWE_LC_TRANSITION}
+#define STALE(e, state) {.event = EVT(e), .want_next = ST(state), .want_kind = QWE_LC_IGNORE}
+#define COE ((struct qwe_lc_payload){1, NULL, NULL})
+#define PLAIN ((struct qwe_lc_payload){0, NULL, NULL})
+#define FAILS(r) ((struct qwe_lc_payload){0, (r), NULL})
+#define CARRY(r) ((struct qwe_lc_payload){0, NULL, (r)})
 
 static enum qwe_lc_state walk(enum qwe_lc_state s, const struct step *steps, size_t n, char *why, size_t whylen)
 {
@@ -328,9 +332,9 @@ SCENARIO(cancel_in_pending_skips, QWE_LC_PENDING, QWE_LC_SKIPPED, GO(CANCEL, SKI
 
 SCENARIO(cancel_in_ready_skips, QWE_LC_READY, QWE_LC_SKIPPED, GO(CANCEL, SKIPPED, "cancel-requested"))
 
-SCENARIO(skip_in_pending, QWE_LC_PENDING, QWE_LC_SKIPPED, {QWE_LC_EV_SKIP, FAILS("target-disabled"), QWE_LC_SKIPPED, "target-disabled", QWE_LC_TRANSITION})
+SCENARIO(skip_in_pending, QWE_LC_PENDING, QWE_LC_SKIPPED, {.event = QWE_LC_EV_SKIP, .payload = FAILS("target-disabled"), .want_next = QWE_LC_SKIPPED, .want_reason = "target-disabled", .want_kind = QWE_LC_TRANSITION})
 
-SCENARIO(skip_in_ready, QWE_LC_READY, QWE_LC_SKIPPED, {QWE_LC_EV_SKIP, FAILS("if: false"), QWE_LC_SKIPPED, "if: false", QWE_LC_TRANSITION})
+SCENARIO(skip_in_ready, QWE_LC_READY, QWE_LC_SKIPPED, {.event = QWE_LC_EV_SKIP, .payload = FAILS("if: false"), .want_next = QWE_LC_SKIPPED, .want_reason = "if: false", .want_kind = QWE_LC_TRANSITION})
 
 /* The reason is the payload's, whatever it is: a future if: reuses the event unchanged. */
 TEST skip_reason_comes_from_the_payload(void)

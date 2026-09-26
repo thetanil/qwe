@@ -10,7 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define MAX_PLAIN (64 * 1024)
+#define MAX_PLAIN ((size_t)64 * 1024)
 
 /* Reads all of stdin into a malloc'd buffer. Returns its length, or -1. */
 static ssize_t read_stdin(uint8_t **out)
@@ -67,7 +67,7 @@ int qwe_cmd_encrypt(int argc, char **argv)
 	n = read_stdin(&plain);
 	if (n < 0) {
 		if (n == -2)
-			qwe_diag("qwe encrypt: the secret is longer than %d bytes\n", MAX_PLAIN);
+			qwe_diag("qwe encrypt: the secret is longer than %lu bytes\n", (unsigned long)MAX_PLAIN);
 		else
 			qwe_diag("qwe encrypt: cannot read stdin\n");
 		sodium_memzero(key, sizeof key);

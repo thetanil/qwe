@@ -15,6 +15,7 @@ TEST depth_limit(void)
 	 * be parsed first, the error would be about the missing "]" instead. */
 	char deep[QWE_YAML_MAX_DEPTH + 2];
 	char ok[2 * QWE_YAML_MAX_DEPTH + 1];
+	const size_t depth = QWE_YAML_MAX_DEPTH;
 
 	memset(deep, '[', QWE_YAML_MAX_DEPTH + 1);
 	deep[QWE_YAML_MAX_DEPTH + 1] = '\0';
@@ -25,7 +26,7 @@ TEST depth_limit(void)
 	/* Exactly the limit is fine. */
 	memset(ok, '[', QWE_YAML_MAX_DEPTH);
 	memset(ok + QWE_YAML_MAX_DEPTH, ']', QWE_YAML_MAX_DEPTH);
-	ok[2 * QWE_YAML_MAX_DEPTH] = '\0';
+	ok[2 * depth] = '\0';
 	ASSERT_EQ(0, qwe_yaml_to_cbor(ok, strlen(ok), &buf, &n, NULL, err, sizeof err));
 	free(buf);
 	PASS();
