@@ -290,6 +290,15 @@ what each one fails on.
   connect a failure instead of a skip.
 - **Caches.** A saved cache key never changes, so a cache slowly goes stale. The nightly deletes the
   `setup-bazel-*` caches and rebuilds them, and pushes to `main` restore the result.
+- **Badges can lag.** A workflow's own badge (the Status row at the top of this file) tracks only its
+  *own* direct triggers -- `push`, `pull_request`, `schedule`, `workflow_dispatch` -- never a
+  `workflow_call` invocation from another workflow. `valgrind` (and `fuzz`, `perf-baseline`) has no
+  `push` trigger (too slow to gate one), so its badge reflects only the last manual
+  `workflow_dispatch`, not the far more frequent runs `nightly.yml` and `release.yml` make of it by
+  `workflow_call`: a released, green `main` can still show a red `valgrind` badge from an old manual
+  run. Check the actual gate in context instead of trusting an on-demand-only badge alone
+  (`gh run list -w release -L 1`, or the `valgrind` job inside it), or re-dispatch it by hand
+  (`gh workflow run valgrind.yml`) to refresh the badge itself.
 - **Coverage report.** A green push to `main` publishes the HTML report and a line-coverage percentage badge (`coverage.json`) to GitHub Pages, from the last job of `coverage.yml`.
 - **Fuzzing** runs for 3600 s in the nightly, never on a push or in a release. Start it by hand and read the result:
   ```
