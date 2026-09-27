@@ -24,7 +24,7 @@ only:
       says so. `unit: tools/ci/workflows_test.sh`
 - [x] It has a README badge. `unit: tools/ci/workflows_test.sh` (rule 1)
 - [x] The docs say when and how to run it. `manual: docs/ci-checks.md`
-- [ ] A dispatch opens a PR with a valid `expected.tsv`.
+- [x] A dispatch opens a PR with a valid `expected.tsv`.
       `human: needs the workflow on GitHub, and "Allow GitHub Actions to create
       and approve pull requests" enabled in the repo settings`
 - [x] `bazel test //...` is green.
@@ -52,3 +52,9 @@ Actions to create and approve pull requests" is on.
 - `docs/ci-checks.md` has a "Re-measuring the perf expected values" section: the command,
   what it does, when to run it, and the repo setting.
 - `bazel test //...`: 262 pass, 3 skipped.
+
+2026-09-27: the user turned the repo setting on and pushed. Dispatch run 36308620510 (`ref=main`,
+`version=v0.3.0-m2`) took about 1.5 min: build 31 s, five measure jobs 25-34 s each, and propose
+15 s. It opened [PR #3](https://github.com/thetanil/qwe/pull/3), which changes only
+`tools/perf/expected.tsv` and lists four CPU models across the five runners. That spread led to
+ticket 04.
