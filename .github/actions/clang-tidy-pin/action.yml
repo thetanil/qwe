@@ -15,6 +15,7 @@ runs:
           echo "CLANG_TIDY_VERSION=$CLANG_TIDY_VERSION"
           echo "CLANG_TIDY_URL=$CLANG_TIDY_URL"
           echo "CLANG_TIDY_SHA256=$CLANG_TIDY_SHA256"
+          echo "CLANG_TIDY_TARBALL_ROOT=$CLANG_TIDY_TARBALL_ROOT"
         } >>"$GITHUB_ENV"
     - name: Restore the pinned clang-tidy from cache
       id: cache
@@ -26,7 +27,12 @@ runs:
       # Only clang-tidy itself is kept: `ldd` on the LLVM release build shows it needs
       # nothing from the tarball at runtime (libm/libz/libc, the runner's own), so
       # extracting just bin/clang-tidy out of the ~2 GB tarball is enough, and it's what
-      # gets cached.
+      # gets cached. The member path is built from CLANG_TIDY_TARBALL_ROOT (pin.env),
+      # not discovered by listing the archive first: `tar -tJf` on this single-stream xz
+      # tarball has to decompress everything up to the last entry it prints, and piping
+      # that into anything that stops reading early races tar's own stdio buffering --
+      # exactly this, on a real runner, decompressed gigabytes before its buffer next
+      # flushed, found the reader long gone, and failed the whole step on the write error.
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
@@ -37,9 +43,8 @@ runs:
         trap 'rm -rf "$tmp"' EXIT
         curl -sSL -o "$tmp/llvm.tar.xz" "$CLANG_TIDY_URL"
         echo "$CLANG_TIDY_SHA256  $tmp/llvm.tar.xz" | sha256sum -c -
-        top=$(tar -tJf "$tmp/llvm.tar.xz" | head -1 | cut -d/ -f1)
-        tar -xJf "$tmp/llvm.tar.xz" -C "$tmp" "$top/bin/clang-tidy"
-        install -m 0755 "$tmp/$top/bin/clang-tidy" "$dir/clang-tidy"
+        tar -xJf "$tmp/llvm.tar.xz" -C "$tmp" "$CLANG_TIDY_TARBALL_ROOT/bin/clang-tidy"
+        install -m 0755 "$tmp/$CLANG_TIDY_TARBALL_ROOT/bin/clang-tidy" "$dir/clang-tidy"
     - name: Save the pinned clang-tidy to cache
       if: steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
