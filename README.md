@@ -102,7 +102,8 @@ qwe keygen | qwe encrypt | qwe --version
 ## Getting it
 
 qwe is Linux x86_64 only. Each [release](https://github.com/thetanil/qwe/releases) attaches `qwe`,
-`qwe-debug` (the same build with symbols) and `SHA256SUMS`. To build it yourself you need Bazel 8.7.0
+`qwe-debug` (the same build with symbols), `SHA256SUMS` and the static-analysis evidence bundle
+(`clang-tidy-evidence-<version>.zip`, `docs/static-analysis.md`). To build it yourself you need Bazel 8.7.0
 (the version is pinned in `.bazelversion`); every dependency is vendored in the repository.
 
 ```
@@ -271,15 +272,16 @@ what each one fails on.
 
 | Workflow | Runs | When |
 |---|---|---|
-| `tests` | `bazel test //...` | every push to `main` |
-| `asan` | the suite under AddressSanitizer and LeakSanitizer | every push to `main` |
-| `ubsan` | the suite under UBSan | every push to `main` |
-| `coverage` | the 85% per-file coverage check, and the HTML report as an artifact | every push to `main` |
-| `smoke` | the smoke workflows on the release build, and `perf`'s timing against the stored expected values (`tools/perf/expected.tsv`; reported on a push, gating on a release) | every push to `main` |
-| `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes), plus a static-analysis job (the LLVM Static Analyzer and a C ruleset, `docs/static-analysis.md`) | by hand, nightly, and in a release |
-| `nightly` | all five of the above, from fresh caches, and `fuzz` | 02:17 UTC, and by hand |
+| `tests` | `bazel test //...` | every push to `main`, pull requests |
+| `asan` | the suite under AddressSanitizer and LeakSanitizer | every push to `main`, pull requests |
+| `ubsan` | the suite under UBSan | every push to `main`, pull requests |
+| `static-analysis` | the LLVM Static Analyzer and a C ruleset through clang-tidy, pinned to `20.1.8` (`docs/static-analysis.md`); uploads an evidence artifact every run | every push to `main`, pull requests, by hand, nightly, and in a release |
+| `coverage` | the 85% per-file coverage check, and the HTML report as an artifact | every push to `main`, pull requests |
+| `smoke` | the smoke workflows on the release build, and `perf`'s timing against the stored expected values (`tools/perf/expected.tsv`; reported on a push, gating on a release) | every push to `main`, pull requests |
+| `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes) | by hand, nightly, and in a release |
+| `nightly` | every gate above (including `valgrind`), plus `smoke` and `fuzz`, from fresh caches | 02:17 UTC, and by hand |
 | `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | nightly (one hour), and by hand |
-| `release` | all five again, then builds and publishes | a pushed tag `v*` |
+| `release` | every gate again (including `valgrind`), plus `smoke`, then builds and publishes | a pushed tag `v*` |
 | `codeql` | GitHub CodeQL code scanning (C and the workflow files); results in the Security tab. Not a gate: nightly and release do not call it | every push to `main`, pull requests, weekly |
 
 - **Runner and setup.** `ubuntu-24.04`, Bazel from `.bazelversion`, the caches through
@@ -300,8 +302,9 @@ what each one fails on.
   The job summary lists each process's executions, corpus and coverage. The corpus persists between
   runs in the Actions cache. See `docs/fuzzing.md`.
 - **Drift.** `//tools/ci:workflows_test` (part of `bazel test //...`) fails if a workflow has no badge, a
-  command in `docs/ci-checks.md` is in no workflow, or the nightly or release stops calling a gate or
-  the smoke workflow.
+  command in `docs/ci-checks.md` is in no workflow, a gate drops its `pull_request` trigger (`valgrind`
+  is the one gate excused, being too slow), or the nightly or release stops calling a gate or the smoke
+  workflow.
 
 To check a change before pushing, run the same commands locally (`docs/ci-checks.md`); the workflows run
 nothing else.
@@ -314,11 +317,12 @@ never tags, so a tag that was only created locally does nothing.
 1. Bump `QWE_VERSION` in `src/kernel/qwe.h`, the only place the version is written (the
    `cli_version` e2e case and `tools/release/check_version.sh` read it from there). Run
    `bazel test //...`.
-2. Commit and `git push` to `main`. Wait until the five gates a push runs (`tests`, `asan`, `ubsan`,
-   `coverage` and `smoke`) are green **on that commit**. The release reruns all of them at the tag, so
-   a red `main` means a failed release. (CodeQL runs on the push too; the release does not rerun it.)
+2. Commit and `git push` to `main`. Wait until the six gates a push runs (`tests`, `asan`, `ubsan`,
+   `static-analysis`, `coverage` and `smoke`) are green **on that commit**. The release reruns all of
+   them at the tag, so a red `main` means a failed release. (CodeQL runs on the push too; the release
+   does not rerun it.)
    ```
-   gh run list -c "$(git rev-parse HEAD)"     # one row per workflow: five gates plus CodeQL
+   gh run list -c "$(git rev-parse HEAD)"     # one row per workflow: six gates plus CodeQL
    gh run watch <run id>                      # or follow one of them
    ```
    Then check `smoke`'s perf job, which a push runs **report-only**: a regression against
@@ -332,26 +336,28 @@ never tags, so a tag that was only created locally does nothing.
    see `docs/ci-checks.md`), then start again from this step.
 3. Tag that exact commit, then push the tag by name:
    ```
-   git tag v0.4.0                # the tag is "v" + QWE_VERSION, or the version check fails
-   git push origin v0.4.0        # this is the step that starts the release
+   git tag v0.3.1                # the tag is "v" + QWE_VERSION, or the version check fails
+   git push origin v0.3.1        # this is the step that starts the release
    ```
    (Instead, you can write the release in the GitHub web UI with the tag `v<version>` and publish it;
    the tag it creates starts the same run. That release is public while the gates run.)
 4. Watch the run: `gh run list -w release -L 1`, then `gh run watch <run id>`. It reruns
-   `tests`, `asan`, `ubsan` and `coverage`, adds `valgrind` (unit, e2e and static analysis; about
+   `tests`, `asan`, `ubsan`, `static-analysis` and `coverage`, adds `valgrind` (unit and e2e; about
    25 minutes, the slowest part), and runs `smoke` (the release binary's own smoke workflows on a
    clean runner, then `perf`'s timing against `tools/perf/expected.tsv`, which here fails the release
    on a regression).
    Only then does `publish` build `qwe` and `qwe-debug`, check that the tag, `QWE_VERSION` and
    `qwe --version` agree, and create the release (title `v<version> (<short hash>)`, generated
-   notes plus the commit hash) with the binaries and `SHA256SUMS` attached. A tag with a `-`
-   (`v0.4.0-rc1`) is marked a pre-release. Check it with `gh release view v<version>`.
+   notes plus the commit hash) with the binaries, `SHA256SUMS` and the static-analysis evidence
+   bundle (`clang-tidy-evidence-<version>.zip`, downloaded from the `static-analysis` job's own
+   run) attached. A tag with a `-` (`v0.3.1-rc1`) is marked a pre-release. Check it with
+   `gh release view v<version>`.
 5. If a gate or the version check fails: for a pushed tag, no release was created. For a release
    written in the web UI, it is turned back into a draft. Either way, fix `main`, then move the tag
    and push it again:
    ```
-   git tag -d v0.4.0 && git push origin :refs/tags/v0.4.0
-   git tag v0.4.0 && git push origin v0.4.0
+   git tag -d v0.3.1 && git push origin :refs/tags/v0.3.1
+   git tag v0.3.1 && git push origin v0.3.1
    ```
 
 ## Credits
