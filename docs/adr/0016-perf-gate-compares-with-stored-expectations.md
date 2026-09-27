@@ -30,7 +30,9 @@ runners to other CPUs, and a stored median is a number measured on some other da
 hardware. The handling:
 
 - **The expected values are medians pooled over several runners, not one.** The first file
-  pools 255 rounds per key of the v0.3.0 binary from five runs on five runners.
+  pooled 255 rounds per key of the v0.3.0 binary from five runs of the old A/B job. It was
+  replaced by `v0.3.0-m2` (PR #3, `perf-baseline.yml` run 36308620510): 255 rounds per key
+  measured the way the gate measures (candidate only), with each runner's CPU recorded.
 - **A key fails only at more than 2x its expected median.** The first `perf-baseline.yml`
   dispatch (run 36308620510) measured one binary on five runners with four CPU models. The
   `smoke_run` wall medians were 50.6 ms (AMD EPYC 9V45), 62.3 and 63.7 ms (EPYC 9V74),
@@ -77,5 +79,5 @@ where ADR-0014 counted paired rounds in which B beat A.
 - A new smoke workflow in the perf set needs expected values before it is gated.
   `//tools/perf:expected_test` fails until they exist, so the gap cannot pass silently as
   a `new` key.
-- The expected file records where its numbers came from (runs, runners, version) in its
-  header. The first one predates the CPU recording, which it says.
+- The expected file records where its numbers came from (the run, the ref, each runner's
+  CPU, the version) in its header.
