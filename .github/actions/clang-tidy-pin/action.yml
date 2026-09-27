@@ -23,7 +23,14 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: ${{ github.workspace }}/.clang-tidy-pin
-        key: clang-tidy-pin-${{ env.CLANG_TIDY_VERSION }}-${{ env.CLANG_TIDY_SHA256 }}
+        # The tarball's version+hash alone under-specifies the cache entry: this action's
+        # own extraction logic (which members, what layout) can change without either of
+        # those changing, and a GitHub Actions cache key is immutable -- a stale entry from
+        # before such a change would silently win forever otherwise (exactly what run
+        # 36319120718 hit: a cache saved by the pre-bin/-layout version of this file kept
+        # matching after the layout changed). hashFiles this file so any change to it gets
+        # a fresh key, and therefore a fresh download and extraction, automatically.
+        key: clang-tidy-pin-${{ env.CLANG_TIDY_VERSION }}-${{ env.CLANG_TIDY_SHA256 }}-${{ hashFiles('.github/actions/clang-tidy-pin/action.yml') }}
     - name: Download and verify the pinned clang-tidy
       # `ldd` on the LLVM release build's bin/clang-tidy shows it needs nothing from the
       # tarball at runtime beyond libm/libz/libc (the runner's own) -- but clang-tidy also
@@ -62,7 +69,7 @@ runs:
       uses: actions/cache/save@v6
       with:
         path: ${{ github.workspace }}/.clang-tidy-pin
-        key: clang-tidy-pin-${{ env.CLANG_TIDY_VERSION }}-${{ env.CLANG_TIDY_SHA256 }}
+        key: clang-tidy-pin-${{ env.CLANG_TIDY_VERSION }}-${{ env.CLANG_TIDY_SHA256 }}-${{ hashFiles('.github/actions/clang-tidy-pin/action.yml') }}
     - name: Put the pinned clang-tidy first on PATH
       shell: bash
       run: echo "$GITHUB_WORKSPACE/.clang-tidy-pin/bin" >>"$GITHUB_PATH"
