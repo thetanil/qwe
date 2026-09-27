@@ -13,6 +13,7 @@ name: smoke
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
     inputs:
       rounds:

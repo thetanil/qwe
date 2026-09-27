@@ -21,6 +21,8 @@ jobs:
     uses: ./.github/workflows/ubsan.yml
   valgrind:
     uses: ./.github/workflows/valgrind.yml
+  static-analysis:
+    uses: ./.github/workflows/static-analysis.yml
   coverage:
     uses: ./.github/workflows/coverage.yml
     permissions: # the called workflow's pages job asks for these, though it only runs on a push to main
@@ -34,7 +36,7 @@ jobs:
     with:
       perf-gate: true
   publish:
-    needs: [tests, asan, ubsan, valgrind, coverage, smoke]
+    needs: [tests, asan, ubsan, valgrind, static-analysis, coverage, smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -50,6 +52,11 @@ jobs:
         run: bazel build --config=release //src/cli:qwe //src/cli:qwe-debug
       - name: The version matches the tag
         run: tools/release/check_version.sh "$TAG" bazel-bin/src/cli/qwe
+      - name: Download the static-analysis evidence
+        uses: actions/download-artifact@v8
+        with:
+          name: clang-tidy-evidence-${{ github.sha }}
+          path: clang-tidy-evidence
       - name: Package
         run: |
           set -eu
@@ -57,6 +64,9 @@ jobs:
           mkdir dist
           cp bazel-bin/src/cli/qwe "dist/qwe-$v-linux-x86_64"
           cp bazel-bin/src/cli/qwe-debug "dist/qwe-debug-$v-linux-x86_64"
+          # Workflow artifacts expire (90 days, docs/ci-checks.md); a release asset does
+          # not, so the static-analysis evidence for this exact commit rides along.
+          (cd clang-tidy-evidence && zip -rq "$OLDPWD/dist/clang-tidy-evidence-$v.zip" .)
           file dist/*
           (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
       - name: Attach to the release
@@ -77,7 +87,7 @@ jobs:
           fi
   draft-on-failure:
     # A release published in the web UI is already public when the gates start.
-    needs: [tests, asan, ubsan, valgrind, coverage, smoke, publish]
+    needs: [tests, asan, ubsan, valgrind, static-analysis, coverage, smoke, publish]
     if: failure()
     runs-on: ubuntu-24.04
     permissions:

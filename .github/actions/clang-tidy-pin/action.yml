@@ -1,0 +1,61 @@
+name: clang-tidy-pin
+description: >
+  Installs the exact clang-tidy tools/clang-tidy/pin.env pins (LLVM's own GitHub release
+  tarball, verified against its published sha256) and puts it first on PATH. Cached by the
+  pinned version and hash, which never change, so only the very first run downloads it.
+runs:
+  using: composite
+  steps:
+    - name: Read the pin
+      shell: bash
+      run: |
+        set -eu
+        . tools/clang-tidy/pin.env
+        {
+          echo "CLANG_TIDY_VERSION=$CLANG_TIDY_VERSION"
+          echo "CLANG_TIDY_URL=$CLANG_TIDY_URL"
+          echo "CLANG_TIDY_SHA256=$CLANG_TIDY_SHA256"
+        } >>"$GITHUB_ENV"
+    - name: Restore the pinned clang-tidy from cache
+      id: cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ github.workspace }}/.clang-tidy-pin
+        key: clang-tidy-pin-${{ env.CLANG_TIDY_VERSION }}-${{ env.CLANG_TIDY_SHA256 }}
+    - name: Download and verify the pinned clang-tidy
+      # Only clang-tidy itself is kept: `ldd` on the LLVM release build shows it needs
+      # nothing from the tarball at runtime (libm/libz/libc, the runner's own), so
+      # extracting just bin/clang-tidy out of the ~2 GB tarball is enough, and it's what
+      # gets cached.
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -eu
+        dir="$GITHUB_WORKSPACE/.clang-tidy-pin"
+        mkdir -p "$dir"
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        curl -sSL -o "$tmp/llvm.tar.xz" "$CLANG_TIDY_URL"
+        echo "$CLANG_TIDY_SHA256  $tmp/llvm.tar.xz" | sha256sum -c -
+        top=$(tar -tJf "$tmp/llvm.tar.xz" | head -1 | cut -d/ -f1)
+        tar -xJf "$tmp/llvm.tar.xz" -C "$tmp" "$top/bin/clang-tidy"
+        install -m 0755 "$tmp/$top/bin/clang-tidy" "$dir/clang-tidy"
+    - name: Save the pinned clang-tidy to cache
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ github.workspace }}/.clang-tidy-pin
+        key: clang-tidy-pin-${{ env.CLANG_TIDY_VERSION }}-${{ env.CLANG_TIDY_SHA256 }}
+    - name: Put the pinned clang-tidy first on PATH
+      shell: bash
+      run: echo "$GITHUB_WORKSPACE/.clang-tidy-pin" >>"$GITHUB_PATH"
+    - name: clang-tidy is the pinned version
+      shell: bash
+      run: |
+        set -eu
+        clang-tidy --version
+        got=$(clang-tidy --version | grep -oE 'version [0-9]+\.[0-9]+\.[0-9]+' | head -1 | cut -d' ' -f2)
+        [ "$got" = "$CLANG_TIDY_VERSION" ] || {
+          echo "clang-tidy-pin: got $got, tools/clang-tidy/pin.env pins $CLANG_TIDY_VERSION" >&2
+          exit 1
+        }

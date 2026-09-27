@@ -10,8 +10,37 @@ Static Analyzer itself (symbolic execution, cross-function), run through
 ruleset for C. It finds a different class of thing from the sanitizers and
 valgrind: they need a run that exercises the bad path; this reads every path,
 without running anything, at the cost of false positives a runtime check never has.
-It runs in `valgrind.yml` (job `static-analysis`), on the same cadence as valgrind:
-by hand, nightly, and in a release, never on a push (see `docs/ci-checks.md`).
+It runs in its own `static-analysis.yml`, on every push to main, every pull request,
+nightly, release and by hand (see `docs/ci-checks.md`): unlike valgrind, the gate is
+about a minute, so it gates a pull request rather than waiting for the next nightly run.
+
+## The pinned version
+
+`tools/clang-tidy/pin.env` is the one file everything below reads: `docs/ci-checks.md`,
+`run.sh` and `.github/actions/clang-tidy-pin`. CI installs exactly `CLANG_TIDY_VERSION`
+(`20.1.8`, what every finding count in this file was measured with), downloaded from
+LLVM's own GitHub release tarball and checked against its published `CLANG_TIDY_SHA256`
+before use — apt.llvm.org only ever carries the latest point release of a major, so an
+`apt install clang-tidy-20` pin silently drifts forward as upstream ships new point
+releases; a URL pinned by content hash cannot. `run.sh` itself only enforces
+`CLANG_TIDY_MAJOR` (`20`) against whatever `$CLANG_TIDY` resolves to, so a devcontainer's
+apt-installed `clang-tidy-20` (tracking Ubuntu's `llvm-toolchain-noble-20` packaging, which
+does move across 20.x point releases) still works locally; it refuses anything from a
+different major, naming the pin file. Running it with `CLANG_TIDY=clang-tidy-18` (or any
+non-20 major) exits non-zero without touching Bazel.
+
+## Evidence
+
+`run.sh --evidence-dir DIR` runs the same gate and additionally writes, whether it passes
+or fails: `version.txt` (`clang-tidy --version`), `.clang-tidy` (a copy of the config as
+run), `files.txt` (the exact file list `bazel aquery` resolved), `sha.txt` (the git commit),
+`output.txt` (every file's full output, not `--quiet`) and `exit_status.txt`. CI uploads
+this as the `clang-tidy-evidence-<sha>` artifact on every run of `static-analysis.yml`.
+GitHub keeps a workflow artifact for at most 90 days (up to 400 on a private repo), so
+`release.yml` also downloads it and attaches it to the GitHub release as
+`clang-tidy-evidence-<version>.zip`, which does not expire
+(`.scratch/iso26262-tool-qualification` ticket 01 decides how long evidence has to be kept
+beyond that).
 
 ## Scope
 

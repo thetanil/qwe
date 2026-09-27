@@ -1,12 +1,24 @@
 #!/bin/bash
-# usage: tools/clang-tidy/run.sh [--raw]
+# usage: tools/clang-tidy/run.sh [--raw] [--evidence-dir DIR]
 #
 # Default: the pass/fail gate, .clang-tidy as written.
-# --raw:   the backlog, not a gate. Every check group .clang-tidy turns on, with
-#          none of its exclusions and none of its CheckOptions, tallied per
-#          check, split into src/+tools/ and *_test.c, and marked with what hid
-#          it from the gate (an exclusion or an option). Always exits 0 once it
-#          has run.
+# --raw:           the backlog, not a gate. Every check group .clang-tidy turns on,
+#                  with none of its exclusions and none of its CheckOptions, tallied
+#                  per check, split into src/+tools/ and *_test.c, and marked with
+#                  what hid it from the gate (an exclusion or an option). Always
+#                  exits 0 once it has run.
+# --evidence-dir:  the gate, and also write version.txt (clang-tidy --version),
+#                  .clang-tidy (a copy), files.txt (the exact file list), sha.txt
+#                  (the git commit), output.txt (every file's full clang-tidy output,
+#                  not --quiet) and exit_status.txt into DIR. CI's evidence artifact
+#                  (docs/static-analysis.md, docs/ci-checks.md); a human runs it the
+#                  same way to reproduce what an assessor was shown.
+#
+# tools/clang-tidy/pin.env names the exact clang-tidy CI installs and the finding
+# counts in docs/static-analysis.md were measured with. This script only enforces
+# the major version (CLANG_TIDY_MAJOR): a devcontainer's apt-installed clang-tidy-20
+# tracks Ubuntu's llvm-toolchain-noble-20 packaging, which moves across 20.x point
+# releases; CI pins the exact point release itself (.github/actions/clang-tidy-pin).
 #
 # The LLVM Static Analyzer (clang-analyzer-*, run through clang-tidy) plus a
 # popular bugprone/cert/performance/portability ruleset for C -- see
@@ -25,21 +37,47 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$here"
 
-raw=0
-case "${1-}" in
---raw) raw=1 ;;
-"") ;;
-*)
-	echo "usage: tools/clang-tidy/run.sh [--raw]" >&2
+usage() {
+	echo "usage: tools/clang-tidy/run.sh [--raw] [--evidence-dir DIR]" >&2
 	exit 2
-	;;
-esac
+}
+
+raw=0
+evidence=
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--raw)
+		raw=1
+		shift
+		;;
+	--evidence-dir)
+		if [ $# -lt 2 ] || [ -z "$2" ]; then
+			usage
+		fi
+		evidence=$2
+		shift 2
+		;;
+	*) usage ;;
+	esac
+done
+[ "$raw" = 1 ] && [ -n "$evidence" ] && usage
 
 : "${CLANG_TIDY:=clang-tidy}"
 command -v "$CLANG_TIDY" >/dev/null 2>&1 || {
 	echo "run.sh: $CLANG_TIDY not found" >&2
 	exit 1
 }
+
+# tools/clang-tidy/pin.env: the single file the docs and CI both read.
+# shellcheck disable=SC1091
+. "$here/tools/clang-tidy/pin.env"
+version_line=$("$CLANG_TIDY" --version | grep -oE 'version [0-9]+\.[0-9]+\.[0-9]+' | head -1)
+got_major=${version_line#version }
+got_major=${got_major%%.*}
+if [ "$got_major" != "$CLANG_TIDY_MAJOR" ]; then
+	echo "run.sh: $CLANG_TIDY is major version ${got_major:-unknown} (${version_line:-no version output}); tools/clang-tidy/pin.env pins major $CLANG_TIDY_MAJOR (CI runs exactly $CLANG_TIDY_VERSION)" >&2
+	exit 1
+fi
 
 # Materialize every generated header (LuaJIT's buildvm output, the embedded Lua
 # bytecode) that the compile actions below expect to find under bazel-out.
@@ -119,12 +157,29 @@ if [ "$raw" = 1 ]; then
 	exit 0
 fi
 
+if [ -n "$evidence" ]; then
+	mkdir -p "$evidence"
+	"$CLANG_TIDY" --version >"$evidence/version.txt"
+	cp .clang-tidy "$evidence/.clang-tidy"
+	printf '%s\n' "${files[@]}" >"$evidence/files.txt"
+	git rev-parse HEAD >"$evidence/sha.txt" 2>/dev/null || echo unknown >"$evidence/sha.txt"
+	: >"$evidence/output.txt"
+fi
+
 fail=0
 for file in "${files[@]}"; do
 	mapfile -t flags < <(flags_for_file "$file")
-	if ! "$CLANG_TIDY" --quiet "$file" -- "${flags[@]}"; then
+	if [ -n "$evidence" ]; then
+		# Full output, not --quiet: the evidence bundle keeps the "N warnings
+		# generated" summary line too.
+		if ! "$CLANG_TIDY" "$file" -- "${flags[@]}" >>"$evidence/output.txt" 2>&1; then
+			fail=1
+		fi
+	elif ! "$CLANG_TIDY" --quiet "$file" -- "${flags[@]}"; then
 		fail=1
 	fi
 done
+
+[ -n "$evidence" ] && echo "$fail" >"$evidence/exit_status.txt"
 
 exit "$fail"

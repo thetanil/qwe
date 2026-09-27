@@ -35,6 +35,9 @@ jobs:
   valgrind:
     needs: refresh-caches
     uses: ./.github/workflows/valgrind.yml
+  static-analysis:
+    needs: refresh-caches
+    uses: ./.github/workflows/static-analysis.yml
   coverage:
     needs: refresh-caches
     uses: ./.github/workflows/coverage.yml

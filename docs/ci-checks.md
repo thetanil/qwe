@@ -27,15 +27,20 @@ nightly and release do not call it, and `workflows_test` requires only its badge
 
 | Check | Workflow | Command | Cadence | Cost | Fails when |
 |---|---|---|---|---|---|
-| Tests | `tests.yml` | `bazel test //...` | every push to main | seconds, warm cache | any test fails |
-| ASan + LSan | `asan.yml` | `bazel test --config=asan //...` | every push to main | about the plain suite | a memory error or leak |
-| UBSan | `ubsan.yml` | `bazel test --config=ubsan //...` | every push to main | about the plain suite | undefined behaviour |
+| Tests | `tests.yml` | `bazel test //...` | every push to main, every pull request | seconds, warm cache | any test fails |
+| ASan + LSan | `asan.yml` | `bazel test --config=asan //...` | every push to main, every pull request | about the plain suite | a memory error or leak |
+| UBSan | `ubsan.yml` | `bazel test --config=ubsan //...` | every push to main, every pull request | about the plain suite | undefined behaviour |
 | Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | nightly, release and manual | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
 | Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | nightly, release and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
-| Static analysis | `valgrind.yml` (job `static-analysis`) | `tools/clang-tidy/run.sh` | nightly, release and manual | about the plain suite's build, plus one clang-tidy pass per file | any `clang-analyzer-*`/bugprone/cert/concurrency/performance/portability finding in `src/`, `plugins/` or `tools/` |
-| Coverage | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/`, `plugins/` or `tools/` has less than 85% of its lines covered |
-| Smoke | `smoke.yml` (job `build`, then `smoke` and `perf`) | `./qwe run tests/smoke/smoke_run.yml --debug --summary "$GITHUB_STEP_SUMMARY"` | every push to main | build: one `bazel build --config=release //src/cli:qwe`; smoke seconds on a fresh runner; perf about a minute (51 rounds of the candidate only) | smoke: the release binary fails a real smoke workflow or negative case, or is not statically linked (the `--debug` lifecycle traces are kept as the `smoke-runs` artifact). perf: a key regressed against `tools/perf/expected.tsv` (ADR-0016); this fails the job only when gating (`release.yml`, a manual dispatch), and otherwise is a warning with the report in the run summary |
+| Static analysis | `static-analysis.yml` | `tools/clang-tidy/run.sh` | every push to main, every pull request, nightly, release and manual | about the plain suite's build, plus one clang-tidy pass per file, pinned to clang-tidy `20.1.8` (`tools/clang-tidy/pin.env`) | any `clang-analyzer-*`/bugprone/cert/concurrency/performance/portability finding in `src/`, `plugins/` or `tools/` |
+| Coverage | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main, every pull request | about 35 s warm | any file under `src/`, `plugins/` or `tools/` has less than 85% of its lines covered |
+| Smoke | `smoke.yml` (job `build`, then `smoke` and `perf`) | `./qwe run tests/smoke/smoke_run.yml --debug --summary "$GITHUB_STEP_SUMMARY"` | every push to main, every pull request | build: one `bazel build --config=release //src/cli:qwe`; smoke seconds on a fresh runner; perf about a minute (51 rounds of the candidate only) | smoke: the release binary fails a real smoke workflow or negative case, or is not statically linked (the `--debug` lifecycle traces are kept as the `smoke-runs` artifact). perf: a key regressed against `tools/perf/expected.tsv` (ADR-0016); this fails the job only when gating (`release.yml`, a manual dispatch), and otherwise is a warning with the report in the run summary |
 | Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | nightly (3600 s) and manual | hours; four processes in parallel | any crash artifact exists |
+
+Every gate above but valgrind also runs on `pull_request`, so a finding is checked before a
+change merges, not only after it lands on `main`. Valgrind's 23 minutes is too slow to gate a
+pull request on, so it stays nightly/release/manual only. `workflows_test` rule 3 enforces the
+`pull_request` trigger on every gate but valgrind, not just the badge and the `workflow_call`.
 
 Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
 `docs/static-analysis.md`, `docs/coverage.md` and `docs/fuzzing.md`. What
@@ -47,6 +52,7 @@ follows is only what CI needs.
 bazel test //...
 bazel test --config=asan //...
 bazel test --config=ubsan //...
+tools/clang-tidy/run.sh
 bazel run //tools/coverage:check
 ./qwe run tests/smoke/smoke_run.yml --debug --summary "$GITHUB_STEP_SUMMARY"
 tools/perf/compare.sh tools/perf/expected.tsv perf-out/samples.tsv tools/perf/allow-list.txt perf-out
@@ -61,15 +67,13 @@ an artifact. On a green push to main it is also deployed to GitHub Pages (`https
 ## On demand
 
 Valgrind takes 23 minutes on a runner, so `valgrind.yml` runs only from `workflow_dispatch` and
-from `nightly.yml` and `release.yml` (by `workflow_call`), never on a push. `workflows_test` checks these commands too.
-Static analysis (`docs/static-analysis.md`) runs as a third, independent job in the same
-workflow file — same cadence, same triggers, no separate badge or wiring needed.
+from `nightly.yml` and `release.yml` (by `workflow_call`), never on a push or a pull request.
+`workflows_test` checks these commands too.
 `release.yml` builds the shipped binaries with the release config (same codegen as fastbuild,
 debug info kept for `qwe-debug`; the strip rule still strips `qwe`).
 
 ```
 bazel build --config=release //src/cli:qwe //src/cli:qwe-debug
-tools/clang-tidy/run.sh
 ```
 
 ## Re-measuring the perf expected values
@@ -126,18 +130,21 @@ hardcoded in their `inventory.yaml` files. `.github/actions/setup` with `ssh-tar
 ## Nightly and release
 
 `nightly.yml` runs at 02:17 UTC and on demand. It first deletes every `setup-bazel-*` cache (a saved
-cache key is never rewritten, so the gates' caches go stale), then calls all five gate workflows:
-tests, asan, ubsan, valgrind and coverage, and `smoke.yml` (build, smoke, and perf reporting against
+cache key is never rewritten, so the gates' caches go stale), then calls all six gate workflows:
+tests, asan, ubsan, valgrind, static-analysis and coverage, and `smoke.yml` (build, smoke, and perf reporting against
 the stored expected values without gating). They run cold and save fresh caches, which pushes to main then restore. It also calls
 `fuzz.yml` for 3600 seconds (release does not). `workflows_test` fails if it stops calling one of the
-five gates, smoke, or the fuzzer.
+six gates, smoke, or the fuzzer.
 
 `release.yml` runs on a pushed tag `v*`. Write the release in the GitHub web UI (its notes, and the tag it
-creates on publish), or push the tag yourself. All five gates and `smoke.yml` run again at the tagged
+creates on publish), or push the tag yourself. All six gates and `smoke.yml` run again at the tagged
 commit (not the fuzzer); `smoke.yml` is called with `perf-gate: true`, so a perf regression against
 `tools/perf/expected.tsv` fails the release (on a push and nightly it only reports). Then `qwe` and `qwe-debug` are built,
 `tools/release/check_version.sh` checks that the tag, `QWE_VERSION` in `src/kernel/qwe.h` and
-`qwe --version` agree, and the two binaries and `SHA256SUMS` are attached to the release. The full
+`qwe --version` agree, and the two binaries, `SHA256SUMS` and the static-analysis evidence bundle
+(`clang-tidy-evidence-<version>.zip`, downloaded from the `static-analysis` job's own artifact,
+which expires in at most 90 days — see `docs/static-analysis.md`; a release asset does not)
+are attached to the release. The full
 commit hash is appended to the release notes (a release created by the workflow is titled
 `<tag> (<short sha>)`). A release made in the web UI is public while the gates run; if a gate (smoke
 included) or the version check fails, the workflow turns it back into a draft. A pre-release tag

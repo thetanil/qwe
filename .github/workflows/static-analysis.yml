@@ -1,0 +1,46 @@
+name: static-analysis
+# The LLVM Static Analyzer through clang-tidy, plus a C ruleset: docs/static-analysis.md.
+# Pinned to the exact clang-tidy tools/clang-tidy/pin.env names, installed by
+# .github/actions/clang-tidy-pin (run.sh itself only enforces the major version, so a
+# devcontainer's apt-installed clang-tidy-20 still works). Runs on every push and pull
+# request, like tests.yml: the gate takes about a minute (docs/ci-checks.md), so a finding
+# is checked before a change lands rather than waiting for the next nightly run.
+# nightly.yml and release.yml call it too (workflow_call), same as the other gates; it used
+# to be a third job inside valgrind.yml, sharing valgrind's on-demand-only cadence, which is
+# exactly the gap this split fixes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-static-analysis-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+jobs:
+  static-analysis:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: static-analysis
+      - uses: ./.github/actions/clang-tidy-pin
+      - name: tools/clang-tidy/run.sh
+        run: tools/clang-tidy/run.sh --evidence-dir "$RUNNER_TEMP/clang-tidy-evidence"
+      # Evidence for a qualification assessor (docs/static-analysis.md): the pinned
+      # version, .clang-tidy, the exact file list, the git SHA, the full output and the
+      # exit status, whether the gate passed or not. release.yml also attaches this
+      # bundle to the GitHub release as an asset, which does not expire.
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: clang-tidy-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/clang-tidy-evidence
+          if-no-files-found: error
+      - if: failure()
+        uses: ./.github/actions/collect-logs
+        with:
+          name: static-analysis-logs

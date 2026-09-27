@@ -24,6 +24,7 @@ backends).
 [![asan](https://github.com/thetanil/qwe/actions/workflows/asan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/asan.yml)
 [![ubsan](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml)
 [![valgrind](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml)
+[![static-analysis](https://github.com/thetanil/qwe/actions/workflows/static-analysis.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/static-analysis.yml)
 [![coverage](https://github.com/thetanil/qwe/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/coverage.yml)
 [![coverage percent](https://img.shields.io/endpoint?url=https://thetanil.com/qwe/coverage.json)](https://thetanil.com/qwe/)
 [![smoke](https://github.com/thetanil/qwe/actions/workflows/smoke.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/smoke.yml)
