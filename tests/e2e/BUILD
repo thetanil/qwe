@@ -4,7 +4,11 @@ exports_files(["run_case.sh", "invert.sh"])
 
 e2e_test(name = "cli_unknown_subcommand")
 
-e2e_test(name = "cli_version")
+# The expected version is read from src/kernel/qwe.h by the case's check.sh, not written twice.
+e2e_test(
+    name = "cli_version",
+    data = ["//src/kernel:qwe.h"],
+)
 
 e2e_test(name = "cli_serve_stub")
 

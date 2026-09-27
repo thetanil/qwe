@@ -310,38 +310,47 @@ nothing else.
 A release is a pushed tag `v<version>`. Nothing else starts one: a plain `git push` sends commits,
 never tags, so a tag that was only created locally does nothing.
 
-1. Bump `QWE_VERSION` in `src/kernel/qwe.h` and the expected output in
-   `tests/e2e/cli_version/expected/stdout` (`qwe <version>`). Run `bazel test //...`.
-2. Commit and `git push` to `main`. Wait until every workflow a push runs (`tests`, `asan`, `ubsan`,
-   `coverage` and `smoke`) is green **on that commit**. The release reruns all of them at the tag, so
-   a red `main` means a failed release:
+1. Bump `QWE_VERSION` in `src/kernel/qwe.h`, the only place the version is written (the
+   `cli_version` e2e case and `tools/release/check_version.sh` read it from there). Run
+   `bazel test //...`.
+2. Commit and `git push` to `main`. Wait until the five gates a push runs (`tests`, `asan`, `ubsan`,
+   `coverage` and `smoke`) are green **on that commit**. The release reruns all of them at the tag, so
+   a red `main` means a failed release. (CodeQL runs on the push too; the release does not rerun it.)
    ```
-   gh run list -c "$(git rev-parse HEAD)"     # one row per workflow; wait for five successes
+   gh run list -c "$(git rev-parse HEAD)"     # one row per workflow: five gates plus CodeQL
    gh run watch <run id>                      # or follow one of them
    ```
+   Then check `smoke`'s perf job, which a push runs **report-only**: a regression against
+   `tools/perf/expected.tsv` (a key more than 2x its expected median) leaves the run green, with a
+   "perf regression (report only)" warning, but the same regression fails the release.
+   ```
+   gh run view <smoke run id>                 # a perf warning shows under ANNOTATIONS
+   ```
+   If there is one, fix it, or, if the change is intended, re-measure the expected values and
+   merge the PR that opens (`gh workflow run perf-baseline.yml -f ref=main -f version=v<version>`,
+   see `docs/ci-checks.md`), then start again from this step.
 3. Tag that exact commit, then push the tag by name:
    ```
-   git tag v0.2.0                # the tag is "v" + QWE_VERSION, or the version check fails
-   git push origin v0.2.0        # this is the step that starts the release
+   git tag v0.4.0                # the tag is "v" + QWE_VERSION, or the version check fails
+   git push origin v0.4.0        # this is the step that starts the release
    ```
    (Instead, you can write the release in the GitHub web UI with the tag `v<version>` and publish it;
    the tag it creates starts the same run. That release is public while the gates run.)
 4. Watch the run: `gh run list -w release -L 1`, then `gh run watch <run id>`. It reruns
    `tests`, `asan`, `ubsan` and `coverage`, adds `valgrind` (unit, e2e and static analysis; about
    25 minutes, the slowest part), and runs `smoke` (the release binary's own smoke workflows on a
-   clean runner, then `perf`'s timing against `tools/perf/expected.tsv`, which fails the release on a
-   regression; if the perf reports on `main` have been drifting, re-measure first, see
-   `docs/ci-checks.md`).
+   clean runner, then `perf`'s timing against `tools/perf/expected.tsv`, which here fails the release
+   on a regression).
    Only then does `publish` build `qwe` and `qwe-debug`, check that the tag, `QWE_VERSION` and
    `qwe --version` agree, and create the release (title `v<version> (<short hash>)`, generated
    notes plus the commit hash) with the binaries and `SHA256SUMS` attached. A tag with a `-`
-   (`v0.3.0-rc1`) is marked a pre-release. Check it with `gh release view v<version>`.
+   (`v0.4.0-rc1`) is marked a pre-release. Check it with `gh release view v<version>`.
 5. If a gate or the version check fails: for a pushed tag, no release was created. For a release
    written in the web UI, it is turned back into a draft. Either way, fix `main`, then move the tag
    and push it again:
    ```
-   git tag -d v0.2.0 && git push origin :refs/tags/v0.2.0
-   git tag v0.2.0 && git push origin v0.2.0
+   git tag -d v0.4.0 && git push origin :refs/tags/v0.4.0
+   git tag v0.4.0 && git push origin v0.4.0
    ```
 
 ## Credits

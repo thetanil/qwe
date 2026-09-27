@@ -4,9 +4,13 @@
  * usage: bcembed <out.c> <module>=<file> ...
  *
  * A file ending in .json is not code: it is embedded as a module that returns
- * its text as one string. */
-#include "src/kernel/put.h"
+ * its text as one string.
+ *
+ * Allocation failures abort through qwe_xmalloc and qwe_xrealloc (alloc.h, policy 2): a
+ * build tool has nothing to recover to, and the message names the allocation. */
+#include "src/kernel/alloc.h"
 #include "src/kernel/errstr.h"
+#include "src/kernel/put.h"
 
 #include <lauxlib.h>
 #include <lua.h>
@@ -33,34 +37,47 @@ static int writer(lua_State *L, const void *p, size_t sz, void *ud)
 	return 0;
 }
 
+/* Reads the whole stream. No size is taken first, so nothing can change between sizing and
+ * reading (CERT FIO19-C: no fseek/ftell to size a file; FIO45-C: no check-then-use on a
+ * file): a file that grows or shrinks meanwhile is simply read as it is when read. More than
+ * BCEMBED_MAX_SOURCE bytes is EFBIG, a failed read keeps its errno. The buffer grows by
+ * doubling through qwe_xrealloc, one byte past the cap at most, and always has room for the
+ * NUL. */
 static char *slurp(const char *path, size_t *len)
 {
 	FILE *fp = fopen(path, "rb");
-	char *buf;
-	long n;
+	char *buf = NULL;
+	size_t n = 0, cap = 0, want, got;
+	int err;
 
 	if (!fp)
 		return NULL;
-	/* fp is read-only: a failed fclose loses nothing */
-	n = fseek(fp, 0, SEEK_END) == 0 ? ftell(fp) : -1;
-	if (n < 0 || fseek(fp, 0, SEEK_SET) != 0) {
-		(void)fclose(fp);
-		return NULL;
+	errno = 0; /* so a failed read's errno is its own */
+	for (;;) {
+		if (n == cap) {
+			cap = cap ? 2 * cap : 4096;
+			if (cap > (size_t)BCEMBED_MAX_SOURCE + 1)
+				cap = (size_t)BCEMBED_MAX_SOURCE + 1;
+			buf = qwe_xrealloc(buf, cap + 1);
+		}
+		want = cap - n;
+		got = fread(buf + n, 1, want, fp);
+		n += got;
+		/* a short read is end of file or an error: the stream is not read again */
+		if (got < want || n > (size_t)BCEMBED_MAX_SOURCE)
+			break;
 	}
-	if (n > BCEMBED_MAX_SOURCE) {
-		(void)fclose(fp);
-		errno = EFBIG;
-		return NULL;
-	}
-	buf = malloc((size_t)n + 1);
-	if (buf && fread(buf, 1, (size_t)n, fp) != (size_t)n) {
+	err = ferror(fp) ? (errno ? errno : EIO) : 0;
+	(void)fclose(fp); /* fp is read-only: a failed fclose loses nothing */
+	if (!err && n > (size_t)BCEMBED_MAX_SOURCE)
+		err = EFBIG;
+	if (err) {
 		free(buf);
-		buf = NULL;
+		errno = err;
+		return NULL;
 	}
-	(void)fclose(fp);
-	if (buf)
-		buf[n] = '\0';
-	*len = (size_t)n;
+	buf[n] = '\0';
+	*len = n;
 	return buf;
 }
 
@@ -87,7 +104,10 @@ int main(int argc, char **argv)
 			(void)fclose(out); /* failing already */
 			return 2;
 		}
-		name = strndup(argv[i], (size_t)(eq - argv[i]));
+		n = (size_t)(eq - argv[i]);
+		name = qwe_xmalloc(n + 1);
+		memcpy(name, argv[i], n);
+		name[n] = '\0';
 		src = slurp(eq + 1, &len);
 		if (!src) {
 			qwe_diag("bcembed: cannot read %s: %s\n", eq + 1, qwe_strerror(errno));
@@ -97,20 +117,15 @@ int main(int argc, char **argv)
 		}
 		is_json = strlen(eq + 1) > 5 && !strcmp(eq + 1 + strlen(eq + 1) - 5, ".json");
 		if (is_json) {
-			/* return [=====[ ... ]=====]: 22 bytes around the text, and a NUL */
-			int w;
+			/* return [=====[ ... ]=====]: copied, not formatted, so every byte of the
+			 * text is kept (a %s would stop at a NUL) and nothing can be cut short. */
+			static const char head[] = "return [=====[\n", tail[] = "]=====]";
 
-			chunk = malloc(len + 32);
-			w = chunk ? snprintf(chunk, len + 32, "return [=====[\n%s]=====]", src) : -1;
-			if (w < 0 || (size_t)w >= len + 32) {
-				qwe_diag("bcembed: cannot wrap %s\n", eq + 1);
-				free(chunk);
-				free(src);
-				free(name);
-				(void)fclose(out); /* failing already */
-				return 1;
-			}
-			n = (size_t)w;
+			n = sizeof head - 1 + len + sizeof tail - 1;
+			chunk = qwe_xmalloc(n);
+			memcpy(chunk, head, sizeof head - 1);
+			memcpy(chunk + sizeof head - 1, src, len);
+			memcpy(chunk + sizeof head - 1 + len, tail, sizeof tail - 1);
 		} else {
 			chunk = src;
 			n = len;

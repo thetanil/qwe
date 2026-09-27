@@ -171,4 +171,5 @@ there.
 - [27: a register of the vendored components, for tool qualification](issues/27-third-party-register.md)
 - [28: "no exceptions" enforced by a test](issues/28-no-exceptions-test.md)
 - [29: closeout: the register, and everything rerun](issues/29-closeout.md)
+- [31: `summary.c`'s `log_tail` sizes a file, then reads it](issues/31-log-tail-size-then-read.md)
 - 30: moved to `.scratch/iso26262-tool-qualification`, since replaced by its 07

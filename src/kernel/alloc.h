@@ -19,7 +19,6 @@
  * or is one of the helpers below. alloc_audit.txt lists the files that have bare
  * calls and how many; alloc_audit_test fails when the count of any file changes,
  * so a new call gets read against these rules before the list is updated.
- * tools/bcembed.c, a build-time tool, is exempt there.
  */
 #ifndef QWE_KERNEL_ALLOC_H
 #define QWE_KERNEL_ALLOC_H

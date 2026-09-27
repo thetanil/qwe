@@ -3,6 +3,12 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//src:__subpackages__"])
 
+# QWE_VERSION lives only here; the cli_version e2e case reads its expected output from it.
+exports_files(
+    ["qwe.h"],
+    visibility = ["//tests/e2e:__pkg__"],
+)
+
 # The kernel has no main. Only src/cli/main.c does.
 cc_library(
     name = "kernel",
@@ -483,6 +489,7 @@ cc_library(
     name = "alloc",
     srcs = ["alloc.c"],
     hdrs = ["alloc.h"],
+    visibility = ["//src:__subpackages__", "//tools:__pkg__"], # tools/bcembed.c aborts on OOM too
     deps = [":put"],
 )
 

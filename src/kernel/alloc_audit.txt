@@ -22,4 +22,3 @@ src/secrets/envelope.c 4
 # Exempt: a build-time tool, not part of the qwe binary. It runs once under
 # bazel over trusted inputs and a failure there fails the build; nothing needs
 # to report it.
-tools/bcembed.c 3
