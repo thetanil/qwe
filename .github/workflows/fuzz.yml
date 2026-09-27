@@ -1,16 +1,20 @@
 name: fuzz
+# Not on push or pull_request (hours long). Runs by hand (workflow_dispatch) and on its own
+# schedule -- offset 18 minutes after nightly.yml's cron, past its cache-refresh step -- so
+# it has a direct trigger of its own: nightly.yml calling this as a workflow_call job never
+# updated this file's own badge, only push/pull_request/schedule/workflow_dispatch do.
+# Nothing calls this by workflow_call any more (nightly.yml dropped the job), so there is no
+# workflow_call trigger here; a scheduled run has no `inputs` context, so every ${{ inputs.seconds }}
+# below falls back to the same 3600 s default nightly.yml used to pass explicitly.
 on:
+  schedule:
+    - cron: "35 2 * * *"
   workflow_dispatch:
     inputs:
       seconds:
         description: Seconds each of the four fuzz processes runs (at most 19800)
         default: "3600"
         required: true
-  workflow_call:
-    inputs:
-      seconds:
-        type: string
-        default: "3600"
 permissions:
   contents: read
 concurrency:
@@ -27,7 +31,7 @@ jobs:
     steps:
       - name: Reject a run that would not fit in the job
         env:
-          SECONDS_IN: ${{ inputs.seconds }}
+          SECONDS_IN: ${{ inputs.seconds || '3600' }}
         run: |
           case $SECONDS_IN in '' | *[!0-9]*) echo "seconds must be a whole number" >&2; exit 1 ;; esac
           [ "$SECONDS_IN" -ge 1 ] && [ "$SECONDS_IN" -le 19800 ] || { echo "seconds must be 1..19800" >&2; exit 1; }
@@ -48,7 +52,7 @@ jobs:
           key: fuzz-corpus-${{ github.run_id }}
           restore-keys: fuzz-corpus-
       - name: Fuzz
-        run: tools/fuzz/nightly.sh ${{ inputs.seconds }}
+        run: tools/fuzz/nightly.sh ${{ inputs.seconds || '3600' }}
       - name: Job summary
         if: always()
         run: |

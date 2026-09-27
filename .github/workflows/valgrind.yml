@@ -1,7 +1,14 @@
 name: valgrind
+# Not on push (23 minutes is too slow to gate one) or pull_request. Runs by hand
+# (workflow_dispatch), at the tag in a release (workflow_call from release.yml), and on its
+# own schedule -- offset 13 minutes after nightly.yml's cron, past its cache-refresh step --
+# so it has a direct trigger of its own: a workflow_call from another workflow's job never
+# updates this file's own badge, only push/pull_request/schedule/workflow_dispatch do.
 on:
   workflow_dispatch:
   workflow_call:
+  schedule:
+    - cron: "30 2 * * *"
 permissions:
   contents: read
 concurrency:

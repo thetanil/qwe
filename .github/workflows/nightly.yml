@@ -1,6 +1,12 @@
 name: nightly
-# A full run at night: every gate, valgrind included, from caches rebuilt from scratch.
-# (release.yml runs the same gates again at a tag; this run keeps the caches fresh.)
+# The push-cadence gates rerun at night from caches rebuilt from scratch, plus smoke, so a
+# stale cache never quietly outlives what a push would have caught. (release.yml runs the
+# same gates again at a tag.) valgrind and fuzz are NOT called from here: each schedules
+# itself independently, a few minutes after this file's own cron, so their own badges track
+# a real nightly run -- a workflow_call from a job in this file would never update them
+# (only push/pull_request/schedule/workflow_dispatch do). refresh-caches deletes every
+# setup-bazel-* cache repo-wide, so their disk caches go cold too, on the same schedule as
+# everything else here, even though nothing in this file's job graph runs them.
 on:
   schedule:
     - cron: "17 2 * * *"
@@ -32,9 +38,6 @@ jobs:
   ubsan:
     needs: refresh-caches
     uses: ./.github/workflows/ubsan.yml
-  valgrind:
-    needs: refresh-caches
-    uses: ./.github/workflows/valgrind.yml
   static-analysis:
     needs: refresh-caches
     uses: ./.github/workflows/static-analysis.yml
@@ -48,8 +51,3 @@ jobs:
   smoke:
     needs: refresh-caches
     uses: ./.github/workflows/smoke.yml
-  fuzz:
-    needs: refresh-caches
-    uses: ./.github/workflows/fuzz.yml
-    with:
-      seconds: "3600"

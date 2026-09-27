@@ -278,9 +278,9 @@ what each one fails on.
 | `static-analysis` | the LLVM Static Analyzer and a C ruleset through clang-tidy, pinned to `20.1.8` (`docs/static-analysis.md`); uploads an evidence artifact every run | every push to `main`, pull requests, by hand, nightly, and in a release |
 | `coverage` | the 85% per-file coverage check, and the HTML report as an artifact | every push to `main`, pull requests |
 | `smoke` | the smoke workflows on the release build, and `perf`'s timing against the stored expected values (`tools/perf/expected.tsv`; reported on a push, gating on a release) | every push to `main`, pull requests |
-| `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes) | by hand, nightly, and in a release |
-| `nightly` | every gate above (including `valgrind`), plus `smoke` and `fuzz`, from fresh caches | 02:17 UTC, and by hand |
-| `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | nightly (one hour), and by hand |
+| `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes) | by hand, its own nightly-matching schedule, and in a release |
+| `nightly` | `tests`, `asan`, `ubsan`, `static-analysis` and `coverage`, plus `smoke`, from fresh caches | 02:17 UTC, and by hand |
+| `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | its own nightly-matching schedule (one hour), and by hand |
 | `release` | every gate again (including `valgrind`), plus `smoke`, then builds and publishes | a pushed tag `v*` |
 | `codeql` | GitHub CodeQL code scanning (C and the workflow files); results in the Security tab. Not a gate: nightly and release do not call it | every push to `main`, pull requests, weekly |
 
@@ -290,15 +290,16 @@ what each one fails on.
   connect a failure instead of a skip.
 - **Caches.** A saved cache key never changes, so a cache slowly goes stale. The nightly deletes the
   `setup-bazel-*` caches and rebuilds them, and pushes to `main` restore the result.
-- **Badges can lag.** A workflow's own badge (the Status row at the top of this file) tracks only its
-  *own* direct triggers -- `push`, `pull_request`, `schedule`, `workflow_dispatch` -- never a
-  `workflow_call` invocation from another workflow. `valgrind` (and `fuzz`, `perf-baseline`) has no
-  `push` trigger (too slow to gate one), so its badge reflects only the last manual
-  `workflow_dispatch`, not the far more frequent runs `nightly.yml` and `release.yml` make of it by
-  `workflow_call`: a released, green `main` can still show a red `valgrind` badge from an old manual
-  run. Check the actual gate in context instead of trusting an on-demand-only badge alone
-  (`gh run list -w release -L 1`, or the `valgrind` job inside it), or re-dispatch it by hand
-  (`gh workflow run valgrind.yml`) to refresh the badge itself.
+- **Why `valgrind` and `fuzz` schedule themselves.** A workflow's own badge (the Status row at the top
+  of this file) tracks only its *own* direct triggers -- `push`, `pull_request`, `schedule`,
+  `workflow_dispatch` -- never a `workflow_call` invocation from another workflow's job. Both are too
+  slow to gate a push; `nightly.yml` used to be their only automatic trigger, called by
+  `workflow_call`, which meant each badge tracked only its last manual `workflow_dispatch`, not what
+  nightly actually ran -- a released, green `main` could still show a red `valgrind` badge from an old
+  manual run. Each now has its own `schedule`, a few minutes after `nightly.yml`'s cron (past its
+  cache-clearing step), instead of being called from there, so a real nightly run is a direct trigger
+  and the badge tracks it. `perf-baseline`'s badge needs no such fix: it is intentionally manual-only
+  (rule 7, below), so its badge already reflects its only trigger.
 - **Coverage report.** A green push to `main` publishes the HTML report and a line-coverage percentage badge (`coverage.json`) to GitHub Pages, from the last job of `coverage.yml`.
 - **Fuzzing** runs for 3600 s in the nightly, never on a push or in a release. Start it by hand and read the result:
   ```
@@ -312,8 +313,9 @@ what each one fails on.
   runs in the Actions cache. See `docs/fuzzing.md`.
 - **Drift.** `//tools/ci:workflows_test` (part of `bazel test //...`) fails if a workflow has no badge, a
   command in `docs/ci-checks.md` is in no workflow, a gate drops its `pull_request` trigger (`valgrind`
-  is the one gate excused, being too slow), or the nightly or release stops calling a gate or the smoke
-  workflow.
+  is the one gate excused, being too slow), `valgrind` or `fuzz` loses its own `schedule` trigger or
+  gains a `push` one, `nightly.yml` starts calling either of them by `workflow_call` again, or the
+  nightly or release stops calling a gate or the smoke workflow.
 
 To check a change before pushing, run the same commands locally (`docs/ci-checks.md`); the workflows run
 nothing else.

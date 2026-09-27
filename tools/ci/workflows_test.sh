@@ -1,17 +1,23 @@
 #!/bin/bash
 # usage: workflows_test.sh [case...]     (no argument: every case)
 #
-# Cases: badge_missing badge_dangling command_unwired trigger_missing pull_request_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge fuzz_manual_only release_calls_smoke nightly_calls_smoke perf_baseline_manual_only repo_is_consistent.
-# The first five build a copy of the repo's CI files, break one thing, and expect
-# check_repo to fail; repo_is_consistent runs check_repo on the files as committed.
+# Cases: badge_missing badge_dangling command_unwired trigger_missing pull_request_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge valgrind_fuzz_own_schedule release_calls_smoke nightly_calls_smoke perf_baseline_manual_only repo_is_consistent.
+# Every case but non_workflow_badge (expect_pass) and repo_is_consistent builds a copy of the
+# repo's CI files, breaks one thing, and expects check_repo to fail; repo_is_consistent runs
+# check_repo on the files as committed.
 #
 # check_repo <root> rules:
 #  1. every .github/workflows/<w>.yml has a badge in README.md, and every badge names a workflow file
 #  2. every command in the "Every push" and "On demand" code blocks of docs/ci-checks.md
 #     appears in some workflow file
-#  4. nightly.yml and release.yml call all six gate workflows (tests asan ubsan valgrind
-#     static-analysis coverage)
-#  5. fuzz.yml never starts on a push or a schedule of its own; nightly.yml calls it and release.yml does not
+#  4. nightly.yml calls its five gate workflows (tests asan ubsan static-analysis coverage);
+#     release.yml calls all six (those five plus valgrind)
+#  5. valgrind.yml and fuzz.yml each have their own schedule trigger and no push trigger, and
+#     nightly.yml does not call either of them by workflow_call (each schedules itself instead,
+#     a few minutes after nightly.yml's own cron, so its badge reflects a real nightly run --
+#     a workflow_call from a job in another workflow never updates the called workflow's own
+#     badge, only push/pull_request/schedule/workflow_dispatch do). release.yml still does not
+#     call fuzz.yml (fuzzing is not part of a release).
 #  3. every workflow but fuzz.yml, release.yml, nightly.yml, codeql.yml and perf-baseline.yml runs on
 #     workflow_call, and on push to main (valgrind.yml is on demand and must not run on push; codeql.yml is GitHub's code
 #     scanning, not a gate, with its own triggers). Every one of those but valgrind.yml also runs on
@@ -44,17 +50,33 @@ check_repo() {
 			bad=1
 		fi
 	done
-	if [ -f .github/workflows/fuzz.yml ] && grep -Eq "^  (push|schedule):" .github/workflows/fuzz.yml; then
-		echo "rule 5: fuzz.yml must not start on push or schedule" >&2
-		bad=1
-	fi
-	for caller in nightly release; do
-		for g in tests asan ubsan valgrind static-analysis coverage; do
-			if ! grep -q "uses: ./.github/workflows/$g.yml" ".github/workflows/$caller.yml" 2>/dev/null; then
-				echo "rule 4: $caller.yml does not call $g.yml" >&2
-				bad=1
-			fi
-		done
+	for w in valgrind fuzz; do
+		f=".github/workflows/$w.yml"
+		if [ -f "$f" ] && grep -Eq "^  push:" "$f"; then
+			echo "rule 5: $w.yml must not start on push" >&2
+			bad=1
+		fi
+		if [ -f "$f" ] && ! grep -Eq "^  schedule:" "$f"; then
+			echo "rule 5: $w.yml must have its own schedule trigger, so its badge tracks a real nightly run (a workflow_call from another workflow's job never updates it)" >&2
+			bad=1
+		fi
+		if grep -q "uses: ./.github/workflows/$w.yml" .github/workflows/nightly.yml 2>/dev/null; then
+			echo "rule 5: nightly.yml must not call $w.yml by workflow_call any more -- it schedules itself" >&2
+			bad=1
+		fi
+	done
+	! grep -q "uses: ./.github/workflows/fuzz.yml" .github/workflows/release.yml 2>/dev/null || { echo "rule 5: release.yml must not call fuzz.yml" >&2; bad=1; }
+	for g in tests asan ubsan static-analysis coverage; do
+		if ! grep -q "uses: ./.github/workflows/$g.yml" .github/workflows/nightly.yml 2>/dev/null; then
+			echo "rule 4: nightly.yml does not call $g.yml" >&2
+			bad=1
+		fi
+	done
+	for g in tests asan ubsan valgrind static-analysis coverage; do
+		if ! grep -q "uses: ./.github/workflows/$g.yml" .github/workflows/release.yml 2>/dev/null; then
+			echo "rule 4: release.yml does not call $g.yml" >&2
+			bad=1
+		fi
 	done
 	for caller in nightly release; do
 		if ! grep -q "uses: ./.github/workflows/smoke.yml" ".github/workflows/$caller.yml" 2>/dev/null; then
@@ -73,8 +95,6 @@ check_repo() {
 			bad=1
 		fi
 	fi
-	grep -q "uses: ./.github/workflows/fuzz.yml" .github/workflows/nightly.yml 2>/dev/null || { echo "rule 5: nightly.yml does not call fuzz.yml" >&2; bad=1; }
-	! grep -q "uses: ./.github/workflows/fuzz.yml" .github/workflows/release.yml 2>/dev/null || { echo "rule 5: release.yml must not call fuzz.yml" >&2; bad=1; }
 	for w in $(grep -o 'actions/workflows/[A-Za-z0-9_.-]*\.yml/badge.svg' README.md | sed -e 's|actions/workflows/||' -e 's|/badge.svg||'); do
 		if [ ! -f ".github/workflows/$w" ]; then
 			echo "rule 1: README badge names $w, which does not exist" >&2
@@ -135,13 +155,16 @@ case_badge_dangling() { expect_fail badge_dangling 'echo "[![x](https://github.c
 case_pull_request_missing() { expect_fail pull_request_missing 'sed -i "/^  pull_request:$/d" .github/workflows/tests.yml'; }
 case_command_unwired() { expect_fail command_unwired 'sed -i "s|bazel test //\.\.\.|bazel test //nothing|" .github/workflows/tests.yml'; }
 case_trigger_missing() { expect_fail trigger_missing 'sed -i "/workflow_call:/d" .github/workflows/tests.yml'; }
-case_nightly_calls_every_gate() { expect_fail nightly_calls_every_gate 'sed -i "/valgrind.yml/d" .github/workflows/nightly.yml'; }
+case_nightly_calls_every_gate() { expect_fail nightly_calls_every_gate 'sed -i "/static-analysis.yml/d" .github/workflows/nightly.yml'; }
 case_release_calls_every_gate() { expect_fail release_calls_every_gate 'sed -i "/coverage.yml/d" .github/workflows/release.yml'; }
 case_non_workflow_badge() { expect_pass non_workflow_badge 'echo "[![c](https://img.shields.io/endpoint?url=https://o.github.io/r/coverage.json)](https://o.github.io/r/)" >> README.md'; }
-case_fuzz_manual_only() {
-	expect_fail fuzz_push 'sed -i "s/^  workflow_dispatch:/  push:\n    branches: [main]\n  workflow_dispatch:/" .github/workflows/fuzz.yml' &&
-		expect_fail fuzz_schedule 'sed -i "s/^  workflow_dispatch:/  schedule:\n    - cron: \"0 3 * * *\"\n  workflow_dispatch:/" .github/workflows/fuzz.yml' &&
-		expect_fail nightly_drops_fuzz 'sed -i "/fuzz.yml/d" .github/workflows/nightly.yml' &&
+case_valgrind_fuzz_own_schedule() {
+	expect_fail valgrind_push 'sed -i "s/^  workflow_dispatch:/  push:\n    branches: [main]\n  workflow_dispatch:/" .github/workflows/valgrind.yml' &&
+		expect_fail fuzz_push 'sed -i "s/^  workflow_dispatch:/  push:\n    branches: [main]\n  workflow_dispatch:/" .github/workflows/fuzz.yml' &&
+		expect_fail valgrind_schedule_removed 'sed -i "/^  schedule:/,+1d" .github/workflows/valgrind.yml' &&
+		expect_fail fuzz_schedule_removed 'sed -i "/^  schedule:/,+1d" .github/workflows/fuzz.yml' &&
+		expect_fail nightly_calls_valgrind 'printf "  valgrind:\n    uses: ./.github/workflows/valgrind.yml\n" >> .github/workflows/nightly.yml' &&
+		expect_fail nightly_calls_fuzz 'printf "  fuzz:\n    uses: ./.github/workflows/fuzz.yml\n" >> .github/workflows/nightly.yml' &&
 		expect_fail release_calls_fuzz 'printf "  fuzz:\n    uses: ./.github/workflows/fuzz.yml\n" >> .github/workflows/release.yml'
 }
 case_release_calls_smoke() { expect_fail release_calls_smoke 'sed -i "/smoke.yml/d" .github/workflows/release.yml'; }
@@ -152,7 +175,7 @@ case_perf_baseline_manual_only() {
 }
 case_repo_is_consistent() { (check_repo "$here"); }
 
-cases=${*:-badge_missing badge_dangling command_unwired trigger_missing pull_request_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge fuzz_manual_only release_calls_smoke nightly_calls_smoke perf_baseline_manual_only repo_is_consistent}
+cases=${*:-badge_missing badge_dangling command_unwired trigger_missing pull_request_missing nightly_calls_every_gate release_calls_every_gate non_workflow_badge valgrind_fuzz_own_schedule release_calls_smoke nightly_calls_smoke perf_baseline_manual_only repo_is_consistent}
 rc=0
 for c in $cases; do
 	if "case_$c"; then echo "PASS: $c"; else echo "FAIL: $c" >&2; rc=1; fi
