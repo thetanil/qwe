@@ -66,10 +66,11 @@ Four separate gaps between what `docs/static-analysis.md` says and what CI does.
       Comments, and closes the ticket`
       Push confirmed green: [run 36319304724](https://github.com/thetanil/qwe/actions/runs/36319304724)
       (commit `1d4f9c1`), artifact `clang-tidy-evidence-1d4f9c1a08e923127d52c12c63d87b8276ba6208`
-      uploaded. The release-attach half is still unverified — no tag has been
-      pushed since this landed. Whoever cuts the next release should confirm
-      `release.yml`'s `publish` job attached `clang-tidy-evidence-<version>.zip`
-      and note it here; re-open if it didn't.
+      uploaded.
+
+      Release-attach half confirmed too: the [v0.3.1 release](https://github.com/thetanil/qwe/releases/tag/v0.3.1)
+      ([run 36320774458](https://github.com/thetanil/qwe/actions/runs/36320774458)) carries
+      `clang-tidy-evidence-0.3.1.zip` alongside the binaries and `SHA256SUMS`, checksum included.
 - [x] The gate at the pinned version is green on `main`. If pinning changes any
       finding (18 vs 20 differences the tickets never saw), fix each in code;
       list them in the Comments. `manual: run.sh at exit 0`
