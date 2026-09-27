@@ -12,6 +12,7 @@ runs:
         set -eu
         . tools/clang-tidy/pin.env
         {
+          echo "CLANG_TIDY_MAJOR=$CLANG_TIDY_MAJOR"
           echo "CLANG_TIDY_VERSION=$CLANG_TIDY_VERSION"
           echo "CLANG_TIDY_URL=$CLANG_TIDY_URL"
           echo "CLANG_TIDY_SHA256=$CLANG_TIDY_SHA256"
@@ -24,15 +25,21 @@ runs:
         path: ${{ github.workspace }}/.clang-tidy-pin
         key: clang-tidy-pin-${{ env.CLANG_TIDY_VERSION }}-${{ env.CLANG_TIDY_SHA256 }}
     - name: Download and verify the pinned clang-tidy
-      # Only clang-tidy itself is kept: `ldd` on the LLVM release build shows it needs
-      # nothing from the tarball at runtime (libm/libz/libc, the runner's own), so
-      # extracting just bin/clang-tidy out of the ~2 GB tarball is enough, and it's what
-      # gets cached. The member path is built from CLANG_TIDY_TARBALL_ROOT (pin.env),
-      # not discovered by listing the archive first: `tar -tJf` on this single-stream xz
-      # tarball has to decompress everything up to the last entry it prints, and piping
-      # that into anything that stops reading early races tar's own stdio buffering --
-      # exactly this, on a real runner, decompressed gigabytes before its buffer next
-      # flushed, found the reader long gone, and failed the whole step on the write error.
+      # `ldd` on the LLVM release build's bin/clang-tidy shows it needs nothing from the
+      # tarball at runtime beyond libm/libz/libc (the runner's own) -- but clang-tidy also
+      # needs its resource directory (lib/clang/<major>/include: stddef.h, stdarg.h, ...,
+      # the compiler-builtin headers, found by walking up from the binary's own path, same
+      # as clang itself) to preprocess anything. Extracting only bin/clang-tidy, without
+      # that directory next to it in the same layout, made every file "stddef.h file not
+      # found", and the resulting broken preprocessing produced unrelated bogus findings
+      # downstream (run 36317103321). Both directories come from the ~2 GB tarball, but
+      # together are a few hundred MB, not the whole tree, and that's what gets cached.
+      # The member paths are built from CLANG_TIDY_TARBALL_ROOT (pin.env), not discovered
+      # by listing the archive first: `tar -tJf` on this single-stream xz tarball has to
+      # decompress everything up to the last entry it prints, and piping that into
+      # anything that stops reading early races tar's own stdio buffering -- exactly this,
+      # on a real runner, decompressed gigabytes before its buffer next flushed, found the
+      # reader long gone, and failed the whole step on the write error (run 36315912964).
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
@@ -43,8 +50,13 @@ runs:
         trap 'rm -rf "$tmp"' EXIT
         curl -sSL -o "$tmp/llvm.tar.xz" "$CLANG_TIDY_URL"
         echo "$CLANG_TIDY_SHA256  $tmp/llvm.tar.xz" | sha256sum -c -
-        tar -xJf "$tmp/llvm.tar.xz" -C "$tmp" "$CLANG_TIDY_TARBALL_ROOT/bin/clang-tidy"
-        install -m 0755 "$tmp/$CLANG_TIDY_TARBALL_ROOT/bin/clang-tidy" "$dir/clang-tidy"
+        tar -xJf "$tmp/llvm.tar.xz" -C "$tmp" \
+          "$CLANG_TIDY_TARBALL_ROOT/bin/clang-tidy" \
+          "$CLANG_TIDY_TARBALL_ROOT/lib/clang/$CLANG_TIDY_MAJOR/include"
+        mkdir -p "$dir/bin" "$dir/lib/clang/$CLANG_TIDY_MAJOR"
+        install -m 0755 "$tmp/$CLANG_TIDY_TARBALL_ROOT/bin/clang-tidy" "$dir/bin/clang-tidy"
+        cp -r "$tmp/$CLANG_TIDY_TARBALL_ROOT/lib/clang/$CLANG_TIDY_MAJOR/include" \
+          "$dir/lib/clang/$CLANG_TIDY_MAJOR/include"
     - name: Save the pinned clang-tidy to cache
       if: steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
@@ -53,7 +65,7 @@ runs:
         key: clang-tidy-pin-${{ env.CLANG_TIDY_VERSION }}-${{ env.CLANG_TIDY_SHA256 }}
     - name: Put the pinned clang-tidy first on PATH
       shell: bash
-      run: echo "$GITHUB_WORKSPACE/.clang-tidy-pin" >>"$GITHUB_PATH"
+      run: echo "$GITHUB_WORKSPACE/.clang-tidy-pin/bin" >>"$GITHUB_PATH"
     - name: clang-tidy is the pinned version
       shell: bash
       run: |
