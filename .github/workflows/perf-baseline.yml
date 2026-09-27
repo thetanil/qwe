@@ -138,7 +138,7 @@ jobs:
               /^#/ || $1 == "key" { next }
               f == 1 { old[$1] = $2; next }
               { o = ($1 in old) ? sprintf("%.1f", old[$1] / 1000) : "-"
-                r = (($1 in old) && old[$1] > 0) ? sprintf("%.3f", $2 / old[$1]) : "new"
+                r = !($1 in old) ? "new" : (old[$1] > 0 ? sprintf("%.3f", $2 / old[$1]) : "-")
                 printf "| %s | %s | %.1f | %s |\n", $1, o, $2 / 1000, r; seen[$1] = 1 }
               END { for (k in old) if (!(k in seen)) printf "| %s | %.1f | - | gone |\n", k, old[k] / 1000 }
             ' old-expected.tsv tools/perf/expected.tsv

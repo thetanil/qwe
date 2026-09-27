@@ -25,11 +25,13 @@
 # if any key regressed after allow-list suppression, 3 on a usage error.
 set -eu
 
-# Thresholds. A key regresses only when all three hold. Job and step times come from
-# result.json's duration_ms, so they move in whole milliseconds: a key whose stored median is
-# 2 ms reads 3 ms on a slightly slower runner (ratio 1.5, delta 1 ms) without anything having
-# changed. The step floor is therefore two of those quanta, the same as the wall floor.
-RATIO_THRESHOLD=1.20
+# Thresholds. A key regresses only when all three hold. The ratio is 2x because one binary
+# measured on five runners spread 1.68x by CPU model alone (perf-baseline run 36308620510):
+# on timings this short, runner variance is expected, and a tighter ratio fails for nothing.
+# Job and step times come from result.json's duration_ms, so they move in whole milliseconds:
+# a 1 ms step can read 2 ms (ratio 2.0) on a slightly slower runner. The step floor is
+# therefore two of those quanta, the same as the wall floor.
+RATIO_THRESHOLD=2.0
 DELTA_FLOOR_STEP_US=2000
 DELTA_FLOOR_WALL_US=2000
 ALPHA=0.01

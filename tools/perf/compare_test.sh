@@ -1,6 +1,6 @@
 #!/bin/bash
 # usage: compare_test.sh <compare.sh> [case...]
-# Cases: no_change regression below_floor not_significant allow_versioned one_sided_keys
+# Cases: no_change regression under_two_x below_floor not_significant allow_versioned one_sided_keys
 # sign_test_table no_version
 script=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 shift
@@ -34,9 +34,15 @@ case_no_change() {
 
 case_regression() {
 	expected v0.3.0; exp wf1/job 6667
-	: >"$t/samples.tsv"; const wf1/job 11 9667 # +45%, +3ms, every round
+	: >"$t/samples.tsv"; const wf1/job 11 14000 # 2.1x, +7.3ms, every round
 	run && return 1
 	grep -qF '`wf1/job`' "$t/out/report.md"
+}
+
+case_under_two_x() {
+	expected v0.3.0; exp wf1/job 10000
+	: >"$t/samples.tsv"; const wf1/job 11 19000 # 1.9x, +9ms, every round: runner variance, not a regression
+	run
 }
 
 case_below_floor() {
@@ -54,8 +60,8 @@ case_not_significant() {
 }
 
 case_allow_versioned() {
-	printf 'v0.3.0 wf1/* 2.0  # known, expires when the expected values are re-measured\n' >"$t/allow.txt"
-	: >"$t/samples.tsv"; const wf1/job 11 9667
+	printf 'v0.3.0 wf1/* 3.0  # known, expires when the expected values are re-measured\n' >"$t/allow.txt"
+	: >"$t/samples.tsv"; const wf1/job 11 14000
 	expected v0.3.0; exp wf1/job 6667
 	run "$t/allow.txt" || return 1 # the matching version suppresses it
 	expected v0.4.0; exp wf1/job 6667
@@ -92,7 +98,7 @@ case_no_version() {
 	[ $? -eq 3 ]
 }
 
-cases=${*:-no_change regression below_floor not_significant allow_versioned one_sided_keys sign_test_table no_version}
+cases=${*:-no_change regression under_two_x below_floor not_significant allow_versioned one_sided_keys sign_test_table no_version}
 rc=0
 for c in $cases; do
 	if "case_$c"; then echo "PASS: $c"; else echo "FAIL: $c" >&2; rc=1; fi

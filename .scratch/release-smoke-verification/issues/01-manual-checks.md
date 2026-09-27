@@ -72,8 +72,10 @@ had ratios 0.988 to 1.008, all `gated`, all pass.
 
 2026-09-27, after `.scratch/perf-static-baseline` (ADR-0016): the perf job no longer
 downloads a release, so **"a checksum mismatch in the baseline download"** has nothing left
-to test and should close `wontfix`. **"The 5 ms busy-wait fails the perf job"** still
-applies, now against `tools/perf/expected.tsv`, on a scratch-branch dispatch
-(`perf-gate` defaults to `true` there). The step floor is 2 ms, so 5 ms clears it. The
+to test and should close `wontfix`. **"The 5 ms busy-wait fails the perf job"** no longer
+holds as written: since perf-static-baseline ticket 04 a key fails only above 2x its
+expected median, and 5 ms turns `smoke_run/run` from about 9 ms into 14 ms (1.6x). Use a
+busy-wait that at least doubles the step, e.g. 50 ms, on a scratch-branch dispatch
+(`perf-gate` defaults to `true` there). The
 `baseline: self` check above stays as evidence of the old A/B job's stability; there is no
 `baseline` input any more.

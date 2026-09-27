@@ -36,7 +36,7 @@ release sections, and `tools/perf/allow-list.txt`'s header describe the new flow
       `manual: read the workflows`
 - [x] `tools/ci/workflows_test.sh` passes. `unit: tools/ci/workflows_test.sh`
 - [x] The docs describe the new flow. `manual: docs/ci-checks.md, README.md`
-- [ ] A push to `main` runs the new workflow green.
+- [x] A push to `main` runs the new workflow green.
       `human: needs a push, which agents never do in this project`
 - [x] `bazel test //...` is green.
 
@@ -64,3 +64,11 @@ green" is open until the user pushes (agents never push in this project).
   release paragraphs) and the README's CI table and release steps.
 - `actionlint` is clean apart from a pre-existing shellcheck note in `release.yml`'s
   publish step. `bazel test //...`: 262 pass, 3 skipped.
+
+2026-09-27: the user pushed. [Run 36308366056](https://github.com/thetanil/qwe/actions/runs/36308366056)
+(`f359b9b`) was green: build 29 s, then smoke and perf in parallel, 33 s each, 67 s in
+all (2 min 23 s for run 36302821424 before). Perf ran report-only (`PERF_GATE: false`).
+Every wall ratio was 0.81 to 0.83 against the v0.3.0 values, with no qwe code changed:
+either a faster runner, or the candidate-only method timing faster than the A/B-interleaved
+runs the stored values came from. A `perf-baseline.yml` dispatch re-measures with the same
+method the gate uses.

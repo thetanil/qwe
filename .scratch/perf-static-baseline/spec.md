@@ -43,3 +43,4 @@ This supersedes ADR-0014 (A/B against the last release); ADR-0016 records why.
 - [01: stored expectations, and the tools to make and use them](issues/01-stored-expectations.md)
 - [02: smoke.yml builds once, runs once, compares with the stored values](issues/02-smoke-once.md)
 - [03: a workflow that measures and proposes new expected values](issues/03-update-workflow.md)
+- [04: fail only at 2x the expected value](issues/04-two-x-tolerance.md)
