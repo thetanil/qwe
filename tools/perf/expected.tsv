@@ -1,51 +1,53 @@
-# version: v0.3.0
-# The v0.3.0 release binary (ae49293), measured by the old A/B perf job on five GitHub-hosted ubuntu-24.04 runners, 51 rounds each.
-# run-36186458092: the v0.3.0 release run, where v0.3.0 was the candidate (B, or no-baseline where v0.2.0 could not run the workflow).
-# run-36194788784, -36196615241, -36245001109, -36302821424: pushes to main after the release, where v0.3.0 was the baseline (A).
-# Runner CPU models were not recorded for these runs; .github/workflows/perf-baseline.yml records them from now on.
-# source: run-36186458092/samples.tsv bins=B,no-baseline rows=2040
-# source: run-36194788784/samples.tsv bins=A rows=2040
-# source: run-36196615241/samples.tsv bins=A rows=2040
-# source: run-36245001109/samples.tsv bins=A rows=2040
-# source: run-36302821424/samples.tsv bins=A rows=2040
+# version: v0.3.0-m2
+# Measured by .github/workflows/perf-baseline.yml run 36308620510: main (f359b9b4337d18c28a145aec47097955b1abc51b), the release build, 51 rounds on each of five GitHub-hosted ubuntu-24.04 runners.
+# perf-samples-1: 4 vCPU, AMD EPYC 7763 64-Core Processor, 6.17.0-1022-azure
+# perf-samples-2: 4 vCPU, AMD EPYC 9V45 96-Core Processor, 6.17.0-1022-azure
+# perf-samples-3: 4 vCPU, AMD EPYC 9V74 80-Core Processor, 6.17.0-1022-azure
+# perf-samples-4: 4 vCPU, AMD EPYC 9V74 80-Core Processor, 6.17.0-1022-azure
+# perf-samples-5: 4 vCPU, Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz, 6.17.0-1022-azure
+# source: perf-samples-1/samples.tsv bins=B rows=2040
+# source: perf-samples-2/samples.tsv bins=B rows=2040
+# source: perf-samples-3/samples.tsv bins=B rows=2040
+# source: perf-samples-4/samples.tsv bins=B rows=2040
+# source: perf-samples-5/samples.tsv bins=B rows=2040
 key	median_us	p90_us	n
-smoke_run/wall	78466	88796	255
-smoke_run/run	9000	12000	255
+smoke_run/wall	66304	89187	255
+smoke_run/run	7000	11000	255
 smoke_run/run/0	2000	3000	255
-smoke_run/run/1	2000	2000	255
-smoke_run/run/2	0	1000	255
-smoke_run/run/3	0	1000	255
-smoke_run/run/4	2000	2000	255
-smoke_run/run/5	0	1000	255
-smoke_file/wall	158004	173425	255
-smoke_file/file	85000	95000	255
-smoke_file/file/0	17000	18000	255
-smoke_file/file/1	8000	8000	255
+smoke_run/run/1	1000	2000	255
+smoke_run/run/2	0	0	255
+smoke_run/run/3	0	0	255
+smoke_run/run/4	1000	2000	255
+smoke_run/run/5	0	0	255
+smoke_file/wall	135524	164864	255
+smoke_file/file	71000	86000	255
+smoke_file/file/0	14000	17000	255
+smoke_file/file/1	6000	8000	255
 smoke_file/file/2	0	0	255
 smoke_file/file/3	0	0	255
 smoke_file/file/4	0	0	255
 smoke_file/file/5	0	0	255
-smoke_file/file/6	16000	18000	255
-smoke_file/file/7	5000	5000	255
-smoke_file/file/8	8000	8000	255
+smoke_file/file/6	14000	17000	255
+smoke_file/file/7	4000	5000	255
+smoke_file/file/8	6000	8000	255
 smoke_file/file/9	0	0	255
-smoke_file/file/10	16000	18000	255
-smoke_file/file/11	8000	8000	255
+smoke_file/file/10	14000	17000	255
+smoke_file/file/11	6000	8000	255
 smoke_file/file/12	0	0	255
-smoke_graph/wall	78730	88527	255
-smoke_graph/a	4000	5000	255
+smoke_graph/wall	64927	86540	255
+smoke_graph/a	3000	5000	255
 smoke_graph/b	2000	3000	255
 smoke_graph/c	2000	3000	255
-smoke_graph/d	2000	2000	255
+smoke_graph/d	1000	2000	255
 smoke_graph/a/0	2000	2000	255
 smoke_graph/a/1	1000	2000	255
 smoke_graph/b/0	2000	3000	255
 smoke_graph/c/0	2000	3000	255
 smoke_graph/d/0	1000	2000	255
-smoke_project_plugin/wall	82506	93326	255
-smoke_project_plugin/first	3000	3000	255
-smoke_project_plugin/second	11000	13000	255
+smoke_project_plugin/wall	72192	92168	255
+smoke_project_plugin/first	3000	4000	255
+smoke_project_plugin/second	9000	12000	255
 smoke_project_plugin/first/0	3000	3000	255
-smoke_project_plugin/second/0	3000	3000	255
-smoke_project_plugin/second/1	7000	8000	255
-smoke_project_plugin/second/2	0	1000	255
+smoke_project_plugin/second/0	2000	3000	255
+smoke_project_plugin/second/1	6000	8000	255
+smoke_project_plugin/second/2	0	0	255
