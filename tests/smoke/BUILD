@@ -9,6 +9,7 @@ filegroup(
         ".qwe/plugins/**",
         "neg_plugin_top_level/**",
     ]),
+    visibility = ["//tools/perf:__pkg__"],
 )
 
 # Runs every tests/smoke/*.yml (not neg_*.yml) with the fastbuild binary and expects exit 0,

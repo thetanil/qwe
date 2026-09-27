@@ -29,6 +29,7 @@ backends).
 [![smoke](https://github.com/thetanil/qwe/actions/workflows/smoke.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/smoke.yml)
 [![nightly](https://github.com/thetanil/qwe/actions/workflows/nightly.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/nightly.yml)
 [![fuzz](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml)
+[![perf-baseline](https://github.com/thetanil/qwe/actions/workflows/perf-baseline.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/perf-baseline.yml)
 [![release](https://github.com/thetanil/qwe/actions/workflows/release.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/release.yml)
 [![codeql](https://github.com/thetanil/qwe/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/codeql.yml)
 

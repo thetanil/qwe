@@ -1,0 +1,4 @@
+tests/smoke/smoke_run.yml
+tests/smoke/smoke_file.yml
+tests/smoke/smoke_graph.yml
+tests/smoke/smoke_project_plugin.yml

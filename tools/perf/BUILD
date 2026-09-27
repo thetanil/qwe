@@ -49,13 +49,15 @@ sh_test(
     data = [":expect.sh"],
 )
 
-# The stored expected values cover every workflow the perf job times.
+# The stored expected values cover every workflow in workflows.txt, the list the perf job
+# and .github/workflows/perf-baseline.yml time.
 sh_test(
     name = "expected_test",
     size = "small",
     srcs = ["expected_test.sh"],
     data = [
         "expected.tsv",
-        "//.github:ci_files",
+        "workflows.txt",
+        "//tests/smoke:smoke_sources",
     ],
 )

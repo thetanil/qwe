@@ -1,0 +1,158 @@
+name: perf-baseline
+# Re-measures tools/perf/expected.tsv, the stored values smoke.yml's perf job compares with
+# (docs/adr/0016-perf-gate-compares-with-stored-expectations.md), and proposes the new file
+# as a pull request. Run it by hand when code got faster or slower on purpose, when the perf
+# reports on main have been drifting (GitHub moved its runners to other CPUs), or before a
+# release whose perf report would otherwise fail on a known change. Never on a push or a
+# schedule: a stored value changes only through a reviewed PR.
+#
+# build makes the release binary of <ref> once. measure times it on five runners (a matrix,
+# so the pooled medians span more than one machine), each recording its CPU model. propose
+# pools the samples with tools/perf/expect.sh and opens the PR against the default branch,
+# with the medians' diff and the five CPUs in its description. The repo setting "Allow GitHub
+# Actions to create and approve pull requests" must be on.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or commit to measure."
+        default: "main"
+      version:
+        description: "Label for the new values (the file's '# version:', which tools/perf/allow-list.txt lines match), e.g. v0.4.0."
+        required: true
+      rounds:
+        description: "Timed rounds per runner (one warm-up round runs first and is discarded)."
+        default: "51"
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: release
+      - run: bazel build --config=release //src/cli:qwe
+      - run: |
+          mkdir out
+          cp bazel-bin/src/cli/qwe out/qwe
+          git rev-parse HEAD >out/sha.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: perf-baseline-build
+          path: out
+          if-no-files-found: error
+  measure:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [1, 2, 3, 4, 5]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: perf-baseline-build
+          path: build
+      - run: chmod +x build/qwe
+      - name: Time the binary
+        env:
+          ROUNDS: ${{ inputs.rounds }}
+        run: |
+          # shellcheck disable=SC2046 # one workflow path per line, no spaces
+          tools/perf/run.sh "perf-samples-${{ matrix.runner }}" "$ROUNDS" "$PWD/build/qwe" $(cat tools/perf/workflows.txt)
+          echo "$(nproc) vCPU, $(awk -F: '/model name/{print $2; exit}' /proc/cpuinfo | sed 's/^ *//'), $(uname -r)" \
+            >"perf-samples-${{ matrix.runner }}/cpu.txt"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: perf-samples-${{ matrix.runner }}
+          path: |
+            perf-samples-${{ matrix.runner }}/samples.tsv
+            perf-samples-${{ matrix.runner }}/cpu.txt
+          if-no-files-found: error
+  propose:
+    needs: measure
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # push the proposal branch
+      pull-requests: write # open the PR
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      REF: ${{ inputs.ref }}
+      ROUNDS: ${{ inputs.rounds }}
+      BASE: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: perf-samples-*
+          path: samples
+      - uses: actions/download-artifact@v8
+        with:
+          name: perf-baseline-build
+          path: build
+      - name: Pool the samples into tools/perf/expected.tsv
+        run: |
+          set -eu
+          sha=$(cat build/sha.txt)
+          notes=(--note "Measured by .github/workflows/perf-baseline.yml run $GITHUB_RUN_ID: $REF ($sha), the release build, $ROUNDS rounds on each of five GitHub-hosted ubuntu-24.04 runners.")
+          inputs=()
+          for d in samples/perf-samples-*; do
+            notes+=(--note "$(basename "$d"): $(cat "$d/cpu.txt")")
+            inputs+=("$d/samples.tsv")
+          done
+          cp tools/perf/expected.tsv old-expected.tsv
+          tools/perf/expect.sh "${notes[@]}" "$VERSION" tools/perf/expected.tsv "${inputs[@]}"
+      - name: Describe the change
+        run: |
+          set -eu
+          {
+            echo "Re-measured perf expected values: \`$VERSION\`, from \`$REF\` ($(cut -c1-7 build/sha.txt))."
+            echo
+            echo "Made by [perf-baseline run $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+            echo "Merging it moves the gate's reference and expires every \`tools/perf/allow-list.txt\` line"
+            echo "for the old version ($(sed -n 's/^# version: //p' old-expected.tsv))."
+            echo
+            echo "## Runners"
+            echo
+            for d in samples/perf-samples-*; do echo "- $(basename "$d"): $(cat "$d/cpu.txt")"; done
+            echo
+            echo "## Medians (ms)"
+            echo
+            echo "| key | old | new | ratio |"
+            echo "|---|---|---|---|"
+            awk -F'\t' '
+              FNR == 1 { f++ }
+              /^#/ || $1 == "key" { next }
+              f == 1 { old[$1] = $2; next }
+              { o = ($1 in old) ? sprintf("%.1f", old[$1] / 1000) : "-"
+                r = (($1 in old) && old[$1] > 0) ? sprintf("%.3f", $2 / old[$1]) : "new"
+                printf "| %s | %s | %.1f | %s |\n", $1, o, $2 / 1000, r; seen[$1] = 1 }
+              END { for (k in old) if (!(k in seen)) printf "| %s | %.1f | - | gone |\n", k, old[k] / 1000 }
+            ' old-expected.tsv tools/perf/expected.tsv
+          } >pr-body.md
+          cat pr-body.md >>"$GITHUB_STEP_SUMMARY"
+      - name: Open the pull request
+        run: |
+          set -eu
+          branch="perf-baseline/$VERSION-$GITHUB_RUN_ID"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add tools/perf/expected.tsv
+          git commit -m "perf: expected values $VERSION, measured from $REF (perf-baseline run $GITHUB_RUN_ID)"
+          git push origin "$branch"
+          gh pr create --base "$BASE" --head "$branch" \
+            --title "perf: expected values $VERSION" --body-file pr-body.md

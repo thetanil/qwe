@@ -240,9 +240,9 @@ jobs:
       - run: chmod +x qwe
       - name: Time the candidate
         run: |
-          .github/scripts/summary-link.sh tools/perf/run.sh tools/perf/compare.sh tools/perf/expected.tsv
-          tools/perf/run.sh perf-out "$ROUNDS" "$PWD/qwe" \
-            tests/smoke/smoke_run.yml tests/smoke/smoke_file.yml tests/smoke/smoke_graph.yml tests/smoke/smoke_project_plugin.yml
+          .github/scripts/summary-link.sh tools/perf/run.sh tools/perf/compare.sh tools/perf/expected.tsv tools/perf/workflows.txt
+          # shellcheck disable=SC2046 # one workflow path per line, no spaces
+          tools/perf/run.sh perf-out "$ROUNDS" "$PWD/qwe" $(cat tools/perf/workflows.txt)
       - name: Report header
         run: |
           {

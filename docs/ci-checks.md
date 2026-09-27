@@ -72,6 +72,29 @@ bazel build --config=release //src/cli:qwe //src/cli:qwe-debug
 tools/clang-tidy/run.sh
 ```
 
+## Re-measuring the perf expected values
+
+`smoke.yml`'s perf job compares the candidate with `tools/perf/expected.tsv`: per-key medians,
+stored once, not re-measured on every run (ADR-0016). They are re-measured by
+`perf-baseline.yml`, which starts only by hand (`workflows_test` rule 7):
+
+```
+gh workflow run perf-baseline.yml -f ref=main -f version=v0.4.0
+```
+
+It builds the release binary of `ref` once, times it for `rounds` (default 51) on five runners,
+pools the samples with `tools/perf/expect.sh`, and opens a pull request that replaces
+`expected.tsv`. The PR description lists the five runners' CPU models and every median's old and new
+value. Merge it like any other change. Doing so expires the `tools/perf/allow-list.txt` lines for
+the old version.
+
+Run it when code got faster or slower on purpose, when the report on pushes to `main` has been
+drifting for no code reason (GitHub moved its runners to other CPUs), or before a release whose
+perf gate would otherwise fail on a change you accept. The PR needs the repo setting "Allow GitHub
+Actions to create and approve pull requests" (Settings, Actions, General). A new workflow in
+`tools/perf/workflows.txt` needs a re-measure before it is gated: `//tools/perf:expected_test` fails
+until `expected.tsv` has it.
+
 ## How CI reaches ssh
 
 The 19 e2e cases that need ssh connect to `172.18.0.1`, the devcontainer's host, which is
