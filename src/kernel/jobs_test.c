@@ -163,6 +163,25 @@ TEST jobs_free_handles_partial_load(void)
 	PASS();
 }
 
+/* The schema requires needs' elements to be strings, but qwe_jobs_load does
+ * not trust that it ran (ticket sca-round3/03): lua_tostring on a boolean is
+ * NULL, and strdup(NULL) is undefined behavior. This is a workflow no schema
+ * step has run over -- the boolean would not survive qwe_validate_doc. */
+TEST needs_with_a_non_string_element_is_refused_not_crashed(void)
+{
+	lua_State *L = luaL_newstate();
+	struct job *jobs = NULL;
+
+	ASSERT_EQ(0, luaL_dostring(L,
+	    "return { jobs = {"
+	    "  build = { steps = { { run = 'true' } } },"
+	    "  test = { needs = { true }, steps = { { run = 'true' } } } } }"));
+	ASSERT_EQ(-1, qwe_jobs_load(L, "w.yaml", &jobs));
+	ASSERT_EQ(0, live); /* the refused load left nothing behind */
+	lua_close(L);
+	PASS();
+}
+
 TEST jobs_load_fails_cleanly_when_any_allocation_fails(void)
 {
 	int at;
@@ -193,6 +212,7 @@ TEST jobs_load_fails_cleanly_when_any_allocation_fails(void)
 SUITE(jobs)
 {
 	RUN_TEST(jobs_load_fails_cleanly_when_any_allocation_fails);
+	RUN_TEST(needs_with_a_non_string_element_is_refused_not_crashed);
 	RUN_TEST(jobs_free_handles_partial_load);
 	RUN_TEST(jobs_free_releases_everything);
 	RUN_TEST(timeout_conversion_is_total);

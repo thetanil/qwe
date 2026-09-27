@@ -3,6 +3,7 @@
 
 #include "src/secrets/keyfile.h"
 #include "src/kernel/errstr.h"
+#include "src/kernel/luaown.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -49,13 +50,24 @@ static int fs_list(lua_State *L)
 	closedir(d);
 	if (n > 1) /* qsort of a null array is undefined, even for zero elements */
 		qsort(names, n, sizeof *names, cmp_name);
-	lua_createtable(L, (int)n, 0);
-	for (i = 0; i < n; i++) {
-		lua_pushstring(L, names[i]);
-		lua_rawseti(L, -2, (int)i + 1);
-		free(names[i]);
+	/* names (the array and its n strdup'd entries) stays live through calls
+	 * below that can raise -- lua_createtable and lua_pushstring, both of
+	 * which allocate. qwe_lua_own_strv protects it, so such a raise frees
+	 * whatever is left instead of leaking it (ticket sca-round3/03, same
+	 * rule as 02); we still free each entry ourselves as we go (its normal
+	 * job, not the wrapper's, on the path where nothing raises). */
+	{
+		char **list = names; /* qwe_lua_own_strv clears names; keep a working alias */
+		int idx = qwe_lua_own_strv(L, &names, n);
+
+		lua_createtable(L, (int)n, 0);
+		for (i = 0; i < n; i++) {
+			lua_pushstring(L, list[i]);
+			lua_rawseti(L, -2, (int)i + 1);
+		}
+		qwe_lua_own_strv_release(L, idx);
+		lua_remove(L, idx);
 	}
-	free(names);
 	return 1;
 nomem:
 	closedir(d);

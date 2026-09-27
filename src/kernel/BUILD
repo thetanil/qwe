@@ -196,6 +196,7 @@ cc_library(
     hdrs = ["luacbor.h"],
     deps = [
         ":fmt",
+        ":luaown",
         "//src/edge/yaml",
         "//third_party/luajit",
         "//third_party/tinycbor",
@@ -740,5 +741,21 @@ cc_test(
         ":luavm",
         "//third_party/greatest",
         "//third_party/luajit",
+    ],
+)
+
+# Every C function qwe.exec/fs/secrets/cbor exposes to Lua, called with a
+# wrong-typed argument at every position (ticket sca-round3/03).
+sh_test(
+    name = "lua_boundary_test",
+    size = "small",
+    srcs = ["//tests:run_lua_test.sh"],
+    args = [
+        "$(location :luarun)",
+        "$(location lua_boundary_test.lua)",
+    ],
+    data = [
+        "lua_boundary_test.lua",
+        ":luarun",
     ],
 )

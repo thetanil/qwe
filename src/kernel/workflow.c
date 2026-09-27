@@ -483,6 +483,12 @@ static int load_inventory(lua_State *L, const char *cmd, const char *wf_path, co
 	qwe_positions_free(pos);
 	if (errors > 0)
 		goto fail;
+	/* inv_path (which may point into default_path) is not read again past
+	 * this point: free default_path now, before the unprotected lua_call
+	 * below, rather than leave it live across a call that can raise
+	 * (ticket sca-round3/03, same rule as 02). */
+	free(default_path);
+	default_path = NULL;
 	/* qwe.inventory.use(inventory): fully-vendored bootstrap Lua (src/kernel/lua/
 	 * inventory.lua), never project-supplied -- lua_call, not lua_pcall (ticket 18). */
 	lua_getglobal(L, "require");
@@ -492,7 +498,6 @@ static int load_inventory(lua_State *L, const char *cmd, const char *wf_path, co
 	lua_pushvalue(L, top + 1);
 	lua_call(L, 1, 0);
 	lua_settop(L, top);
-	free(default_path);
 	return 0;
 fail:
 	free(default_path);

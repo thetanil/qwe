@@ -1,5 +1,6 @@
 #include "src/kernel/luacbor.h"
 #include "src/kernel/fmt.h"
+#include "src/kernel/luaown.h"
 
 #include "cbor.h"
 #include "src/edge/yaml/secret_tag.h"
@@ -52,20 +53,24 @@ static const char *convert_string(lua_State *L, CborValue *it, int bytes)
 	size_t n;
 	CborError e;
 
+	/* s is malloc'd by tinycbor (a "dup" call) and pushing it as a Lua
+	 * string is itself a call that can raise on a Lua allocation failure;
+	 * qwe_lua_own_pushlstring hands it to Lua first, so that raise frees it
+	 * instead of leaking it (ticket sca-round3/03, same rule as 02). */
 	if (bytes) {
 		uint8_t *s;
+
 		e = cbor_value_dup_byte_string(it, &s, &n, it);
 		if (e != CborNoError)
 			return cbor_error_string(e);
-		lua_pushlstring(L, (const char *)s, n);
-		free(s);
+		qwe_lua_own_pushlstring(L, (char **)&s, n);
 	} else {
 		char *s;
+
 		e = cbor_value_dup_text_string(it, &s, &n, it);
 		if (e != CborNoError)
 			return cbor_error_string(e);
-		lua_pushlstring(L, s, n);
-		free(s);
+		qwe_lua_own_pushlstring(L, &s, n);
 	}
 	return NULL;
 }
@@ -298,17 +303,31 @@ static int encode_table(lua_State *L, int idx, CborEncoder *enc, int depth, cons
 		}
 		qsort(keys, n, sizeof *keys, key_cmp);
 		rc = cbor_encoder_create_map(enc, &inner, n);
-		for (i = 0; i < n && r2 == 0; i++) {
-			int r;
-			lua_pushstring(L, keys[i]);
-			rc = cbor_encode_text_stringz(&inner, keys[i]) == CborErrorOutOfMemory ? CborErrorOutOfMemory : rc;
-			lua_gettable(L, idx);
-			r = encode_value(L, lua_gettop(L), &inner, depth + 1, err);
-			lua_pop(L, 1);
-			if (r != 0 && r != CborErrorOutOfMemory)
-				r2 = r;
-			if (r == CborErrorOutOfMemory)
-				rc = r;
+		/* keys (the array; its elements are borrowed from the table, not
+		 * separately owned) stays live through calls below that can raise
+		 * -- lua_pushstring, lua_gettable (a metatable's __index), and
+		 * encode_value's own recursion. qwe_lua_own_block protects it, so
+		 * such a raise frees it instead of leaking it (ticket sca-round3/03,
+		 * same rule as 02); qwe_lua_own_take gets it back once past the
+		 * last such call, to free it here as before. */
+		{
+			const char **owned = keys;
+			int kidx = qwe_lua_own_block(L, (void **)&owned);
+
+			for (i = 0; i < n && r2 == 0; i++) {
+				int r;
+				lua_pushstring(L, keys[i]);
+				rc = cbor_encode_text_stringz(&inner, keys[i]) == CborErrorOutOfMemory ? CborErrorOutOfMemory : rc;
+				lua_gettable(L, idx);
+				r = encode_value(L, lua_gettop(L), &inner, depth + 1, err);
+				lua_pop(L, 1);
+				if (r != 0 && r != CborErrorOutOfMemory)
+					r2 = r;
+				if (r == CborErrorOutOfMemory)
+					rc = r;
+			}
+			qwe_lua_own_take(L, kidx);
+			lua_remove(L, kidx);
 		}
 		free(keys);
 		if (r2)
@@ -374,14 +393,23 @@ int qwe_lua_to_cbor(lua_State *L, int idx, uint8_t **out, size_t *len, char *err
 		uint8_t *buf = malloc(cap);
 		CborEncoder enc;
 		const char *msg = "cannot encode value";
-		int r;
+		int r, idx;
 
 		if (!buf) {
 			qwe_msg(err, err_size, "out of memory");
 			return -1;
 		}
 		cbor_encoder_init(&enc, buf, cap, 0);
+		/* buf stays live through the whole encode_value recursion, which
+		 * makes plenty of Lua calls that can raise (lua_pushstring,
+		 * lua_gettable's __index, ...); qwe_lua_own_block protects it, so
+		 * such a raise frees it instead of leaking it (ticket
+		 * sca-round3/03, same rule as 02). qwe_lua_own_take gets it back
+		 * once encode_value returns normally, to keep using it as before. */
+		idx = qwe_lua_own_block(L, (void **)&buf);
 		r = encode_value(L, abs, &enc, 0, &msg);
+		buf = qwe_lua_own_take(L, idx);
+		lua_remove(L, idx);
 		if (r == 0) {
 			*len = cbor_encoder_get_buffer_size(&enc, buf);
 			*out = buf;
@@ -424,8 +452,7 @@ static int l_encode(lua_State *L)
 		lua_pushstring(L, err);
 		return 2;
 	}
-	lua_pushlstring(L, (const char *)buf, n);
-	free(buf);
+	qwe_lua_own_pushlstring(L, (char **)&buf, n);
 	return 1;
 }
 

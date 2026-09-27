@@ -28,11 +28,36 @@ static int ensure_key(lua_State *L)
 	return 0;
 }
 
+/* plain (from qwe_envelope_open, n + 1 bytes: the n-byte secret and its
+ * trailing NUL) is wiped and freed by owned_secret_gc, whether reached
+ * normally or by a raise (ticket sca-round3/03, same rule as 02) -- for a
+ * decrypted secret, unlike an ordinary buffer, leaving that to a plain
+ * qwe_lua_own would still zero it eventually, but only once collected;
+ * wiping secret material belongs to the type that owns it, not a generic
+ * helper, so it stays here rather than in luaown.h. */
+struct owned_secret {
+	uint8_t *p;
+	size_t n;
+};
+
+static int owned_secret_gc(lua_State *L)
+{
+	struct owned_secret *o = lua_touserdata(L, 1);
+
+	if (o->p) {
+		sodium_memzero(o->p, o->n);
+		free(o->p);
+		o->p = NULL;
+	}
+	return 0;
+}
+
 static int secrets_reveal(lua_State *L)
 {
 	const char *text, *why = NULL;
 	uint8_t *plain;
 	size_t n;
+	struct owned_secret *o;
 
 	luaL_checktype(L, 1, LUA_TTABLE);
 	lua_getfield(L, 1, "value");
@@ -45,9 +70,20 @@ static int secrets_reveal(lua_State *L)
 		return lua_error(L);
 	}
 	qwe_redact_add((const char *)plain, n);
-	lua_pushlstring(L, (const char *)plain, n);
+
+	o = lua_newuserdata(L, sizeof *o);
+	o->p = plain;
+	o->n = n + 1;
+	if (luaL_newmetatable(L, "qwe.secrets.owned")) {
+		lua_pushcfunction(L, owned_secret_gc);
+		lua_setfield(L, -2, "__gc");
+	}
+	lua_setmetatable(L, -2);
+	lua_pushlstring(L, (const char *)plain, n); /* can raise; plain is owned by then */
 	sodium_memzero(plain, n + 1);
 	free(plain);
+	o->p = NULL; /* disarm: freed above already, not owned_secret_gc's job now */
+	lua_replace(L, -2); /* drop the wrapper, keep the string */
 	return 1;
 }
 

@@ -117,8 +117,20 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 				goto nomem;
 			j->nneeds = nn;
 			for (k = 0; k < j->nneeds; k++) {
+				const char *s;
+
 				lua_rawgeti(L, -1, (int)k + 1);
-				j->needs[k] = strdup(lua_tostring(L, -1));
+				/* the schema requires a string here, but this function
+				 * does not trust that it ran (ticket sca-round3/03):
+				 * lua_tostring on anything else is NULL, and passing that
+				 * to strdup is undefined behavior, not a caught error. */
+				s = lua_tostring(L, -1);
+				if (!s) {
+					lua_pop(L, 1);
+					bad = refuse(path, "job", j->id, "needs", "must be strings");
+					break;
+				}
+				j->needs[k] = strdup(s);
 				if (!j->needs[k])
 					goto nomem;
 				lua_pop(L, 1);
