@@ -202,10 +202,22 @@ cc_library(
     ],
 )
 
+# A malloc'd buffer handed to a Lua API call that can itself raise (ticket
+# sca-round3/02): qwe_lua_own transfers it to a Lua userdata first, so the
+# raise frees it instead of leaking it.
+cc_library(
+    name = "luaown",
+    srcs = ["luaown.c"],
+    hdrs = ["luaown.h"],
+    deps = [
+        "//third_party/luajit",
+    ],
+)
+
 cc_library(
     name = "luavm",
     srcs = ["luavm.c", "luafs.c", "luaexec.c", "luasecrets.c"],
-    hdrs = ["luavm.h", "luafs.h", "luaexec.h", "luasecrets.h"],
+    hdrs = ["luavm.h", "luafs.h", "luaexec.h", "luasecrets.h", "luaexec_testhook.h"],
     # The Lua sources, so bazel coverage keeps their line coverage (see //tools/coverage:defs.bzl).
     data = [
         "//plugins/builtin:shipped",
@@ -220,6 +232,7 @@ cc_library(
         "//src/secrets",
         "//third_party/libsodium",
         ":luacbor",
+        ":luaown",
         ":preamble",
         "//src/kernel/lua:modules",
         "//third_party/lpeg",

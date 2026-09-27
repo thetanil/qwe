@@ -4,6 +4,8 @@
 #include "src/kernel/gcov.h"
 #include "src/kernel/preamble.h"
 #include "src/kernel/errstr.h"
+#include "src/kernel/luaown.h"
+#include "src/kernel/luaexec_testhook.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -47,6 +49,22 @@ static void close_fd(int *fd)
 	*fd = -1;
 }
 
+static int force_raise_at; /* see luaexec_testhook.h; 0 outside a test */
+
+void qwe_exec_run_test_force_raise(int which)
+{
+	force_raise_at = which;
+}
+
+/* Raises in place of the which'th post-fork push, if a test armed it. */
+static void maybe_force_raise(lua_State *L, int which)
+{
+	if (force_raise_at == which) {
+		force_raise_at = 0;
+		luaL_error(L, "qwe.exec.run: test-forced raise");
+	}
+}
+
 static int exec_run(lua_State *L)
 {
 	size_t n, i, in_len = 0, in_off = 0;
@@ -79,20 +97,33 @@ static int exec_run(lua_State *L)
 			timeout_ms = (long)(lua_tonumber(L, -1) * 1000.0);
 		lua_pop(L, 1);
 	}
-	argv = calloc(n + 1, sizeof *argv);
-	if (!argv)
-		return luaL_error(L, "qwe.exec.run: out of memory");
+	/* Validate every element is string-convertible first, with nothing yet
+	 * on the C heap: a wrong-typed element raises here, before the first
+	 * malloc, so nothing leaks (ticket sca-round3/02). Each luaL_checkstring
+	 * is left on the stack (not popped) so the second pass can read it back
+	 * with lua_tolstring, which -- given a value already a string -- cannot
+	 * itself raise. */
+	luaL_checkstack(L, (int)n + 8, "qwe.exec.run: too many arguments");
 	for (i = 0; i < n; i++) {
 		lua_rawgeti(L, 1, (int)i + 1);
-		argv[i] = strdup(luaL_checkstring(L, -1));
-		lua_pop(L, 1);
+		luaL_checkstring(L, -1);
+	}
+	argv = calloc(n + 1, sizeof *argv);
+	if (!argv) {
+		lua_pop(L, (int)n);
+		return luaL_error(L, "qwe.exec.run: out of memory");
+	}
+	for (i = 0; i < n; i++) {
+		argv[i] = strdup(lua_tostring(L, (int)i - (int)n));
 		if (!argv[i]) {
 			while (i-- > 0)
 				free(argv[i]);
 			free(argv);
+			lua_pop(L, (int)n);
 			return luaL_error(L, "qwe.exec.run: out of memory");
 		}
 	}
+	lua_pop(L, (int)n);
 
 	if (pipe2(in_p, O_CLOEXEC) < 0 || pipe2(out_p, O_CLOEXEC) < 0 || pipe2(err_p, O_CLOEXEC) < 0) {
 		saved = errno;
@@ -139,15 +170,18 @@ static int exec_run(lua_State *L)
 	close_fd(&err_p[1]);
 	if (in_len == 0)
 		close_fd(&in_p[1]);
+	/* Nothing after the fork needs argv (the child already has its own copy
+	 * across the fork): freeing it here, before any further Lua call, keeps
+	 * it off the list of things a later raise could leak. */
+	for (i = 0; i < n; i++)
+		free(argv[i]);
+	free(argv);
 	if (background) {
 		/* fire and forget: the caller never waits, the parent's child reaper collects it */
 		close_fd(&in_p[1]);
 		close_fd(&out_p[0]);
 		close_fd(&err_p[0]);
 		sigaction(SIGPIPE, &old_pipe, NULL);
-		for (i = 0; i < n; i++)
-			free(argv[i]);
-		free(argv);
 		lua_pushinteger(L, (lua_Integer)pid);
 		return 1;
 	}
@@ -240,9 +274,6 @@ static int exec_run(lua_State *L)
 		;
 reaped:
 	sigaction(SIGPIPE, &old_pipe, NULL);
-	for (i = 0; i < n; i++)
-		free(argv[i]);
-	free(argv);
 	if (failed) {
 		free(out.data);
 		free(err.data);
@@ -256,10 +287,23 @@ reaped:
 		return 2;
 	}
 	lua_pushinteger(L, WIFEXITED(status) ? WEXITSTATUS(status) : -WTERMSIG(status));
-	lua_pushlstring(L, out.data ? out.data : "", out.len);
-	lua_pushlstring(L, err.data ? err.data : "", err.len);
-	free(out.data);
-	free(err.data);
+	/* out.data/err.data are heap buffers, and pushing each as a Lua string is
+	 * a call that can itself raise on a Lua allocation failure. qwe_lua_own
+	 * hands the buffer to Lua *before* that call, so the raise frees it
+	 * instead of leaking it (ticket sca-round3/02); maybe_force_raise proves
+	 * it, at exactly the point a real raise would land. */
+	{
+		int idx = qwe_lua_own(L, &out.data);
+
+		maybe_force_raise(L, 1);
+		qwe_lua_own_finish(L, idx, out.len);
+	}
+	{
+		int idx = qwe_lua_own(L, &err.data);
+
+		maybe_force_raise(L, 2);
+		qwe_lua_own_finish(L, idx, err.len);
+	}
 	return 3;
 
 spawn_failed:
@@ -318,49 +362,71 @@ static int exec_getuid(lua_State *L)
 static int exec_preamble(lua_State *L)
 {
 	const char **names = NULL, **values = NULL;
-	size_t n = 0, cap = 0, bad = 0, len;
+	size_t n = 0, bad = 0, len;
 	char *out;
 	int rc;
 
 	luaL_checktype(L, 1, LUA_TTABLE);
-	lua_pushnil(L);
-	while (lua_next(L, 1)) {
-		if (n == cap) {
-			const char **nn, **nv;
 
-			cap = cap ? cap * 2 : 8;
-			nn = realloc(names, cap * sizeof *names);
-			if (nn)
-				names = nn;
-			nv = realloc(values, cap * sizeof *values);
-			if (nv)
-				values = nv;
-			if (!nn || !nv) {
+	/* Pass 1, one traversal: every name and value must already be a string --
+	 * checked by lua_type, never luaL_checkstring, since coercing a *key* in
+	 * place confuses lua_next (Lua manual, lua_tolstring). Each key is
+	 * copied into karr, a fresh Lua array, so pass 2 below can revisit them
+	 * by index (a plain, bounded C loop, not a second opaque lua_next
+	 * traversal the analyzer cannot see always matches the first one's
+	 * count). Nothing is on the C heap yet, so a bad entry raises with
+	 * nothing to leak (ticket sca-round3/02); building karr itself cannot
+	 * leak either, being Lua's own memory. */
+	lua_newtable(L);
+	{
+		int karr = lua_gettop(L);
+
+		lua_pushnil(L);
+		while (lua_next(L, 1)) {
+			if (lua_type(L, -2) != LUA_TSTRING || lua_type(L, -1) != LUA_TSTRING)
+				return luaL_error(L, "qwe.exec.preamble: env variable name and value must both be strings");
+			lua_pushvalue(L, -2); /* ..., key, value, key_copy */
+			lua_rawseti(L, karr, (int)++n); /* karr[n] = key_copy; pops it */
+			lua_pop(L, 1); /* the value; the key stays for lua_next */
+		}
+
+		if (n) {
+			size_t i;
+
+			names = malloc(n * sizeof *names);
+			values = malloc(n * sizeof *values);
+			if (!names || !values) {
 				free(names);
 				free(values);
 				return luaL_error(L, "qwe.exec.preamble: out of memory");
 			}
-		}
-		/* the strings stay valid: the table holds them */
-		names[n] = luaL_checkstring(L, -2);
-		values[n] = luaL_checkstring(L, -1);
-		n++;
-		lua_pop(L, 1);
-	}
-	/* sorted by name, so the preamble does not depend on table order */
-	{
-		size_t i, j;
 
-		for (i = 1; i < n; i++)
-			for (j = i; j > 0 && strcmp(names[j - 1], names[j]) > 0; j--) {
-				const char *t = names[j];
-
-				names[j] = names[j - 1];
-				names[j - 1] = t;
-				t = values[j];
-				values[j] = values[j - 1];
-				values[j - 1] = t;
+			/* Pass 2: a plain, bounded loop -- karr has exactly n
+			 * entries, and rawget is raw table access, like lua_next,
+			 * so a metatable on the env table cannot re-enter here. */
+			for (i = 0; i < n; i++) {
+				lua_rawgeti(L, karr, (int)i + 1); /* key */
+				lua_pushvalue(L, -1);
+				lua_rawget(L, 1); /* ..., key, value */
+				names[i] = lua_tostring(L, -2);
+				values[i] = lua_tostring(L, -1);
+				lua_pop(L, 2);
 			}
+			/* sorted by name, so the preamble does not depend on table order */
+			for (i = 1; i < n; i++) {
+				size_t j;
+
+				for (j = i; j > 0 && strcmp(names[j - 1], names[j]) > 0; j--) {
+					const char *t = names[j];
+
+					names[j] = names[j - 1];
+					names[j - 1] = t;
+					t = values[j];
+					values[j] = values[j - 1];
+					values[j - 1] = t;
+				}
+			}
+		}
 	}
 	rc = qwe_preamble_build(names, values, n, &out, &len, &bad);
 	if (rc < 0) {
@@ -372,8 +438,9 @@ static int exec_preamble(lua_State *L)
 	}
 	free(names);
 	free(values);
-	lua_pushlstring(L, out, len);
-	free(out);
+	/* out is a heap buffer, and pushing it as a Lua string is a call that can
+	 * itself raise; own it first so that raise frees it (ticket sca-round3/02). */
+	qwe_lua_own_pushlstring(L, &out, len);
 	return 1;
 }
 

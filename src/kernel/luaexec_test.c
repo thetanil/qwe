@@ -4,11 +4,13 @@
 #include "greatest.h"
 #include "src/kernel/luavm.h"
 #include "src/kernel/errstr.h"
+#include "src/kernel/luaexec_testhook.h"
 
 #include <errno.h>
 #include <lauxlib.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 static enum greatest_test_res run_lua(lua_State *L, const char *chunk)
@@ -48,6 +50,76 @@ TEST bad_arguments_raise(void)
 	    "local ok2, err2 = pcall(exec.preamble, { ['1bad'] = 'x' })\n"
 	    "assert(not ok2 and err2:find(\"env variable '1bad': not a valid name\", 1, true), tostring(err2))\n");
 	lua_close(L);
+	PASS();
+}
+
+/* The repro from ticket sca-round3/02: exec_run and exec_preamble allocate C
+ * memory (argv's strdup'd elements; preamble's names/values arrays) and then
+ * called a Lua API function that raises on a wrong-typed argument, longjmping
+ * past the frees. Fixed by validating every element first (nothing yet
+ * allocated when the raise happens) -- see luaexec.c. Run under
+ * --config=asan or --config=valgrind, this is the leak check: LeakSanitizer
+ * or valgrind's leak-check names exec_run/exec_preamble on the old code and
+ * is silent on the fix. */
+TEST wrong_typed_arguments_do_not_leak(void)
+{
+	lua_State *L = qwe_lua_new();
+
+	ASSERT(L != NULL);
+	LUA(L,
+	    "local exec = require('qwe.exec')\n"
+	    "-- exec.preamble({ A = {} }): a table value, not a string\n"
+	    "local ok, err = pcall(exec.preamble, { A = {} })\n"
+	    "assert(not ok and err:find('must both be strings', 1, true), tostring(err))\n"
+	    "-- exec.preamble with a non-string key\n"
+	    "local ok2, err2 = pcall(exec.preamble, { [true] = 'x' })\n"
+	    "assert(not ok2 and err2:find('must both be strings', 1, true), tostring(err2))\n"
+	    "-- exec.run({ \"true\", {} }): a table element in argv\n"
+	    "local ok3, err3 = pcall(exec.run, { 'true', {} })\n"
+	    "assert(not ok3, 'a table argv element must raise')\n"
+	    "-- exec.run({ \"true\", 5 }): a number element is allowed, coerced\n"
+	    "local code = exec.run({ 'true', 5 })\n"
+	    "assert(code == 0, code)\n");
+	lua_close(L);
+	PASS();
+}
+
+/* exec_run's two post-fork pushes (its captured stdout, then stderr) run
+ * after the child is forked, its pipes closed and it is reaped -- so by then
+ * a raise there must free the two C buffers without leaking a descriptor or
+ * leaving a zombie (ticket sca-round3/02). qwe_exec_run_test_force_raise
+ * forces exactly that raise, since there is no cheap way to make a genuine
+ * Lua allocation fail at that point (see luaexec_testhook.h). */
+TEST forced_raise_after_fork_leaks_nothing(void)
+{
+	int which;
+
+	for (which = 1; which <= 2; which++) {
+		lua_State *L = qwe_lua_new();
+		int before, after;
+		pid_t reaped;
+
+		ASSERT(L != NULL);
+		before = dup(0);
+		ASSERT(before >= 0);
+		close(before);
+
+		qwe_exec_run_test_force_raise(which);
+		LUA(L,
+		    "local exec = require('qwe.exec')\n"
+		    "local ok, err = pcall(exec.run, { 'true' })\n"
+		    "assert(not ok and err:find('test-forced raise', 1, true), tostring(err))\n");
+		qwe_exec_run_test_force_raise(0);
+		lua_close(L);
+
+		after = dup(0);
+		ASSERT(after >= 0);
+		close(after);
+		ASSERT_EQ_FMT(before, after, "%d"); /* no descriptor leaked */
+
+		reaped = waitpid(-1, NULL, WNOHANG);
+		ASSERT(reaped <= 0); /* nothing left unreaped, ours or otherwise */
+	}
 	PASS();
 }
 
@@ -122,6 +194,8 @@ int main(int argc, char **argv)
 {
 	GREATEST_MAIN_BEGIN();
 	RUN_TEST(bad_arguments_raise);
+	RUN_TEST(wrong_typed_arguments_do_not_leak);
+	RUN_TEST(forced_raise_after_fork_leaks_nothing);
 	RUN_TEST(wait_gives_up_on_a_running_child);
 	RUN_TEST(run_reports_a_failed_spawn);
 	GREATEST_MAIN_END();
