@@ -28,12 +28,11 @@ jobs:
       pages: write
       id-token: write
   smoke:
-    # exclude-tag: the web-UI release flow publishes this tag before the gates run, so
-    # smoke's own perf job's "latest release" search would otherwise find this release
-    # itself as the baseline.
+    # perf-gate: a release fails on a perf regression against tools/perf/expected.tsv; a push
+    # and nightly only report (docs/adr/0016-perf-gate-compares-with-stored-expectations.md).
     uses: ./.github/workflows/smoke.yml
     with:
-      exclude-tag: ${{ github.ref_name }}
+      perf-gate: true
   publish:
     needs: [tests, asan, ubsan, valgrind, coverage, smoke]
     runs-on: ubuntu-24.04

@@ -273,7 +273,7 @@ what each one fails on.
 | `asan` | the suite under AddressSanitizer and LeakSanitizer | every push to `main` |
 | `ubsan` | the suite under UBSan | every push to `main` |
 | `coverage` | the 85% per-file coverage check, and the HTML report as an artifact | every push to `main` |
-| `smoke` | the smoke workflows on the release build, and `perf`'s timing against the last release | every push to `main` |
+| `smoke` | the smoke workflows on the release build, and `perf`'s timing against the stored expected values (`tools/perf/expected.tsv`; reported on a push, gating on a release) | every push to `main` |
 | `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes), plus a static-analysis job (the LLVM Static Analyzer and a C ruleset, `docs/static-analysis.md`) | by hand, nightly, and in a release |
 | `nightly` | all five of the above, from fresh caches, and `fuzz` | 02:17 UTC, and by hand |
 | `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | nightly (one hour), and by hand |
@@ -328,7 +328,9 @@ never tags, so a tag that was only created locally does nothing.
 4. Watch the run: `gh run list -w release -L 1`, then `gh run watch <run id>`. It reruns
    `tests`, `asan`, `ubsan` and `coverage`, adds `valgrind` (unit, e2e and static analysis; about
    25 minutes, the slowest part), and runs `smoke` (the release binary's own smoke workflows on a
-   clean runner, then `perf`'s A/B timing against the newest non-draft, non-prerelease release).
+   clean runner, then `perf`'s timing against `tools/perf/expected.tsv`, which fails the release on a
+   regression; if the perf reports on `main` have been drifting, re-measure first, see
+   `docs/ci-checks.md`).
    Only then does `publish` build `qwe` and `qwe-debug`, check that the tag, `QWE_VERSION` and
    `qwe --version` agree, and create the release (title `v<version> (<short hash>)`, generated
    notes plus the commit hash) with the binaries and `SHA256SUMS` attached. A tag with a `-`

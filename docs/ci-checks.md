@@ -34,7 +34,7 @@ nightly and release do not call it, and `workflows_test` requires only its badge
 | Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | nightly, release and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
 | Static analysis | `valgrind.yml` (job `static-analysis`) | `tools/clang-tidy/run.sh` | nightly, release and manual | about the plain suite's build, plus one clang-tidy pass per file | any `clang-analyzer-*`/bugprone/cert/concurrency/performance/portability finding in `src/`, `plugins/` or `tools/` |
 | Coverage | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main | about 35 s warm | any file under `src/`, `plugins/` or `tools/` has less than 85% of its lines covered |
-| Smoke | `smoke.yml` (job `debug-smoke`, then `build`, then `smoke`) | `./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"` | every push to main | debug-smoke seconds, fastbuild; build ~ the plain suite under `--config=release`; smoke seconds on a fresh runner | debug-smoke: a real bug in a smoke workflow, caught on the fastbuild binary before `build` pays for `--config=release`. build/smoke: the release binary fails a real smoke workflow, is not statically linked, or the full suite fails under `--config=release` (`build` then keeps a gdb backtrace of any crashed test as the `smoke-release-backtraces` artifact) |
+| Smoke | `smoke.yml` (job `build`, then `smoke` and `perf`) | `./qwe run tests/smoke/smoke_run.yml --debug --summary "$GITHUB_STEP_SUMMARY"` | every push to main | build: one `bazel build --config=release //src/cli:qwe`; smoke seconds on a fresh runner; perf about a minute (51 rounds of the candidate only) | smoke: the release binary fails a real smoke workflow or negative case, or is not statically linked (the `--debug` lifecycle traces are kept as the `smoke-runs` artifact). perf: a key regressed against `tools/perf/expected.tsv` (ADR-0016); this fails the job only when gating (`release.yml`, a manual dispatch), and otherwise is a warning with the report in the run summary |
 | Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | nightly (3600 s) and manual | hours; four processes in parallel | any crash artifact exists |
 
 Details for each live in `docs/sanitizers.md`, `docs/valgrind.md`,
@@ -48,8 +48,8 @@ bazel test //...
 bazel test --config=asan //...
 bazel test --config=ubsan //...
 bazel run //tools/coverage:check
-bazel test --config=release //...
-./qwe run tests/smoke/smoke_run.yml --summary "$GITHUB_STEP_SUMMARY"
+./qwe run tests/smoke/smoke_run.yml --debug --summary "$GITHUB_STEP_SUMMARY"
+tools/perf/compare.sh tools/perf/expected.tsv perf-out/samples.tsv tools/perf/allow-list.txt perf-out
 ```
 
 `check` runs `bazel coverage //... --combined_report=lcov` itself and fails if
@@ -104,16 +104,15 @@ hardcoded in their `inventory.yaml` files. `.github/actions/setup` with `ssh-tar
 
 `nightly.yml` runs at 02:17 UTC and on demand. It first deletes every `setup-bazel-*` cache (a saved
 cache key is never rewritten, so the gates' caches go stale), then calls all five gate workflows:
-tests, asan, ubsan, valgrind and coverage, and `smoke.yml` (build, smoke and the perf A/B job, all at
-their defaults). They run cold and save fresh caches, which pushes to main then restore. It also calls
+tests, asan, ubsan, valgrind and coverage, and `smoke.yml` (build, smoke, and perf reporting against
+the stored expected values without gating). They run cold and save fresh caches, which pushes to main then restore. It also calls
 `fuzz.yml` for 3600 seconds (release does not). `workflows_test` fails if it stops calling one of the
 five gates, smoke, or the fuzzer.
 
 `release.yml` runs on a pushed tag `v*`. Write the release in the GitHub web UI (its notes, and the tag it
 creates on publish), or push the tag yourself. All five gates and `smoke.yml` run again at the tagged
-commit (not the fuzzer); `smoke.yml` is called with `exclude-tag` set to the tag being released, so its
-perf job's "newest eligible release" search never finds this release as its own baseline (the web-UI
-flow publishes the tag before the gates run). Then `qwe` and `qwe-debug` are built,
+commit (not the fuzzer); `smoke.yml` is called with `perf-gate: true`, so a perf regression against
+`tools/perf/expected.tsv` fails the release (on a push and nightly it only reports). Then `qwe` and `qwe-debug` are built,
 `tools/release/check_version.sh` checks that the tag, `QWE_VERSION` in `src/kernel/qwe.h` and
 `qwe --version` agree, and the two binaries and `SHA256SUMS` are attached to the release. The full
 commit hash is appended to the release notes (a release created by the workflow is titled
