@@ -433,15 +433,11 @@ jobs:
     needs: build
     # Its own fresh runner, no shared setup: tools/perf/{run,compare}.sh are plain sh + awk,
     # need no Bazel, and the candidate binary must prove it needs none either (same reason as
-    # the smoke job above).
+    # the smoke job above). Only the candidate runs: it is compared with the stored expected
+    # values in tools/perf/expected.tsv (docs/adr/0016-perf-gate-compares-with-stored-expectations.md).
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read # gh release download/list, against public releases, needs nothing more
     env:
-      GH_TOKEN: ${{ github.token }}
       ROUNDS: ${{ inputs.rounds || '51' }}
-      BASELINE: ${{ inputs.baseline || 'latest' }}
-      EXCLUDE_TAG: ${{ inputs.exclude-tag }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -449,61 +445,22 @@ jobs:
           name: qwe-build
           path: .
       - run: chmod +x qwe
-      - name: Find the baseline
-        id: baseline
+      - name: Time the candidate
         run: |
-          set -eu
-          case "$BASELINE" in
-          none)
-            echo "label=none" >>"$GITHUB_OUTPUT"
-            echo "bin=" >>"$GITHUB_OUTPUT"
-            echo "perf: baseline: none -- report-only, no gate" >>"$GITHUB_STEP_SUMMARY"
-            ;;
-          self)
-            echo "label=self" >>"$GITHUB_OUTPUT"
-            echo "bin=$PWD/qwe" >>"$GITHUB_OUTPUT"
-            ;;
-          latest)
-            tag=$(gh release list -R "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
-              --json tagName,publishedAt --limit 100 |
-              jq -r --arg x "$EXCLUDE_TAG" '[.[] | select(.tagName != $x)] | sort_by(.publishedAt) | last | .tagName // empty')
-            if [ -z "$tag" ]; then
-              echo "label=none" >>"$GITHUB_OUTPUT"
-              echo "bin=" >>"$GITHUB_OUTPUT"
-              echo "perf: no eligible baseline release found -- report-only, no gate" >>"$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            v=${tag#v}
-            mkdir baseline
-            gh release download "$tag" -R "$GITHUB_REPOSITORY" -D baseline \
-              -p "qwe-$v-linux-x86_64" -p SHA256SUMS
-            (cd baseline && sha256sum -c --ignore-missing SHA256SUMS)
-            mv "baseline/qwe-$v-linux-x86_64" baseline/qwe
-            chmod +x baseline/qwe
-            echo "label=$tag" >>"$GITHUB_OUTPUT"
-            echo "bin=$PWD/baseline/qwe" >>"$GITHUB_OUTPUT"
-            ;;
-          *)
-            echo "perf: unknown baseline input '$BASELINE' (want latest, self or none)" >&2
-            exit 1
-            ;;
-          esac
-      - name: A/B against the baseline
-        run: |
-          .github/scripts/summary-link.sh tools/perf/run.sh tools/perf/compare.sh
-          tools/perf/run.sh perf-out "$ROUNDS" "$PWD/qwe" "${{ steps.baseline.outputs.bin }}" \
+          .github/scripts/summary-link.sh tools/perf/run.sh tools/perf/compare.sh tools/perf/expected.tsv
+          tools/perf/run.sh perf-out "$ROUNDS" "$PWD/qwe" \
             tests/smoke/smoke_run.yml tests/smoke/smoke_file.yml tests/smoke/smoke_graph.yml tests/smoke/smoke_project_plugin.yml
       - name: Report header
         run: |
           {
-            echo "## perf: candidate \`${GITHUB_SHA:0:7}\` vs baseline \`${{ steps.baseline.outputs.label }}\`"
+            echo "## perf: candidate \`${GITHUB_SHA:0:7}\` vs expected values \`$(sed -n 's/^# version: //p' tools/perf/expected.tsv)\`"
             echo
             echo "- runner: $(nproc) vCPU, $(awk -F: '/model name/{print $2; exit}' /proc/cpuinfo | sed 's/^ *//'), $(uname -r)"
             echo "- rounds: $ROUNDS"
             echo
           } >>"$GITHUB_STEP_SUMMARY"
       - name: Compare (fails the job on any regression)
-        run: tools/perf/compare.sh "${{ steps.baseline.outputs.label }}" perf-out/samples.tsv tools/perf/allow-list.txt perf-out
+        run: tools/perf/compare.sh tools/perf/expected.tsv perf-out/samples.tsv tools/perf/allow-list.txt perf-out
       - if: always()
         name: Append the report to the run summary
         run: cat perf-out/report.md >>"$GITHUB_STEP_SUMMARY"

@@ -1,11 +1,10 @@
 #!/bin/bash
 # usage: run_test.sh <run.sh> [case...]
-# Cases: warm_up_discarded abba_order no_baseline_detected baseline_none
+# Cases: warm_up_discarded candidate_only rounds_counted candidate_failure_fatal
 #
-# A stub qwe (run <file>: writes a canned result.json under .qwe/runs/<id>/, sleeps a
-# fixed amount, and fails a workflow named in QWE_FAIL_ON) stands in for the real binary,
-# so these cases check run.sh's own bookkeeping (round counting, ABBA ordering, the
-# warm-up discard, no-baseline detection) without needing a built qwe or real timing.
+# A stub qwe (run <file>: writes a canned result.json under .qwe/runs/<id>/, and fails a
+# workflow named in its second argument) stands in for the real binary, so these cases check
+# run.sh's own bookkeeping without needing a built qwe or real timing.
 script=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 shift
 t=$(mktemp -d) || exit 3
@@ -32,42 +31,32 @@ SCRIPT
 	chmod +x "$1"
 }
 
-samples() { cat "$t/out/samples.tsv"; }
-
 case_warm_up_discarded() {
-	stub "$t/cand"; stub "$t/base"
-	"$script" "$t/out" 1 "$t/cand" "$t/base" "$t/wf/smoke_a.yml" >/dev/null 2>&1 || return 1
+	stub "$t/cand"
+	"$script" "$t/out" 1 "$t/cand" "$t/wf/smoke_a.yml" >/dev/null 2>&1 || return 1
 	! grep -q '^0	' "$t/out/samples.tsv"
 }
 
-case_abba_order() {
-	stub "$t/cand"; stub "$t/base"
-	"$script" "$t/out" 2 "$t/cand" "$t/base" "$t/wf/smoke_a.yml" >/dev/null 2>&1 || return 1
-	# round 1: A before B; round 2: B before A (ABBA, alternating by round)
-	seq1=$(awk -F'\t' '$1==1{print $2}' "$t/out/samples.tsv" | head -1)
-	seq2=$(awk -F'\t' '$1==2{print $2}' "$t/out/samples.tsv" | head -1)
-	[ "$seq1" = A ] && [ "$seq2" = B ]
-}
-
-case_no_baseline_detected() {
-	stub "$t/cand"; stub "$t/base" smoke_b.yml
-	"$script" "$t/out" 2 "$t/cand" "$t/base" "$t/wf/smoke_a.yml" "$t/wf/smoke_b.yml" >/dev/null 2>&1 || return 1
-	# smoke_a keeps a real A/B pair every round; smoke_b never gets an A row again after
-	# the warm-up failure, and is marked no-baseline throughout the timed rounds instead.
-	[ "$(awk -F'\t' '$3=="smoke_a/wall" && $2=="A"' "$t/out/samples.tsv" | wc -l)" -eq 2 ] &&
-		[ "$(awk -F'\t' '$3=="smoke_b/wall" && $2=="A"' "$t/out/samples.tsv" | wc -l)" -eq 0 ] &&
-		[ "$(awk -F'\t' '$3=="smoke_b/wall" && $2=="no-baseline"' "$t/out/samples.tsv" | wc -l)" -eq 2 ]
-}
-
-case_baseline_none() {
+case_candidate_only() {
 	stub "$t/cand"
-	"$script" "$t/out" 1 "$t/cand" "" "$t/wf/smoke_a.yml" >/dev/null 2>&1 || return 1
-	# no A rows at all: tools/perf/compare.sh would classify every key "new" (report-only).
-	[ "$(awk -F'\t' '$2=="A"' "$t/out/samples.tsv" | wc -l)" -eq 0 ] &&
-		[ "$(awk -F'\t' '$2=="B" && $3=="smoke_a/wall"' "$t/out/samples.tsv" | wc -l)" -eq 1 ]
+	"$script" "$t/out" 2 "$t/cand" "$t/wf/smoke_a.yml" "$t/wf/smoke_b.yml" >/dev/null 2>&1 || return 1
+	[ "$(awk -F'\t' '$2!="B"' "$t/out/samples.tsv" | wc -l)" -eq 0 ] &&
+		grep -qF $'\tsmoke_a/j/0\t2000' "$t/out/samples.tsv" &&
+		grep -qF $'\tsmoke_b/j\t8000' "$t/out/samples.tsv"
 }
 
-cases=${*:-warm_up_discarded abba_order no_baseline_detected baseline_none}
+case_rounds_counted() {
+	stub "$t/cand"
+	"$script" "$t/out" 3 "$t/cand" "$t/wf/smoke_a.yml" >/dev/null 2>&1 || return 1
+	[ "$(awk -F'\t' '$3=="smoke_a/wall"' "$t/out/samples.tsv" | wc -l)" -eq 3 ]
+}
+
+case_candidate_failure_fatal() {
+	stub "$t/cand" smoke_b.yml
+	! "$script" "$t/out" 1 "$t/cand" "$t/wf/smoke_a.yml" "$t/wf/smoke_b.yml" >/dev/null 2>&1
+}
+
+cases=${*:-warm_up_discarded candidate_only rounds_counted candidate_failure_fatal}
 rc=0
 for c in $cases; do
 	if "case_$c"; then echo "PASS: $c"; else echo "FAIL: $c" >&2; rc=1; fi

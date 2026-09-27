@@ -1,5 +1,7 @@
 # The perf gate is A/B against the last release, not an absolute budget
 
+**Superseded by ADR-0016** (`0016-perf-gate-compares-with-stored-expectations.md`): the gate now compares with stored expectations. Kept as the record of why A/B was chosen first.
+
 `tools/perf/compare.sh` (14) decides whether a candidate build is slower than the last
 release by running both, side by side, on the same runner, in the same job, and comparing
 paired samples. It does not compare either one against a number written down in the repo.

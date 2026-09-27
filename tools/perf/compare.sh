@@ -1,48 +1,59 @@
 #!/bin/sh
-# usage: compare.sh <baseline-version> <samples.tsv> <allow-list> <outdir>
+# usage: compare.sh <expected.tsv> <samples.tsv> <allow-list> <outdir>
 #
-# A/B performance gate. samples.tsv has TSV lines `round  bin  key  us`, bin one of A, B or
-# no-baseline (the candidate ran but the baseline could not, for that workflow). Keys look
-# like <workflow>/wall, <workflow>/<job> or <workflow>/<job>/<step-index>.
+# Performance gate against stored expectations
+# (docs/adr/0016-perf-gate-compares-with-stored-expectations.md).
 #
-# For every key seen in both A and B ("gated"), the A median, the B median, B's p90, the
-# ratio and delta of the two medians, and the paired one-sided sign test (rounds where B > A,
-# ties dropped) decide whether it regressed. A key with samples in only one bin is "gone" or
-# "new"; a no-baseline key is reported too. None of the three are ever gated.
+# expected.tsv is written by tools/perf/expect.sh: a `# version: <v>` line, other `#`
+# comment lines, a header line, then `key  median_us  p90_us  n` per key. samples.tsv has
+# TSV lines `round  bin  key  us` from tools/perf/run.sh; only bin B (the candidate) is read.
+# Keys look like <workflow>/wall, <workflow>/<job> or <workflow>/<job>/<step-index>.
 #
-# allow-list is a file of lines `<baseline-version> <key-glob> <max-ratio>  # reason` (may be
-# missing or empty). A line only suppresses a regression when the baseline version equals its
-# version and the observed ratio is at or below its max-ratio, so an accepted slowdown expires
-# the moment the baseline moves to a new release.
+# For every key in both files ("gated"), the stored median, the candidate's median and p90,
+# the ratio and delta of the two medians, and a one-sided one-sample sign test (rounds in
+# which the candidate is above the stored median, ties dropped) decide whether it regressed.
+# A key only in the samples is "new", a key only in the expected values is "gone"; neither
+# is gated.
+#
+# allow-list is a file of lines `<version> <key-glob> <max-ratio>  # reason` (may be missing
+# or empty). A line only suppresses a regression when <version> equals the expected file's
+# version and the observed ratio is at or below its max-ratio, so an accepted slowdown
+# expires the moment the expected values are re-measured.
 #
 # Writes <outdir>/report.md (verdict, then a per-workflow wall table, then per-key details in
 # a <details> block, every duration in ms) and <outdir>/report.tsv (raw microseconds). Exits 1
-# if any key regressed after allow-list suppression.
+# if any key regressed after allow-list suppression, 3 on a usage error.
 set -eu
 
-# Thresholds. A key regresses only when all three hold.
+# Thresholds. A key regresses only when all three hold. Job and step times come from
+# result.json's duration_ms, so they move in whole milliseconds: a key whose stored median is
+# 2 ms reads 3 ms on a slightly slower runner (ratio 1.5, delta 1 ms) without anything having
+# changed. The step floor is therefore two of those quanta, the same as the wall floor.
 RATIO_THRESHOLD=1.20
-DELTA_FLOOR_STEP_US=500
+DELTA_FLOOR_STEP_US=2000
 DELTA_FLOOR_WALL_US=2000
 ALPHA=0.01
 
 [ $# -eq 4 ] || {
-	echo "usage: compare.sh <baseline-version> <samples.tsv> <allow-list> <outdir>" >&2
+	echo "usage: compare.sh <expected.tsv> <samples.tsv> <allow-list> <outdir>" >&2
 	exit 3
 }
-baseline_version=$1 samples=$2 allow=$3 outdir=$4
+expected=$1 samples=$2 allow=$3 outdir=$4
+[ -f "$expected" ] || { echo "compare: no such file: $expected" >&2; exit 3; }
 [ -f "$samples" ] || { echo "compare: no such file: $samples" >&2; exit 3; }
+grep -q '^# version: ' "$expected" || { echo "compare: $expected has no '# version:' line" >&2; exit 3; }
 
 mkdir -p "$outdir"
 allow_file=$allow
 [ -f "$allow_file" ] || allow_file=/dev/null
 
-awk -F'\t' -v baseline_version="$baseline_version" \
+awk -F'\t' \
 	-v ratio_threshold="$RATIO_THRESHOLD" \
 	-v delta_floor_step="$DELTA_FLOOR_STEP_US" \
 	-v delta_floor_wall="$DELTA_FLOOR_WALL_US" \
 	-v alpha="$ALPHA" \
 	-v allow_file="$allow_file" \
+	-v expected_file="$expected" \
 	-v md_out="$outdir/report.md" \
 	-v tsv_out="$outdir/report.tsv" '
 function sortnum(a, n,    i, j, tmp) {
@@ -71,7 +82,7 @@ function p90(vals, n,    tmp, i, idx) {
 }
 # Smallest k such that P(X >= k) <= a, X ~ Binomial(n, 0.5): the one-sided sign-test
 # critical value. The binomial tail is summed directly (no lookup table).
-function sign_crit(n, a,    c, i, cum, total, k, best) {
+function sign_crit(n, a,    c, i, total, cum, k, best) {
 	if (n <= 0) return n + 1
 	c[0] = 1
 	for (i = 1; i <= n; i++) c[i] = c[i - 1] * (n - i + 1) / i
@@ -124,32 +135,32 @@ BEGIN {
 		allow_max[nallow] = f[3] + 0
 	}
 	close(allow_file)
+
 	nkeys = 0
+	version = ""
+	while ((getline line < expected_file) > 0) {
+		if (line ~ /^# version: /) { version = substr(line, 12); continue }
+		if (line ~ /^#/ || line ~ /^key\t/ || line == "") continue
+		split(line, f, "\t")
+		exp_med[f[1]] = f[2] + 0
+		exp_p90[f[1]] = f[3] + 0
+		if (!(f[1] in seen)) { seen[f[1]] = 1; keyorder[++nkeys] = f[1] }
+	}
+	close(expected_file)
 }
-{
-	round = $1 + 0; bin = $2; key = $3; us = $4 + 0
+$2 == "B" {
+	key = $3; us = $4 + 0
 	if (!(key in seen)) { seen[key] = 1; keyorder[++nkeys] = key }
-	if (bin == "no-baseline") {
-		nobase[key] = 1
-		next
-	}
-	if (bin != "A" && bin != "B") next
-	if (round > (maxround[key] + 0)) maxround[key] = round
-	if (bin == "A") {
-		has_a[key] = 1
-		if (!((key, round) in a_round)) { a_round[key, round] = us; an[key]++; a_vals[key, an[key]] = us }
-	} else {
-		has_b[key] = 1
-		if (!((key, round) in b_round)) { b_round[key, round] = us; bn[key]++; b_vals[key, bn[key]] = us }
-	}
+	has_b[key] = 1
+	bn[key]++
+	b_vals[key, bn[key]] = us
 }
 END {
 	ngated = 0
 	for (ki = 1; ki <= nkeys; ki++) {
 		key = keyorder[ki]
-		if (key in nobase) { status[key] = "no-baseline"; continue }
-		if (has_a[key] && !has_b[key]) { status[key] = "gone"; continue }
-		if (!has_a[key] && has_b[key]) { status[key] = "new"; continue }
+		if ((key in exp_med) && !has_b[key]) { status[key] = "gone"; continue }
+		if (!(key in exp_med) && has_b[key]) { status[key] = "new"; continue }
 		status[key] = "gated"; ngated++
 	}
 	key_alpha = (ngated > 0) ? alpha / ngated : alpha
@@ -159,33 +170,32 @@ END {
 
 	for (ki = 1; ki <= nkeys; ki++) {
 		key = keyorder[ki]
+		res_amed[key] = (key in exp_med) ? exp_med[key] : "-"
 		if (status[key] != "gated") {
-			res_amed[key] = "-"; res_bmed[key] = "-"; res_bp90[key] = "-"
+			res_bmed[key] = "-"; res_bp90[key] = "-"
 			res_ratio[key] = "-"; res_delta[key] = "-"; res_k[key] = "-"; res_n[key] = "-"
 			res_regressed[key] = 0; res_note[key] = ""
+			if (has_b[key]) {
+				delete bv
+				for (i = 1; i <= bn[key]; i++) bv[i] = b_vals[key, i]
+				res_bmed[key] = median(bv, bn[key]); res_bp90[key] = p90(bv, bn[key])
+			}
 			continue
 		}
-		# a_vals/b_vals are keyed by (key, i); pull this key slice into plain
-		# 1-indexed arrays for median()/p90().
-		delete av; delete bv
-		for (i = 1; i <= an[key]; i++) av[i] = a_vals[key, i]
+		delete bv
 		for (i = 1; i <= bn[key]; i++) bv[i] = b_vals[key, i]
-		amed = median(av, an[key])
+		amed = exp_med[key]
 		bmed = median(bv, bn[key])
 		bp90 = p90(bv, bn[key])
 		if (amed > 0) ratio = bmed / amed
 		else ratio = (bmed > 0) ? 999999 : 1
 		delta = bmed - amed
 
-		pn = 0; keff = 0; kgt = 0
-		for (r = 1; r <= maxround[key]; r++) {
-			if (((key, r) in a_round) && ((key, r) in b_round)) {
-				pn++
-				av2 = a_round[key, r]; bv2 = b_round[key, r]
-				if (bv2 > av2) { keff++; kgt++ }
-				else if (bv2 < av2) keff++
-				# ties: counted in pn, not in keff or kgt
-			}
+		keff = 0; kgt = 0
+		for (i = 1; i <= bn[key]; i++) {
+			if (bv[i] > amed) { keff++; kgt++ }
+			else if (bv[i] < amed) keff++
+			# ties with the stored median: dropped, as in any sign test
 		}
 		crit = sign_crit(keff, key_alpha)
 		significant = (keff > 0 && kgt >= crit)
@@ -196,7 +206,7 @@ END {
 		note = ""
 		if (regressed) {
 			for (i = 1; i <= nallow; i++) {
-				if (allow_ver[i] == baseline_version && key ~ allow_re[i] && ratio <= allow_max[i]) {
+				if (allow_ver[i] == version && key ~ allow_re[i] && ratio <= allow_max[i]) {
 					regressed = 0
 					note = "allowed: " allow_glob[i] " (max " allow_max[i] "x, " allow_ver[i] ")"
 					break
@@ -204,15 +214,15 @@ END {
 			}
 		}
 
-		res_amed[key] = amed; res_bmed[key] = bmed; res_bp90[key] = bp90
+		res_bmed[key] = bmed; res_bp90[key] = bp90
 		res_ratio[key] = ratio; res_delta[key] = delta
-		res_k[key] = kgt; res_n[key] = pn
+		res_k[key] = kgt; res_n[key] = bn[key]
 		res_regressed[key] = regressed; res_note[key] = note
 		if (regressed) { any_regression = 1; regressed_keys[++nregressed] = key }
 	}
 
 	# report.tsv: one row per key, raw microseconds.
-	print "key\tstatus\ta_median_us\tb_median_us\tb_p90_us\tratio\tdelta_us\tb_gt_a\tn_paired\tregressed\tnote" > tsv_out
+	print "key\tstatus\texpected_median_us\tmedian_us\tp90_us\tratio\tdelta_us\tabove_expected\tn\tregressed\tnote" > tsv_out
 	for (ki = 1; ki <= nkeys; ki++) {
 		key = keyorder[ki]
 		print key, status[key], res_amed[key], res_bmed[key], res_bp90[key], \
@@ -222,7 +232,7 @@ END {
 	close(tsv_out)
 
 	# report.md
-	print "# perf compare" > md_out
+	print "# perf compare against the expected values of " version > md_out
 	print "" >> md_out
 	if (any_regression) {
 		line = "**FAIL** -- regression in:"
@@ -235,7 +245,7 @@ END {
 
 	print "## Workflow wall times (ms)" >> md_out
 	print "" >> md_out
-	print "| workflow | status | A median | B median | B p90 | ratio | delta | rounds (B>A/n) | verdict |" >> md_out
+	print "| workflow | status | expected median | median | p90 | ratio | delta | rounds above expected/n | verdict |" >> md_out
 	print "|---|---|---|---|---|---|---|---|---|" >> md_out
 	for (ki = 1; ki <= nkeys; ki++) {
 		key = keyorder[ki]
@@ -251,7 +261,7 @@ END {
 
 	print "<details><summary>Per-job / per-step details</summary>" >> md_out
 	print "" >> md_out
-	print "| key | status | A median | B median | B p90 | ratio | delta | rounds (B>A/n) | verdict | note |" >> md_out
+	print "| key | status | expected median | median | p90 | ratio | delta | rounds above expected/n | verdict | note |" >> md_out
 	print "|---|---|---|---|---|---|---|---|---|---|" >> md_out
 	for (ki = 1; ki <= nkeys; ki++) {
 		key = keyorder[ki]

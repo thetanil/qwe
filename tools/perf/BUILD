@@ -1,7 +1,8 @@
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
-# The perf A/B gate: bazel run //tools/perf:compare -- <baseline-version> <samples.tsv> <allow-list> <outdir>
+# The perf gate (docs/adr/0016-perf-gate-compares-with-stored-expectations.md):
+#   bazel run //tools/perf:compare -- <expected.tsv> <samples.tsv> <allow-list> <outdir>
 sh_binary(
     name = "compare",
     srcs = ["compare.sh"],
@@ -16,8 +17,8 @@ sh_test(
     data = [":compare.sh"],
 )
 
-# The A/B round runner behind the perf job (15): bazel run //tools/perf:run --
-#   <outdir> <rounds> <candidate-bin> <baseline-bin> <workflow-file>...
+# The candidate's sample collector: bazel run //tools/perf:run --
+#   <outdir> <rounds> <candidate-bin> <workflow-file>...
 sh_binary(
     name = "run",
     srcs = ["run.sh"],
@@ -30,4 +31,31 @@ sh_test(
     srcs = ["run_test.sh"],
     args = ["$(location :run.sh)"],
     data = [":run.sh"],
+)
+
+# Pools samples into expected values: bazel run //tools/perf:expect --
+#   [--note TEXT]... <version> <out.tsv> <samples.tsv>[:bin,bin...]...
+sh_binary(
+    name = "expect",
+    srcs = ["expect.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_test(
+    name = "expect_test",
+    size = "small",
+    srcs = ["expect_test.sh"],
+    args = ["$(location :expect.sh)"],
+    data = [":expect.sh"],
+)
+
+# The stored expected values cover every workflow the perf job times.
+sh_test(
+    name = "expected_test",
+    size = "small",
+    srcs = ["expected_test.sh"],
+    data = [
+        "expected.tsv",
+        "//.github:ci_files",
+    ],
 )
