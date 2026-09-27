@@ -63,8 +63,8 @@ At `acb416d` it counted 619 findings, none in a header;
 `.scratch/archive/sca-findings/spec.md` worked through the bug-finding classes.
 At `dcc74d8` it counts 427: 254 hidden by an exclusion, every one in a class the
 exclusion table below still lists, and 173 hidden by `cert-err33-c`'s
-`CheckedFunctions` (all `fprintf`/`fputs`/`fputc`). `.scratch/sca-exclusions`
-works through what is left: with `CheckedFunctions` gone, the count is 181,
+`CheckedFunctions` (all `fprintf`/`fputs`/`fputc`). `.scratch/archive/sca-exclusions`
+worked through what is left: with `CheckedFunctions` gone, the count is 181,
 80 hidden by an exclusion and 101 by an option (the reserved-identifier allow
 list, and `concurrency-mt-unsafe`'s `FunctionSet`, which `--raw` widens to `any`).
 

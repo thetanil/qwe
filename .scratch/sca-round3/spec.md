@@ -15,7 +15,7 @@ as the code changes. A code fix costs once and the
 assessor never sees it. So in this round **the default answer to a finding is to
 change the code, and an exception has to beat that on cost, not on convenience.**
 
-Rounds 1 and 2 (`.scratch/archive/sca-findings`, `.scratch/sca-exclusions`) took
+Rounds 1 and 2 (`.scratch/archive/sca-findings`, `.scratch/archive/sca-exclusions`) took
 the opposite default in a few places, and closed them with reasons an assessor
 would push back on. Round 2 ended with 3 excluded checks, 2 narrowed ones, 4
 `NOLINT`s, and a doc full of reasoning. This round removes every one of those

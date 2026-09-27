@@ -52,10 +52,9 @@ the output into this ticket:
 - `grep -rn NOLINT src tools`.
 
 Then close the feature per `docs/agents/issue-tracker.md`, "Closing a feature":
-promote what is load-bearing, repoint references, and `git mv` both
-`.scratch/sca-exclusions` (already closed, still in place; its `09` `wontfix` is
-superseded by tickets 10-12 here) and `.scratch/sca-round3` to
-`.scratch/archive/`.
+promote what is load-bearing, repoint references, and `git mv`
+`.scratch/sca-round3` to `.scratch/archive/`. (`.scratch/sca-exclusions` was
+archived on 2026-09-27; its `09` `wontfix` is superseded by tickets 10-12 here.)
 
 ## Acceptance criteria
 
@@ -68,8 +67,8 @@ superseded by tickets 10-12 here) and `.scratch/sca-round3` to
       `manual: the Blocked by line above names no ticket outside this feature`
 - [ ] Every command in the "rerun" list, with its output, is in the Comments.
       `manual: Comments`
-- [ ] Both features are archived and `grep -rn ".scratch/sca-"` outside
-      `.scratch/` finds no live path. `manual: grep`
+- [ ] The feature is archived and `grep -rn ".scratch/sca-"` outside
+      `.scratch/` finds no live path (only `.scratch/archive/...`). `manual: grep`
 - [ ] `bazel test //...` and the coverage check are green.
 
 ## Comments
