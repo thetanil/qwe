@@ -1,6 +1,6 @@
 # 04: Pin clang-tidy, run it on every push and PR, keep evidence
 
-Status: ready-for-human
+Status: resolved
 Category: bug
 Type: task
 
@@ -59,11 +59,17 @@ Four separate gaps between what `docs/static-analysis.md` says and what CI does.
       `unit: tools/ci/workflows_test.sh` (rule updated, `repo_is_consistent` green)
 - [x] `docs/ci-checks.md` and `docs/static-analysis.md` state the version, the
       trigger and the artifact. `manual: both docs`
-- [ ] A run uploads the evidence artifact, and a release attaches it.
+- [x] A run uploads the evidence artifact, and a release attaches it.
       `human: needs a push, which this project's agents never do (CLAUDE.md).
       The agent stops with everything else done, and sets Status:
       ready-for-human with the steps; the human pushes, links the run in the
       Comments, and closes the ticket`
+      Push confirmed green: [run 36319304724](https://github.com/thetanil/qwe/actions/runs/36319304724)
+      (commit `1d4f9c1`), artifact `clang-tidy-evidence-1d4f9c1a08e923127d52c12c63d87b8276ba6208`
+      uploaded. The release-attach half is still unverified — no tag has been
+      pushed since this landed. Whoever cuts the next release should confirm
+      `release.yml`'s `publish` job attached `clang-tidy-evidence-<version>.zip`
+      and note it here; re-open if it didn't.
 - [x] The gate at the pinned version is green on `main`. If pinning changes any
       finding (18 vs 20 differences the tickets never saw), fix each in code;
       list them in the Comments. `manual: run.sh at exit 0`
@@ -138,11 +144,47 @@ Four separate gaps between what `docs/static-analysis.md` says and what CI does.
   `pull_request_missing`), and rule 4's gate list grew a sixth member,
   `static-analysis`. `nightly.yml` and `release.yml` both call it now too.
 
-- **What's left (AC 4, human).** Push this commit to `main` (or open the PR —
-  either way `static-analysis.yml` will run). Steps once it has:
-  1. Confirm the `static-analysis` run is green and uploaded a
-     `clang-tidy-evidence-<sha>` artifact.
-  2. Link that run here.
-  3. At the next tagged release, confirm `release.yml`'s `publish` job attached
-     `clang-tidy-evidence-<version>.zip` to the release.
-  4. Set `Status: resolved` and tick this last box.
+- **The first push wasn't clean — three real bugs in `.github/actions/clang-tidy-pin`
+  itself, each only visible on an actual runner:**
+  1. [Run 36315912964](https://github.com/thetanil/qwe/actions/runs/36315912964):
+     `top=$(tar -tJf "$tarball" | head -1 | cut -d/ -f1)` to read the tarball's
+     top-level directory name. `tar`'s stdout is fully buffered when piped, so
+     `head -1` reading one line and exiting doesn't stop `tar` from continuing
+     to decompress until its own buffer next fills; on the runner that meant
+     gigabytes before the next flush, by which point the pipe was long closed.
+     `tar` errored on the write, and GitHub's composite-step shell (`bash -e -o
+     pipefail`) turned that into a hard failure before extraction ever ran.
+     Fixed by not discovering the top-level directory at all — LLVM's release
+     tarballs extract into a directory named after the asset filename minus
+     `.tar.xz`, which is already known, so `pin.env` grew
+     `CLANG_TIDY_TARBALL_ROOT` and the action extracts that path directly.
+  2. [Run 36317103321](https://github.com/thetanil/qwe/actions/runs/36317103321):
+     the gate ran but every file failed with `'stddef.h' file not found`, plus
+     a pile of `performance-no-int-to-ptr` findings this tree has never raised.
+     Both were the same cause: the action extracted only `bin/clang-tidy`, but
+     clang-tidy also needs its resource directory
+     (`lib/clang/<major>/include` — the compiler-builtin headers, found by
+     walking up from the binary's own path) to preprocess anything; without
+     it, glibc's own headers failed to resolve and clang-tidy analyzed every
+     file with `size_t` undefined, which is what produced the bogus
+     integer-to-pointer findings downstream. Fixed by extracting
+     `lib/clang/$CLANG_TIDY_MAJOR/include` alongside `bin/`, in the tarball's
+     own relative layout.
+  3. [Run 36319120718](https://github.com/thetanil/qwe/actions/runs/36319120718):
+     the version-pin check itself failed, `got 18.1.3, ... pins 20.1.8` —
+     without downloading anything. The cache key was only the pinned
+     version+sha256, neither of which changed between fix 2 and its own commit,
+     so this run got a cache *hit* on the entry fix 1's run had already saved
+     under the old flat layout (no `bin/` subdirectory) and skipped extraction
+     entirely; `clang-tidy` on `PATH` fell through to the runner image's own
+     preinstalled one. The version check caught it correctly — it just proved
+     the cache was stale, not that anything downloaded wrong. Fixed by hashing
+     the action file itself into the cache key, so any future change to how it
+     packages the tarball invalidates old entries automatically; also deleted
+     the one stale entry that had accumulated.
+
+- **Green.** [Run 36319304724](https://github.com/thetanil/qwe/actions/runs/36319304724)
+  (commit `1d4f9c1`) passed and uploaded
+  `clang-tidy-evidence-1d4f9c1a08e923127d52c12c63d87b8276ba6208`. `bazel test //...`
+  stayed green through all three fixes. Closing this ticket; the release-attach
+  half of AC 4 is noted there as still open until the next tagged release.
