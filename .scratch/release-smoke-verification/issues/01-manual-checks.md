@@ -56,7 +56,7 @@ whether "latest" skips a pre-release as a baseline. Both still need an `-rc` tag
 
 **Scratch-branch negatives (`neg_file_ensure_denied`, a broken `smoke_run`, the
 5 ms busy-wait, a corrupted baseline sum): not done.** No existing run exercises
-them. Each needs a scratch branch pushed, and this project's agents never push.
+them. Each needs a scratch branch pushed. Agents push only ticket branches for a PR (`CLAUDE.md`), and these branches are deliberately red and never merged, so they wait for the user's say-so.
 The failed smoke runs on `main` (35873743795, 35793715513, 36193715136) failed in
 the build job, not in the smoke step, so they are not evidence for the
 broken-`smoke_run` criterion.

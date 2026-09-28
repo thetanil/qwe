@@ -64,6 +64,43 @@ listing the uncovered lines. For a browsable report, `bazel run //tools/coverage
 (needs `genhtml`, from the `lcov` package) writes `coverage-html/`; the coverage workflow uploads it as
 an artifact. On a green push to main it is also deployed to GitHub Pages (`https://thetanil.com/qwe/`, Settings, Pages, source "GitHub Actions"), next to `coverage.json`, the percentage badge document that `tools/coverage/badge.sh` writes (line coverage of `src/` and `plugins/`; red under 70, yellow under 85, green above).
 
+## Pull request gates
+
+Every ticket is a branch and a pull request (`CLAUDE.md`, "Working rules"), so the checks that run
+on `pull_request` are the gates a ticket has to pass. Merging waits for them; an agent stops at a
+green PR and the user merges. The jobs to require, by the name a check shows on the PR:
+
+| Job | Workflow |
+| --- | --- |
+| `tests` | `tests.yml` |
+| `asan` | `asan.yml` |
+| `ubsan` | `ubsan.yml` |
+| `static-analysis` | `static-analysis.yml` |
+| `coverage` | `coverage.yml` |
+| `build`, `smoke` | `smoke.yml` |
+
+Require `build` as well as `smoke`: `smoke` needs `build`, and a job skipped because its `needs`
+failed counts as passing for a required check, so `smoke` alone would let a broken build through.
+`perf` is not required: it reports on a pull request and only gates a release or a manual dispatch
+(ADR-0016). `codeql.yml`'s `Analyze (c-cpp)` joins the list when `.scratch/sca-round3` ticket 26
+has it building for real. Valgrind and fuzz never run on a pull request.
+
+These are the repo's own commit checks (`bazel test //...` green before a commit, then CI's
+sanitizers, clang-tidy, coverage floor and smoke on the PR). What GitHub enforces is the ruleset
+named `PR` (Settings, Rules), which applies to the default branch and has no bypass actors:
+
+- a change reaches `main` only by pull request, and only by squash merge, so a ticket lands as one commit;
+- linear history is required; the branch cannot be deleted or force-pushed;
+- no approving review is required (`required_approving_review_count` is 0), and Copilot code review runs on push.
+
+The ruleset does **not** yet have a "Require status checks to pass" rule, so the jobs in the table
+above are gates by this repo's rule (`CLAUDE.md`) and not yet by GitHub's: a red PR can be merged.
+Add the rule to the `PR` ruleset with the seven job names above (`tests`, `asan`, `ubsan`,
+`static-analysis`, `coverage`, `build`, `smoke`), and turn on "Require branches to be up to date
+before merging" only if a stale base should block a merge too. Check the names against a real PR
+first (`gh pr checks <n>`); a required name that no job reports blocks every merge. A new gate
+workflow is added to the table and to that rule in the same PR.
+
 ## On demand
 
 Valgrind takes 23 minutes on a runner, so it never runs on a push or a pull request. It runs from

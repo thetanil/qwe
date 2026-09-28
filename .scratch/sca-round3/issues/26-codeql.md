@@ -30,7 +30,7 @@ the **default** suite. Three consequences:
 - `queries: security-and-quality` (`+security-extended` if the two do not
   overlap: check what each contains), in the config file.
 - Run it on `pull_request` and `push` as now and on the schedule, and make it a
-  required check in branch protection if the repo's flow uses them (ticket 04).
+  required check in branch protection (the flow now uses PR gates: `docs/ci-checks.md`).
 - The first run's alerts are tickets, and are fixed in code. An alert dismissed
   "won't fix" or "false positive" in the UI is an exception with no record in
   the repo: forbid it here, and if one is unavoidable, add a CodeQL query filter
@@ -38,18 +38,19 @@ the **default** suite. Three consequences:
 - Document it in `docs/static-analysis.md`: what it runs, what it is compared to
   (overlap with clang-tidy, what only CodeQL finds), where to read the results.
 
-CodeQL cannot run here (no CLI in the devcontainer), and the first real run
-needs a push, which this project's agents never do (CLAUDE.md). So the agent
-does everything up to the push, then sets `Status: ready-for-human` with the
-steps. The human pushes and pastes the alert list; fixing the alerts is then
-agent work again, in this ticket or in new ones.
+CodeQL cannot run here (no CLI in the devcontainer), so the first real run is the
+PR's. The agent pushes the ticket branch, opens the PR and reads the run and the
+alert list with `gh` (`gh run view`, `gh api repos/thetanil/qwe/code-scanning/alerts`);
+fixing the alerts is agent work on the same branch, or new tickets. Making
+`Analyze (c-cpp)` a required check is a repo setting the user applies
+(`docs/ci-checks.md`, "Pull request gates").
 
 ## Acceptance criteria
 
 - [ ] `codeql.yml` builds C with Bazel under CodeQL's tracer and runs
       `security-and-quality`. `manual: read the workflow; a run is green`
 - [ ] The alert list of the first run is in the Comments, with a fix or a ticket
-      per alert; open alerts at the end: zero. `human: the Security tab, linked, after the push`
+      per alert; open alerts at the end: zero. `manual: the Security tab or the code-scanning API, linked, after the PR's first run`
 - [ ] `docs/static-analysis.md` covers CodeQL. `manual: doc`
 - [ ] `tools/ci/workflows_test.sh` still passes. `unit: workflows_test.sh`
 - [ ] `bazel test //...` is green.
