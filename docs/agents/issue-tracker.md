@@ -23,7 +23,7 @@ A feature is closed when every ticket under `.scratch/<feature-slug>/issues/` ha
 
 ## Working a ticket
 
-Each ticket is one branch, one commit and one pull request; `CLAUDE.md` ("Working rules") has the steps. In short: branch `<feature>/<NN>-<slug>` from `main`, do the ticket, commit the code and the ticket update together once `bazel test //...` is green, push the branch, open the PR, and fix what `gh pr checks` reports until the gates in `docs/ci-checks.md` ("Pull request gates") are green. The ticket is `Status: resolved` on the branch; the user merges. Nothing is pushed to `main`, and tags and releases stay with the user.
+Each ticket is one branch, one pull request and one initial commit; `CLAUDE.md` ("Working rules") has the steps. In short: branch `<feature>/<NN>-<slug>` from `main`, do the ticket, commit the code and the ticket update together once `bazel test //...` is green, push the branch, open the PR, and fix what `gh pr checks` reports until the gates in `docs/ci-checks.md` ("Pull request gates") are green. The ticket is `Status: resolved` on the branch; the user merges. Nothing is pushed to `main`, and tags and releases stay with the user.
 
 ## Acceptance criteria
 
