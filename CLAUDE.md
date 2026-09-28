@@ -33,7 +33,7 @@ Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/age
 ## Working rules
 
 - **Issues are raw markdown, not the `issues` CLI.** This project overrides the workspace rule: tickets live in `.scratch/<feature>/issues/NN-<slug>.md` and are edited by hand. Closing a ticket means `Status: resolved`, ticked `- [x]` acceptance criteria, and notes appended under `## Comments`.
-- **One branch, one commit and one PR per ticket.** This project overrides the workspace "never commit" and "never push" rules, for this project only (the root `CLAUDE.md` says so too). The flow, in order:
+- **One branch, one pull request and one initial commit per ticket.** This project overrides the workspace "never commit" and "never push" rules, for this project only (the root `CLAUDE.md` says so too). The flow, in order:
   1. Branch from an up-to-date `main`: `<feature>/<NN>-<slug>`, the ticket's path without `.scratch/` and `issues/` (e.g. `sca-round3/26-codeql`). Never work on `main`.
   2. Do the ticket. Once `bazel test //...` is green and the ticket file is updated (`Status: resolved`, ticked criteria, notes under `## Comments`), commit both together as one commit. Never commit before both are true.
   3. Push the branch (never `main`) with the credential-helper form in the root `CLAUDE.md`, as `thetanil` (`GITHUB_PERSONAL_*`). Never put a token in a URL, never `--no-verify`, never force-push.
