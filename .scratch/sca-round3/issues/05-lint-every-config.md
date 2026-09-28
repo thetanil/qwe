@@ -120,3 +120,15 @@ Resolved. What was measured and done:
   file is "checked once"; the evidence, reserved-identifier, timing and `ci-checks.md`
   rows updated.
 - `gate at exit 0` and `bazel test //...` (263 passed, 3 skipped) both hold.
+
+Copilot review of PR #7, both points taken:
+
+- A failed `bazel query` for the manual targets was swallowed: `bazel_out` ran inside
+  `mapfile < <(...)`, whose subshell discards its `exit 1`, so `run.sh` went on with an
+  empty manual list and silently dropped the fuzz targets. Reproduced with a `bazel`
+  shim that fails only `query` (exit 0, 182 pairs instead of 186); the query results now
+  come through command substitution, so the failure stops the script (exit 1, no list).
+  The `third_party` genrule query had the same shape and got the same fix.
+- The count line counted rows, and a row is one flag set with the configurations that
+  share it, not one (file, configuration). It now reads `186 (file, flag set) pairs`
+  (`run.sh`, `coverage_test.sh`, the docs).

@@ -2,7 +2,7 @@
 # usage: tools/clang-tidy/run.sh [--list] [--raw] [--evidence-dir DIR]
 #
 # Default: the pass/fail gate, .clang-tidy as written.
-# --list:          print the (file, configuration) pairs the gate lints and their count,
+# --list:          print the (file, flag set) pairs the gate lints and their count,
 #                  then exit. Needs Bazel only (no build, no clang-tidy).
 #                  tools/clang-tidy/coverage_test.sh checks it against the .c files on disk.
 # --raw:           the backlog, not a gate. Every check group .clang-tidy turns on,
@@ -11,7 +11,7 @@
 #                  what hid it from the gate (an exclusion or an option). Always
 #                  exits 0 once it has run.
 # --evidence-dir:  the gate, and also write version.txt (clang-tidy --version),
-#                  .clang-tidy (a copy), files.txt (the (file, configuration) list and
+#                  .clang-tidy (a copy), files.txt (the (file, flag set) list and
 #                  its count), sha.txt (the git commit), output.txt (every run's full
 #                  clang-tidy output, not --quiet) and exit_status.txt into DIR. CI's
 #                  evidence artifact (docs/static-analysis.md, docs/ci-checks.md); a
@@ -114,7 +114,13 @@ bazel_out() {
 }
 
 scope='//src/... + //tools/... + //plugins/...'
-mapfile -t manual < <(bazel_out query "attr(tags, manual, kind(\"cc_.* rule\", $scope))" --output=label)
+# Command substitution into a variable, not `mapfile < <(...)`: a failed query's
+# exit status must reach set -e, and process substitution discards it.
+manual=()
+manual_labels=$(bazel_out query "attr(tags, manual, kind(\"cc_.* rule\", $scope))" --output=label)
+if [ -n "$manual_labels" ]; then
+	mapfile -t manual <<<"$manual_labels"
+fi
 query="mnemonic(\"CppCompile\", $scope"
 if [ "${#manual[@]}" -gt 0 ]; then
 	echo "run.sh: manual-tagged cc targets added to the wildcard: ${manual[*]}" >&2
@@ -167,7 +173,7 @@ fi
 # The list: file, configurations, variant (tab-separated), then the count.
 {
 	jq -r '[.file, (.configs | join(",")), .variant] | @tsv' "$tmp/entries.jsonl"
-	echo "$(wc -l <"$tmp/entries.jsonl") (file, configuration) pairs"
+	echo "$(wc -l <"$tmp/entries.jsonl") (file, flag set) pairs"
 } >"$tmp/list.txt"
 
 if [ "$list" = 1 ]; then
@@ -199,7 +205,11 @@ fi
 # base, Bazel serves the compile actions from the cache and never writes a
 # header nobody asked for, so clang-tidy fails with "'luajit.h' file not found".
 # Asking for third_party's genrules by name makes Bazel write their outputs.
-mapfile -t generated < <(bazel_out query 'kind(genrule, //third_party/...)' --output=label)
+generated=()
+generated_labels=$(bazel_out query 'kind(genrule, //third_party/...)' --output=label)
+if [ -n "$generated_labels" ]; then
+	mapfile -t generated <<<"$generated_labels"
+fi
 if [ "${#generated[@]}" -eq 0 ]; then
 	echo "run.sh: no genrule under //third_party/... (luajit.h has none to build); the generated-header list is empty" >&2
 	exit 1

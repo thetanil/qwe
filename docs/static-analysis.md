@@ -34,7 +34,7 @@ non-20 major) exits non-zero without touching Bazel.
 
 `run.sh --evidence-dir DIR` runs the same gate and additionally writes, whether it passes
 or fails: `version.txt` (`clang-tidy --version`), `.clang-tidy` (a copy of the config as
-run), `files.txt` (the exact (file, configuration) list `bazel aquery` resolved, and its
+run), `files.txt` (the exact (file, flag set) list `bazel aquery` resolved, and its
 count: see "Scope"), `sha.txt` (the git commit), `output.txt` (every run's full output,
 not `--quiet`, each behind a `@@RUN` line naming its pair) and `exit_status.txt`. CI uploads
 this as the `clang-tidy-evidence-<sha>` artifact on every run of `static-analysis.yml`.
@@ -81,7 +81,7 @@ A finding is reported once, by `file:line`, with the configurations it appeared
 under (`in: src/kernel/proc.c [coverage] -DQWE_GCOV; ...`), however many pairs
 reported it.
 
-`run.sh --list` prints the (file, configuration) pairs and their count (186 at
+`run.sh --list` prints the (file, flag set) pairs and their count (186 at
 `995b7b3`) without building or running clang-tidy; the gate prints the same
 list before it starts, so CI's log and the evidence bundle's `files.txt` show what
 was covered. Each line is `file`, the configurations that produced that flag set,

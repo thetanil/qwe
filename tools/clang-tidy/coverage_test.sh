@@ -4,7 +4,7 @@
 # The clang-tidy gate lints what `bazel aquery` says was compiled, so a .c file no
 # target builds, or one only a configuration the gate skips builds, is silently never
 # linted. This compares the .c files on disk under src/, tools/ and plugins/
-# (third_party/ is vendored and excluded) with the (file, configuration) list
+# (third_party/ is vendored and excluded) with the (file, flag set) list
 # `tools/clang-tidy/run.sh --list` prints, and fails on any file in neither that
 # list nor the allow-list below. It also pins the three cases ticket
 # sca-round3/05 exists for, so a change to run.sh that stops covering them fails here:
@@ -76,7 +76,7 @@ pairs=$(printf '%s\n' "$listing" | grep -P '^[^\t]+\t[^\t]+\t' || true)
 covered=$(printf '%s\n' "$pairs" | cut -f1 | sort -u)
 disk=$(find src tools plugins -name '*.c' -not -path '*/third_party/*' | sort -u)
 
-check "run.sh --list printed at least one (file, configuration) pair" test -n "$pairs"
+check "run.sh --list printed at least one (file, flag set) pair" test -n "$pairs"
 
 uncovered=$(missing_from "$disk" "$covered")
 if [ -n "$uncovered" ]; then
@@ -87,7 +87,7 @@ else
 fi
 
 count=$(printf '%s\n' "$pairs" | sed '/^$/d' | wc -l)
-check "the list ends with its count ($count)" has_line "$count (file, configuration) pairs" "$listing"
+check "the list ends with its count ($count)" has_line "$count (file, flag set) pairs" "$listing"
 
 trace=$(printf '%s\n' "$pairs" | grep -P '^src/kernel/trace\.c\t' | cut -f3 || true)
 check "trace.c is linted with QWE_NO_STRERRORNAME_NP" has_match 'QWE_NO_STRERRORNAME_NP' "$trace"
