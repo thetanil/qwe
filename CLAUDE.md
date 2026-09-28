@@ -33,6 +33,13 @@ Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/age
 ## Working rules
 
 - **Issues are raw markdown, not the `issues` CLI.** This project overrides the workspace rule: tickets live in `.scratch/<feature>/issues/NN-<slug>.md` and are edited by hand. Closing a ticket means `Status: resolved`, ticked `- [x]` acceptance criteria, and notes appended under `## Comments`.
-- **One commit per closed ticket.** This project overrides the workspace "never commit" rule, for this project only. Once `bazel test //...` is green and the ticket file is updated, commit (ticket update included). Never commit before both are true. **Never push.**
+- **One branch, one commit and one PR per ticket.** This project overrides the workspace "never commit" and "never push" rules, for this project only (the root `CLAUDE.md` says so too). The flow, in order:
+  1. Branch from an up-to-date `main`: `<feature>/<NN>-<slug>`, the ticket's path without `.scratch/` and `issues/` (e.g. `sca-round3/26-codeql`). Never work on `main`.
+  2. Do the ticket. Once `bazel test //...` is green and the ticket file is updated (`Status: resolved`, ticked criteria, notes under `## Comments`), commit both together as one commit. Never commit before both are true.
+  3. Push the branch (never `main`) with the credential-helper form in the root `CLAUDE.md`, as `thetanil` (`GITHUB_PERSONAL_*`). Never put a token in a URL, never `--no-verify`, never force-push.
+  4. Open the PR with `gh pr create`, and put the ticket's path in the description.
+  5. Watch the checks with `gh pr checks --watch`. A red check is fixed on the branch: read the log with `gh run view --log-failed`, fix, and push a new commit. A fix goes on top, so the branch history shows what CI caught. Do not re-run a job to get past a failure you have not understood.
+  6. **Stop at a green PR.** Merging is the user's call. Do not merge, do not enable auto-merge, and do not start a ticket that is blocked by an unmerged one without asking.
+- **The CI checks are the PR gates.** Every check `docs/ci-checks.md` lists under "Pull request gates" must be green before a PR is handed over. `main` should require them (see that doc for the setting); a PR that turns one off, skips it or lowers a floor to pass is not done. Tags, releases and `workflow_dispatch` runs of the slow gates (valgrind, fuzz, release) remain the user's: an agent does not cut a release or push a tag.
 - **e2e tests are named `<case>_test`.** The `e2e_test` macro in `tests/e2e/defs.bzl` adds the suffix, because a test named after its case directory shadows that directory in runfiles. Case layout is documented at the top of `tests/e2e/run_case.sh`.
 - **Stub subcommands** print `qwe <cmd>: not implemented` to stderr and exit 2.

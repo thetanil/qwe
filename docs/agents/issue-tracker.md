@@ -19,7 +19,11 @@ A feature is closed when every ticket under `.scratch/<feature-slug>/issues/` ha
 2. **Repoint live references.** `grep -rn ".scratch/<feature-slug>"` outside `.scratch/`: a comment in code or a doc that names a ticket must name the archived path (`.scratch/archive/<feature-slug>/...`) after the move.
 3. **Move it.** `git mv .scratch/<feature-slug> .scratch/archive/<feature-slug>`, keeping the layout. Do not edit the tickets afterwards; a wrong or unfinished one gets a new ticket in a live feature.
 4. **Record it.** Add a row to the table in `.scratch/archive/README.md` (feature, date closed, what it built, ticket and criterion counts) and one paragraph on what was promoted and where.
-5. One commit for the move, so the history shows the feature closing as one step.
+5. One commit for the move, on its own branch (`<feature-slug>/archive`) and PR, so the history shows the feature closing as one step. Same flow as a ticket (below).
+
+## Working a ticket
+
+Each ticket is one branch, one commit and one pull request; `CLAUDE.md` ("Working rules") has the steps. In short: branch `<feature>/<NN>-<slug>` from `main`, do the ticket, commit the code and the ticket update together once `bazel test //...` is green, push the branch, open the PR, and fix what `gh pr checks` reports until the gates in `docs/ci-checks.md` ("Pull request gates") are green. The ticket is `Status: resolved` on the branch; the user merges. Nothing is pushed to `main`, and tags and releases stay with the user.
 
 ## Acceptance criteria
 

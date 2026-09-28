@@ -128,9 +128,11 @@ there.
 - Each ticket ends with `tools/clang-tidy/run.sh` at exit 0, `bazel test //...`
   green, and `bazel run //tools/coverage:check` green (85% per file).
   A new error branch gets a test that reaches it.
-- One commit per closed ticket, never push (`CLAUDE.md`, project rules).
-  Tickets 04 and 26 need a CI run to finish: the agent does everything up to
-  the push, then sets `Status: ready-for-human` with the remaining steps.
+- One branch, one commit and one PR per closed ticket, never push to `main`
+  (`CLAUDE.md`, project rules). Ticket 26 needs a CI run on GitHub to finish: the
+  agent pushes its branch, opens the PR and reads the run itself; only a step
+  that needs a release, a tag or a repo setting is left as `Status: ready-for-human`
+  with the remaining steps. (Ticket 04 was closed under the earlier never-push rule.)
 - Silencing a check without a marker is worse than a `NOLINT`: do not rewrite
   code into a form the check happens not to model (walking `environ` instead of
   `getenv`, a cast chain that hides a conversion) to make a finding go away. The

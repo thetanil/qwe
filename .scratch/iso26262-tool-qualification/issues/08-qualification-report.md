@@ -30,8 +30,8 @@ A release whose report has a failed or missing requirement does not publish.
 
 ## Acceptance criteria
 
-- [ ] A release run attaches the report. `human: needs a push and a release, which
-      agents never do; the agent stops with the workflow ready and sets
+- [ ] A release run attaches the report. `human: needs a release, which agents do
+      not cut; the agent stops with the workflow ready and sets
       ready-for-human`
 - [ ] The report generator runs locally on a built tree and produces every
       section. `unit: tools/ci/qualification_report_test.sh`

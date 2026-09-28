@@ -54,8 +54,9 @@ gate. Nothing in either feature blocks the other.
 
 ## Constraints
 
-- The same repo rules as every feature (`CLAUDE.md`): no Python, one commit per
-  closed ticket, never push. Ticket 08's release run is a human step.
+- The same repo rules as every feature (`CLAUDE.md`): no Python, one branch, one
+  commit and one PR per closed ticket, never push to `main`. Ticket 08's release
+  run is a human step (agents do not cut releases or push tags).
 - The verifying check shares nothing with apply except the target.
 - A check that cannot give a verdict is a **failure**, never a pass.
 - A requirement that cannot name a test is rewritten until it can.
