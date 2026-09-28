@@ -81,7 +81,17 @@ fi
 
 # Materialize every generated header (LuaJIT's buildvm output, the embedded Lua
 # bytecode) that the compile actions below expect to find under bazel-out.
-bazel build //src/... //tools/... >&2
+# //src/... and //tools/... name the genrules in src/, but not the ones in
+# third_party/ (luajit.h): with a warm disk cache (CI's) and a fresh output
+# base, Bazel serves the compile actions from the cache and never writes a
+# header nobody asked for, so clang-tidy fails with "'luajit.h' file not found".
+# Asking for third_party's genrules by name makes Bazel write their outputs.
+mapfile -t generated < <(bazel query 'kind(genrule, //third_party/...)' --output=label 2>/dev/null)
+if [ "${#generated[@]}" -eq 0 ]; then
+	echo "run.sh: no genrule under //third_party/... (luajit.h has none to build); the generated-header list is empty" >&2
+	exit 1
+fi
+bazel build //src/... //tools/... "${generated[@]}" >&2
 
 query='mnemonic("CppCompile", //src/... + //tools/...)'
 aquery_json=$(bazel aquery --output=jsonproto "$query" 2>/dev/null)
