@@ -107,10 +107,14 @@ whose arguments contain `-c <file>`, and keeps only the flags `clang-tidy`'s
 parser needs (`-iquote`/`-isystem`/`-D`/`-std`). Everything else Bazel's
 GCC toolchain passes (`-Wall`, `-frandom-seed`, `-MD`/`-MF`, `-fno-canonical-system-headers`,
 ...) is GCC-specific plumbing that means nothing to clang and can trip its
-driver on a flag it does not recognise. `run.sh` runs `bazel build //src/...
-//tools/...` first so every generated header the compile actions expect
-(LuaJIT's buildvm output, `src/kernel/lua/embedded.h`) exists on disk under
-`bazel-out` before `clang-tidy` reads it.
+driver on a flag it does not recognise. `run.sh` runs `bazel build //src/... //tools/...` first, plus every `genrule` under
+`//third_party/...` (found with `bazel query`), so every generated header the compile
+actions expect (LuaJIT's `luajit.h` and buildvm output, `src/kernel/lua/embedded.h`) exists
+on disk under `bazel-out` before `clang-tidy` reads it. The `third_party` genrules have to be
+named: `//src/...` does not reach them, and a warm disk cache with a fresh output base (a
+pull request's CI run) serves the compile actions from the cache without ever writing a
+header nobody asked for. `run.sh` fails if the query finds no genrule, so the list cannot
+silently go empty.
 
 ## The ruleset, and every exclusion
 
