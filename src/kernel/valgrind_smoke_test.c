@@ -18,6 +18,11 @@ static int fault(int n)
 
 	if (!p)
 		return 0;
+	/* The fault this test exists to commit, so the analyzer is right to report it and
+	 * nothing about the read can be fixed: hiding the block from the analyzer (a
+	 * volatile pointer, an indirect call) does not work, it traces the value back to
+	 * malloc. valgrind is what has to catch it, at run time. */
+	// NOLINTNEXTLINE(clang-analyzer-core.UndefinedBinaryOperatorResult)
 	r = *p + n > 0; /* uninitialised read decides a branch */
 	free(p);
 	if (r)

@@ -1,6 +1,6 @@
 # 05: Lint every compile configuration, and the fuzz harness
 
-Status: ready-for-agent
+Status: resolved
 Category: bug
 Type: task
 
@@ -56,22 +56,67 @@ built with unusual flags.
 
 ## Acceptance criteria
 
-- [ ] `trace.c` is linted with and without `QWE_NO_STRERRORNAME_NP`.
+- [x] `trace.c` is linted with and without `QWE_NO_STRERRORNAME_NP`.
       `manual: run.sh's coverage list names both`
-- [ ] The two fuzz binaries' sources are linted. `manual: coverage list`
-- [ ] `gcov.h`'s `QWE_GCOV` branch is linted (the coverage configuration is in
+- [x] The two fuzz binaries' sources are linted. `manual: coverage list`
+- [x] `gcov.h`'s `QWE_GCOV` branch is linted (the coverage configuration is in
       the list), and so is every other configuration that adds a `-D` or a
       `select()` branch. `manual: coverage list; a throwaway atoi inside
       #ifdef QWE_GCOV fails the gate`
-- [ ] A throwaway `atoi` in `trace.c`'s `#else` (production) branch fails the
+- [x] A throwaway `atoi` in `trace.c`'s `#else` (production) branch fails the
       gate; so does one in its fallback branch. `manual: add each, see exit
       non-zero, revert`
-- [ ] Every `.c` under `src/`, `tools/` and `plugins/` is covered, checked by a
+- [x] Every `.c` under `src/`, `tools/` and `plugins/` is covered, checked by a
       test. `unit: tools/clang-tidy/coverage_test.sh`
-- [ ] Any finding the newly covered code produces is fixed in code (Comments list
+- [x] Any finding the newly covered code produces is fixed in code (Comments list
       them). `manual: gate at exit 0`
-- [ ] `docs/static-analysis.md`'s "Scope" no longer says a manual target "is
+- [x] `docs/static-analysis.md`'s "Scope" no longer says a manual target "is
       never linted" or that a file is "checked once".
-- [ ] `bazel test //...` is green.
+- [x] `bazel test //...` is green.
 
 ## Comments
+
+Resolved. What was measured and done:
+
+- **Pairs.** `run.sh` now lints every distinct (file, flag set), 186 at `995b7b3`
+  (`run.sh --list` prints them and the count; the gate prints the same list, and the
+  evidence bundle's `files.txt` holds it). It enumerates `default`, `coverage` (read
+  from `.bazelrc`'s `coverage` lines), `fuzz`, `valgrind`, `ubsan` and `asan`. Two
+  compiles that differ only in the `bazel-out/<configuration>/` directory name are one
+  pair; the exec-configuration compiles of `alloc.c`, `errstr.c` and `bcembed.c` are
+  not, they carry `-D_FORTIFY_SOURCE=1 -DNDEBUG`.
+- **Configurations that add nothing new.** `fuzz` adds no pair the default does not
+  have, and `release` adds only `-g`. `release` is dropped; `fuzz` is kept and
+  enumerated, so a future `select()` on `qwe_fuzz` is linted (the aquery costs well
+  under a second). `valgrind` adds `valgrind_smoke_test.c`; `ubsan` and `asan` each
+  add one `-DQWE_SMOKE_*` build of `sanitizer_smoke_test.c`; `coverage` adds
+  `-DQWE_GCOV` to 90 compiles.
+- **Manual targets added:** `//src/edge/yaml:chain_fuzz`, `//src/edge/yaml:transcode_fuzz`
+  (printed by `run.sh`). `fuzz_harness.c`, `chain_fuzz.c` and `transcode_fuzz.c` are linted.
+- **Findings the new coverage produced (3), all handled:**
+  - `__gcov_dump`, `__gcov_reset` in `gcov.h` (`bugprone-reserved-identifier`,
+    `cert-dcl37-c`, coverage only): added as exact names to both `AllowedIdentifiers`,
+    as the ticket says; ticket 15 moves them.
+  - `valgrind_smoke_test.c:21`, `clang-analyzer-core.UndefinedBinaryOperatorResult`
+    (valgrind only): the deliberate uninitialised read the test exists to commit.
+    A `volatile` pointer and an indirect `malloc` were both tried and do not hide it
+    (the analyzer traces the value to `malloc`), so it is one `NOLINTNEXTLINE` with the
+    reason. This is the one finding not "fixed in code" in the sense of a change to the
+    flagged logic: it cannot be, the fault is the point. The test still passes under
+    `--config=valgrind`.
+- **Mutation checks** (each applied, gate run, reverted): a throwaway `atoi` fails the
+  gate (exit 1, `cert-err34-c`) in `trace.c`'s production `#else` branch, reported under
+  the default pair and the `coverage` one; in its fallback table, reported under
+  `-DQWE_NO_STRERRORNAME_NP`; and in `gcov.h` under `#ifdef QWE_GCOV`, reported under
+  `coverage` for eight files.
+- **Findings are reported once** by `file:line:col` and check, with the configurations
+  they appeared under (`in: ...`), however many pairs reported them.
+- **Test:** `tools/clang-tidy/coverage_test.sh` compares the 90 `.c` files under `src/`,
+  `tools/` and `plugins/` with the list (allow-list empty), and pins `trace.c`'s two
+  variants, the fuzz sources and `-DQWE_GCOV`. It is not a Bazel test (it needs
+  `bazel aquery`, which cannot run in a sandbox); `static-analysis.yml` runs it before the gate.
+- **Cost:** the gate went from about a minute to about two (93 to 186 runs).
+- **Docs:** "Scope" rewritten, no longer says a manual target "is never linted" or that a
+  file is "checked once"; the evidence, reserved-identifier, timing and `ci-checks.md`
+  rows updated.
+- `gate at exit 0` and `bazel test //...` (263 passed, 3 skipped) both hold.
