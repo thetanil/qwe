@@ -24,10 +24,11 @@ HeaderFilterRegex: '.*'
 ExcludeHeaderFilterRegex: '(^|/)(third_party|bazel-out|external)/'
 FormatStyle: none
 # The reserved names the code has to use (docs/static-analysis.md): the feature
-# test macros, the -Wl,--wrap= pairs of the OOM harness, and one linker symbol.
+# test macros, the -Wl,--wrap= pairs of the OOM harness, one linker symbol, and the two
+# libgcov entry points src/kernel/gcov.h declares (coverage builds only).
 # Anything else in the reserved namespace is still a finding. The regexes are
 # not anchored by the check, so they are anchored here.
 CheckOptions:
-  bugprone-reserved-identifier.AllowedIdentifiers: '^_POSIX_C_SOURCE$;^_GNU_SOURCE$;^__wrap_.*$;^__real_.*$;^__executable_start$'
-  cert-dcl37-c.AllowedIdentifiers: '^_POSIX_C_SOURCE$;^_GNU_SOURCE$;^__wrap_.*$;^__real_.*$;^__executable_start$'
+  bugprone-reserved-identifier.AllowedIdentifiers: '^_POSIX_C_SOURCE$;^_GNU_SOURCE$;^__wrap_.*$;^__real_.*$;^__executable_start$;^__gcov_dump$;^__gcov_reset$'
+  cert-dcl37-c.AllowedIdentifiers: '^_POSIX_C_SOURCE$;^_GNU_SOURCE$;^__wrap_.*$;^__real_.*$;^__executable_start$;^__gcov_dump$;^__gcov_reset$'
   concurrency-mt-unsafe.FunctionSet: glibc

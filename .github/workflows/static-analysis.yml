@@ -3,7 +3,7 @@ name: static-analysis
 # Pinned to the exact clang-tidy tools/clang-tidy/pin.env names, installed by
 # .github/actions/clang-tidy-pin (run.sh itself only enforces the major version, so a
 # devcontainer's apt-installed clang-tidy-20 still works). Runs on every push and pull
-# request, like tests.yml: the gate takes about a minute (docs/ci-checks.md), so a finding
+# request, like tests.yml: the gate takes about two minutes (docs/ci-checks.md), so a finding
 # is checked before a change lands rather than waiting for the next nightly run.
 # nightly.yml and release.yml call it too (workflow_call), same as the other gates; it used
 # to be a third job inside valgrind.yml, sharing valgrind's on-demand-only cadence, which is
@@ -28,6 +28,10 @@ jobs:
         with:
           cache-key: static-analysis
       - uses: ./.github/actions/clang-tidy-pin
+      # Every .c under src/, tools/ and plugins/ is in the list run.sh lints (aquery only, a
+      # few seconds, so it fails before the gate's two minutes do).
+      - name: tools/clang-tidy/coverage_test.sh
+        run: tools/clang-tidy/coverage_test.sh
       - name: tools/clang-tidy/run.sh
         run: tools/clang-tidy/run.sh --evidence-dir "$RUNNER_TEMP/clang-tidy-evidence"
       # Evidence for a qualification assessor (docs/static-analysis.md): the pinned

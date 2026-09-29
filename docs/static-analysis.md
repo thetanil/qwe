@@ -12,7 +12,8 @@ valgrind: they need a run that exercises the bad path; this reads every path,
 without running anything, at the cost of false positives a runtime check never has.
 It runs in its own `static-analysis.yml`, on every push to main, every pull request,
 nightly, release and by hand (see `docs/ci-checks.md`): unlike valgrind, the gate is
-about a minute, so it gates a pull request rather than waiting for the next nightly run.
+about two minutes (one clang-tidy run per (file, flag set) pair, 186 of them, see "Scope"),
+so it gates a pull request rather than waiting for the next nightly run.
 
 ## The pinned version
 
@@ -33,8 +34,9 @@ non-20 major) exits non-zero without touching Bazel.
 
 `run.sh --evidence-dir DIR` runs the same gate and additionally writes, whether it passes
 or fails: `version.txt` (`clang-tidy --version`), `.clang-tidy` (a copy of the config as
-run), `files.txt` (the exact file list `bazel aquery` resolved), `sha.txt` (the git commit),
-`output.txt` (every file's full output, not `--quiet`) and `exit_status.txt`. CI uploads
+run), `files.txt` (the exact (file, flag set) list `bazel aquery` resolved, and its
+count: see "Scope"), `sha.txt` (the git commit), `output.txt` (every run's full output,
+not `--quiet`, each behind a `@@RUN` line naming its pair) and `exit_status.txt`. CI uploads
 this as the `clang-tidy-evidence-<sha>` artifact on every run of `static-analysis.yml`.
 GitHub keeps a workflow artifact for at most 90 days (up to 400 on a private repo), so
 `release.yml` also downloads it and attaches it to the GitHub release as
@@ -46,10 +48,50 @@ beyond that).
 
 `src/`, `plugins/` (empty of C so far) and `tools/` in full, same as the
 sanitizers (`docs/sanitizers.md`) — `third_party/` is vendored and excluded.
-`tools/clang-tidy/run.sh` derives the exact file list from `bazel aquery`
-(`mnemonic("CppCompile", //src/... + //tools/...)`), so a `manual`-tagged
-target (the libFuzzer binaries) is never linted: Bazel's own wildcard
-expansion skips it, the same rule that keeps it out of `bazel build //...`.
+`tools/clang-tidy/run.sh` lints every distinct **(file, flag set)** pair, not every
+file, because the code a gate skips is the code built with unusual flags. It
+derives the pairs from `bazel aquery` (`mnemonic("CppCompile", ...)`), in three
+ways wider than `//src/... + //tools/...` in the default configuration:
+
+- **A file Bazel compiles more than once is linted once per flag set.** `trace.c`
+  is built with and without `-DQWE_NO_STRERRORNAME_NP` (`errno_name_test`'s
+  variant, which compiles the fallback table); `alloc.c`, `errstr.c` and
+  `bcembed.c` are also built in the exec configuration with `-DNDEBUG`, which
+  removes their `assert`s. Two compiles that differ only in the name of the
+  `bazel-out/<configuration>/` directory are one pair.
+- **`manual`-tagged cc targets are added by name.** Bazel's wildcard expansion
+  skips them, the rule that keeps them out of `bazel build //...`, so `run.sh`
+  finds them with `bazel query 'attr(tags, manual, kind("cc_.* rule", ...))'`
+  and says which it added (today `//src/edge/yaml:chain_fuzz` and
+  `//src/edge/yaml:transcode_fuzz`, whose sources `fuzz_harness.c`,
+  `chain_fuzz.c` and `transcode_fuzz.c` are linted).
+- **Every `.bazelrc` configuration that changes what the preprocessor sees is
+  enumerated**, one `bazel aquery` each, and the pairs unioned: `coverage`
+  (`-DQWE_GCOV`, the `src/kernel/gcov.h` branch nothing else compiles, read from
+  `.bazelrc`'s `coverage` lines rather than repeated in `run.sh`), `valgrind`
+  (`--define=qwe_valgrind=1`, which adds `valgrind_smoke_test.c`), `ubsan` and
+  `asan` (each adds one `-DQWE_SMOKE_*` build of `sanitizer_smoke_test.c`) and
+  `fuzz` (`--define=qwe_fuzz=1`). Measured at `995b7b3`, `fuzz` adds no pair the
+  default configuration does not have, and is still enumerated, so a `select()`
+  or `#ifdef` that starts to key on it is linted from that commit. `release` is
+  the one configuration left out: it only adds `-g`, which is not among the
+  flags `run.sh` keeps.
+
+A finding is reported once, by `file:line`, with the configurations it appeared
+under (`in: src/kernel/proc.c [coverage] -DQWE_GCOV; ...`), however many pairs
+reported it.
+
+`run.sh --list` prints the (file, flag set) pairs and their count (186 at
+`995b7b3`) without building or running clang-tidy; the gate prints the same
+list before it starts, so CI's log and the evidence bundle's `files.txt` show what
+was covered. Each line is `file`, the configurations that produced that flag set,
+and the variant, the `-D`/`-std` flags that tell it from the file's other pairs.
+`tools/clang-tidy/coverage_test.sh` compares the `.c` files on disk under `src/`,
+`tools/` and `plugins/` with that list and fails on any file in neither it nor
+an allow-list, which is empty. It also fails if `trace.c` loses either variant,
+if a fuzz harness source drops out, or if `-DQWE_GCOV` stops being linted. It is not
+a Bazel test (it needs `bazel aquery`, which cannot run in a sandbox); CI runs it
+in `static-analysis.yml`.
 
 ## Headers
 
@@ -102,8 +144,9 @@ list, and `concurrency-mt-unsafe`'s `FunctionSet`, which `--raw` widens to `any`
 Every other way to feed Bazel-built flags to `clang-tidy` goes through a tool
 that shells out to Python (`hedron_compile_commands`'s `refresh_compile_commands`
 is a `py_binary`) — this repo runs none (`CLAUDE.md`). Instead, `run.sh` reads
-`bazel aquery`'s JSON directly: it finds, per file, the `CppCompile` action
-whose arguments contain `-c <file>`, and keeps only the flags `clang-tidy`'s
+`bazel aquery`'s JSON directly: it finds each `CppCompile` action
+whose arguments contain `-c <file>` (all of them, not the first per file: see
+"Scope"), and keeps only the flags `clang-tidy`'s
 parser needs (`-iquote`/`-isystem`/`-D`/`-std`). Everything else Bazel's
 GCC toolchain passes (`-Wall`, `-frandom-seed`, `-MD`/`-MF`, `-fno-canonical-system-headers`,
 ...) is GCC-specific plumbing that means nothing to clang and can trip its
@@ -129,7 +172,7 @@ specific, checked reason:
 | Check(s) | Why excluded |
 |---|---|
 | `cert-dcl51-cpp` | A C++ rule (reserved names in a C++ translation unit). It never fires on C, so excluding it hides nothing. |
-| `bugprone-reserved-identifier`, `cert-dcl37-c` (narrowed, not excluded) | `AllowedIdentifiers` lets through the five reserved names this code has to use, anchored: `_POSIX_C_SOURCE` and `_GNU_SOURCE` (the feature-test macros, required before the first include), `__wrap_*` and `__real_*` (what the `-Wl,--wrap=` OOM-test harness links against, `docs/ci-checks.md`'s "Allocation checks"), and `__executable_start` (a linker-defined symbol `oom_shim.c` reads to print call-site offsets). Any other reserved name (a `_Foo` type, a `__helper`) is a finding. |
+| `bugprone-reserved-identifier`, `cert-dcl37-c` (narrowed, not excluded) | `AllowedIdentifiers` lets through the seven reserved names this code has to use, anchored: `_POSIX_C_SOURCE` and `_GNU_SOURCE` (the feature-test macros, required before the first include), `__wrap_*` and `__real_*` (what the `-Wl,--wrap=` OOM-test harness links against, `docs/ci-checks.md`'s "Allocation checks"), `__executable_start` (a linker-defined symbol `oom_shim.c` reads to print call-site offsets), and `__gcov_dump` and `__gcov_reset` (libgcov's entry points, declared in `src/kernel/gcov.h` for the `coverage` configuration, the only one that compiles them). Any other reserved name (a `_Foo` type, a `__helper`) is a finding. |
 | `bugprone-multi-level-implicit-pointer-conversion` | All 50 findings (measured at `407f76a`) are a `void *` converted to or from a `T **` by an allocator, `free` or `qsort`, the C idiom of not casting them: 35 are `T **` to `void *` (`free` 27, `qsort` 3, the argument of `realloc` 5), 13 are `void *` to `T **` (the result of `realloc` 5, `calloc` 5, `qwe_xcalloc` 2, `malloc` 1), and 2 more are `qsort` comparators turning `const void *` into `const char *const *`. The check has no options, so the only way to quiet it is a cast at each of the 50. |
 | `concurrency-mt-unsafe` (narrowed, not excluded) | `FunctionSet: glibc`: only what glibc documents as thread-unsafe, not the POSIX list (79 findings under the default `any`, 49 under `glibc`; `getenv` and `readdir` are glibc-safe as long as nothing calls `setenv`, and `setenv` is confined to tests below). The 49 were fixed, not waved through: `strerror` (18 in `src/` and `tools/`, 2 in tests) is `qwe_strerror` (`src/kernel/errstr.h`, `strerror_r` into a thread-local buffer), `sigprocmask` (4 and 8) is `pthread_sigmask`, `sleep` (1) is `nanosleep`, and the 14 `setenv`/`unsetenv` in tests go through `src/testing/env.h`. Two `NOLINTNEXTLINE(concurrency-mt-unsafe)` remain, both on the same premise: `qwe_test_setenv`/`qwe_test_unsetenv` there, and the `exit` in `luavm.c`'s Lua panic handler. The premise, that qwe has no threads (`docs/adr/0001-fork-per-plugin-step.md`), is tested: `//src/cli:no_threads_test` fails if the `qwe-debug` binary links `pthread_create` or `thrd_create`, the only way glibc starts a thread, and shows the check can tell by running it on a probe binary that does. |
 | `bugprone-easily-swappable-parameters` | 30 findings (21 in `src/` and `tools/`, 9 in tests). No option set leaves only the real hazards. `ModelImplicitConversions: false` drops 6 (`int`/`long`/enum mixes), the 3 `qsort` comparators (`a`, `b`) stay because their signature is fixed by `qsort`, `MinimumLength: 3` drops all of them (none has a run of three), and what is left is 8 test helpers (`write_file(name, body)` four times, `has_file`, `run`, two out-parameter pairs: a swapped call fails the test at once) and 13 findings in 12 functions in `src/` and `tools/`, most with one or two call sites in the same or a neighbouring file (e.g. `send_result(L, idx, fd)`, `qwe_summary_write(path, run_dir, workflow_file, ...)`, `ssh_call(job, fn, a, b, ...)`). Fixing those would mean wrapping arguments in structs, which is a refactor, not a fix of a defect. |
@@ -216,6 +259,30 @@ suppressed to get a green run:
   passed a possibly-null `ptr` when `n == 0` (the array is never allocated for
   an empty list) — a base pointer that must not be null even when the
   standard permits `nmemb == 0`. Found by `clang-analyzer-core.NonNullParamChecker`.
+
+## What linting every configuration found
+
+`.scratch/sca-round3` ticket 05 widened the gate from the first compile action of
+each file in the default configuration to every distinct (file, flag set) pair
+(see "Scope"). The code it newly reached produced three findings, and no others:
+
+- **`__gcov_dump` and `__gcov_reset`** in `src/kernel/gcov.h`, reported by
+  `bugprone-reserved-identifier` and `cert-dcl37-c` under `coverage`
+  (`-DQWE_GCOV`), the only configuration that compiles that branch. The names are
+  libgcov's and cannot change, so they are allowed as exact names in
+  `AllowedIdentifiers` (ticket 15 moves them into a directory-scoped config).
+- **`valgrind_smoke_test.c`'s deliberate uninitialised read**, reported by
+  `clang-analyzer-core.UndefinedBinaryOperatorResult` under `valgrind`, the only
+  configuration that builds the file. It is a true positive on purpose: the test
+  commits the fault so valgrind has something to catch. Hiding it (a `volatile`
+  pointer, an indirect `malloc`) does not work, the analyzer traces the value back
+  to `malloc`, so it carries one `NOLINTNEXTLINE` with that reason.
+
+A throwaway `atoi` (`cert-err34-c`) proves each newly covered branch is live: in
+`trace.c`'s production `#else` branch, in its fallback table, and in `gcov.h`
+under `#ifdef QWE_GCOV`, each fails the gate and each is reported under the pair
+that compiles it, `(default)`, `(default) -DQWE_NO_STRERRORNAME_NP ...` and
+`(coverage) -DQWE_GCOV`.
 
 ## What re-enabling excluded checks found
 
