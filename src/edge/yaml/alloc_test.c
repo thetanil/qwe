@@ -11,6 +11,9 @@
 void *__real_malloc(size_t n);
 void *__real_realloc(void *p, size_t n);
 void *__real_calloc(size_t a, size_t b);
+void *__wrap_malloc(size_t n);
+void *__wrap_realloc(void *p, size_t n);
+void *__wrap_calloc(size_t a, size_t b);
 
 static int armed;
 static long calls;   /* allocations seen while armed */

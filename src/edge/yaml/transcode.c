@@ -1,4 +1,5 @@
 #include "src/edge/yaml/transcode.h"
+#include "src/edge/yaml/transcode_hooks.h"
 #include "src/kernel/fmt.h"
 
 #include "cbor.h"

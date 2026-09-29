@@ -18,6 +18,11 @@ void *__real_calloc(size_t a, size_t b);
 void *__real_realloc(void *p, size_t n);
 char *__real_strdup(const char *s);
 char *__real_strndup(const char *s, size_t n);
+void *__wrap_malloc(size_t n);
+void *__wrap_calloc(size_t a, size_t b);
+void *__wrap_realloc(void *p, size_t n);
+char *__wrap_strdup(const char *s);
+char *__wrap_strndup(const char *s, size_t n);
 
 /* The allocation numbered fail_at (1-based) returns NULL; 0 = never. */
 static int fail_at, calls, fired;

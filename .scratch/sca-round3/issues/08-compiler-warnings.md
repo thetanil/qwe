@@ -1,6 +1,6 @@
 # 08: Compiler warnings the toolchain leaves off
 
-Status: ready-for-agent
+Status: resolved
 Category: enhancement
 Type: task
 
@@ -67,25 +67,130 @@ a warnings-only build).
 
 ## Acceptance criteria
 
-- [ ] `.bazelrc` builds `src/`, `tools/` with all the flags above (except
+- [x] `.bazelrc` builds `src/`, `tools/` with all the flags above (except
       `-Wswitch-enum`, ticket 09), `-Werror`, and appends `-Wfree-nonheap-object`.
       `manual: .bazelrc; bazel build //...`
-- [ ] Zero warnings under those flags for `src/` and `tools/` and tests, with no
+- [x] Zero warnings under those flags for `src/` and `tools/` and tests, with no
       `#pragma GCC diagnostic` and no per-file `-Wno-`. `manual: bazel build
       --keep_going --copt=-Wno-error //...` prints none
-- [ ] The same flags reach the exec configuration. `manual: bazel aquery` on
+- [x] The same flags reach the exec configuration. `manual: bazel aquery` on
       `//tools:bcembed` shows them on the exec action
-- [ ] Zero warnings under those flags at `-O2` too, and a CI job builds that way.
+- [x] Zero warnings under those flags at `-O2` too, and a CI job builds that way.
       `manual: bazel build --keep_going --copt=-Wno-error --copt=-O2 //src/... //tools/...`
       prints none; the workflow is named in the Comments
-- [ ] `third_party/` keeps its own flags (`-w` in its BUILD `copts`, and the
+- [x] `third_party/` keeps its own flags (`-w` in its BUILD `copts`, and the
       `per_file_copt` rules in `.bazelrc`, as today) and is not changed.
       `manual: git diff --stat third_party` empty
-- [ ] Each fix that changes behaviour (the `(long)lua_tonumber` conversions,
+- [x] Each fix that changes behaviour (the `(long)lua_tonumber` conversions,
       `luacbor.c:337`) has a test at the boundary values. `unit: <tests>`
-- [ ] Any finding the analyzer of ticket 06 or 07 also reports is cross-referenced
+- [x] Any finding the analyzer of ticket 06 or 07 also reports is cross-referenced
       in the Comments.
-- [ ] `bazel test //...` (also `--config=asan`, `--config=ubsan`) and the coverage
+- [x] `bazel test //...` (also `--config=asan`, `--config=ubsan`) and the coverage
       check are green.
 
 ## Comments
+
+Worked on `sca-round3/08-compiler-warnings`, from `origin/main` at `47edde6`, gcc
+`13.3.0-6ubuntu2~24.04.1`, clang 20.1.8 for the fuzz build.
+
+### Measured again
+
+Bazel prints a warning only when it runs the action, so each measurement changed every
+command line with a unique `--copt=-DQWE_WARN_PROBE_<n>` (a cached action replays nothing,
+and a warm build looks clean). With the flags on `--copt` over `//...`, the ticket's table
+reproduced for our code, plus two:
+
+- `-Wshadow` 1, not 0: `luacbor.c:396`, `int r, idx;` inside `qwe_lua_to_cbor` shadows its
+  `idx` parameter (added since `bb9d69f`). Renamed `own`.
+- `-O2`, `//src/... //tools/...`: one more, `-Wformat-truncation=` in `fmt_test.c`'s
+  `msg_cuts` (`qwe_msg` into `char[4]` of `"error %d"`, inlined and proven cut). The cut is
+  what that test checks: the text is now a `const char *volatile`, printed with `%s`, so the
+  compiler cannot prove it.
+
+`third_party/` warned on almost every flag (libyaml, tinycbor): that is why the set is not a
+`--copt` (below).
+
+### Where the flags go
+
+- `.bazelrc`: `--per_file_copt=.*,-third_party/.*@<the set>` beside the unchanged `-Wall
+  -Wextra -Werror` line, and `--host_per_file_copt` with the same set plus
+  `--host_copt=-Wall/-Wextra/-Werror` for the exec configuration. Not the same `--copt` line
+  as the ticket put it: that line reaches `third_party/`, and criterion 5 keeps third_party's
+  flags as they are. The per-file form is the one `.bazelrc` already uses to scope
+  (`build:ubsan`). **Trap:** Bazel matches the regex against the whole path, so
+  `-^third_party/` (my first try) excluded nothing; `-third_party/.*` does.
+- `-Wfree-nonheap-object` lands after the toolchain's `-Wno-free-nonheap-object` (aquery of
+  `//src/kernel:errstr`: the toolchain's `-Wno-` early in the command line, ours near the
+  end), so it is on.
+- Exec: `bazel aquery 'mnemonic("CppCompile", //tools:bcembed)'` shows `-Werror`, `-Wextra`,
+  `-Wwrite-strings`, `-Wfree-nonheap-object` on both `k8-opt-exec` actions. The exec build
+  is at `-O2`, so `bcembed.c`, `alloc.c`, `errstr.c` and `put.c` get the `-O2` check there too.
+- `build:fuzz` adds `--copt=-Wno-unknown-warning-option` (and `--host_copt`): the set is
+  gcc's, and clang errors on six names it lacks under `-Werror`. It is a flag about flag
+  names, not a finding silenced. clang then checks the rest and found two gcc does not:
+  `fmt.h:28` `-Wformat-nonliteral` (`qwe_vfmt` had no `format(printf, 3, 0)`: added) and
+  `luacbor.c:172` `-Wdouble-promotion` (a `float` to `lua_pushnumber`: now an explicit
+  `(lua_Number)f`).
+- `build:warnings-o2 --copt=-O2`, and a `compiler-warnings` job in `static-analysis.yml`
+  running `bazel build --config=warnings-o2 //src/... //tools/...` (the workflow runs on
+  push, pull request, nightly and release). It is in `docs/ci-checks.md`'s table, "Every
+  push" and the pull request gates (eight names now; ticket 07's PR also counts eight with
+  `gcc-analyzer`, so whichever merges second makes it nine). `docs/compiler-warnings.md` is
+  new; `docs/static-analysis.md` and `run.sh` say `warnings-o2` is left out of clang-tidy's
+  configurations for the same reason as `release`.
+
+### The fixes
+
+| Finding | Change |
+|---|---|
+| `-Wwrite-strings`, CLI tests (73) | The commands only read `argv`: `qwe_cmd_fn`, `qwe_dispatch` and the five `qwe_cmd_*` take `const char *const *argv`; `main` makes the one cast (adding `const` at both levels, which C does not do implicitly and `-Wcast-qual` allows). Tests declare `const char *argv[]`. |
+| `-Wwrite-strings`, `proc_test.c` (5) | `qwe_child_fn` returns what `execvp` takes (`char **`), so the tests' argv are `static char` arrays. |
+| `-Wcast-qual` `jobs.c` (3) | `qwe_step_result`'s `id`, `name`, `plugin` are `char *`, like `outputs_json` beside them: the result owns them (`qwe_jobs_free` frees them). `result_test`/`summary_test` use `char` arrays. |
+| `-Wcast-qual` `validate.c` (2) | `check_dag` keeps the owning `char **` lists in `needs_of[]` and gives the dag a `const char *const *` view. One more checked `calloc`: `alloc_audit.txt` 13 → 14. |
+| `-Wcast-qual` `positions.c` | `bsearch` with the pointer string as the key (`cmp_key`), no probe entry. |
+| `-Wcast-qual` tests | `validate/oom_test.c`: scenarios not `const` (the probe takes `void *`). `transcode_test.c`: the value is `const yaml_char_t[]`. |
+| `-Wsign-conversion` `sched.c`, `workflow.c` (×2), `sched_test.c` | `running += is_running(...)` (int into `size_t`) is `if (...) running++`. `proc_test.c`: `room` is `rlim_t`. |
+| `-Wmissing-prototypes` | `oom_shim.h` declares the five `__wrap_*` (ticket 15 may move them); the six tests with their own wrappers declare them beside their `__real_*`; `transcode.c` includes `transcode_hooks.h`. |
+| `-Wbad-function-cast` `workflow.c` ×2 | `qwe_count_from_number` (`jobs.c`): below 1 and NaN → 0, from 2^63 up → `LONG_MAX`, else `(long)v`. `(long)1e300` was undefined; on x86 it gave `LONG_MIN`, which both callers read as "no limit" by accident. |
+| `-Wfloat-equal` `luacbor.c` | `is_exact_integer(d)`: the range test (±2^53) first, which also rejects NaN and ±inf, then `fpclassify(modf(d, &whole)) == FP_ZERO`. The old `d == (double)(long long)d` converted before checking the range, undefined for NaN, ±inf and \|d\| ≥ 2^63. |
+| `-Wswitch-default` `workflow.c` `apply_action` | Every action is listed; the `default` prints the value, file and line and aborts (ticket 09's form). |
+| `-Wformat=` `lifecycle_test.c:277` | `%u`. |
+| `-Wpedantic` `lifecycle_test.c:243,247` | `SCENARIO`'s `steps[]` is automatic, not `static`: a compound literal is a valid initializer there. Brace initializers in the macros would also have worked, and clang-tidy's `bugprone-macro-parentheses` then flags the unparenthesised `pl` (tried: the gate went red). |
+
+No `#pragma GCC diagnostic`, no per-file `-Wno-` added. The one per-target `-Wno-` under
+`src/` (`valgrind_smoke_test`'s `-Wno-maybe-uninitialized`) predates this ticket: the
+uninitialised read is that test's point, and it builds only under `--config=valgrind`.
+
+Behaviour changes, with boundary tests:
+
+- `jobs_test` `count_conversion_is_total`: 1, 1.9, 8, 2^62, 2^63 − 1024 (the largest double
+  below 2^63) → `LONG_MAX − 1023`, 2^63, 1e300, +inf → `LONG_MAX`; 0.5, 0, −1, −1e300, −inf,
+  NaN → 0.
+- `lua_cbor_test` `encode_integers_at_the_boundaries`: ±2^53 and 2^53 − 1 exact CBOR integer
+  bytes, −1, 0, −0.0 → integer 0; 2^53 + 2, −2^53 − 2, ±2^63, 1e300, 0.5, −0.5, 2^51 + 0.5,
+  ±inf and NaN → a double (`0xfb`). (My first version had 2^52 + 0.5, which is not a double:
+  the ulp there is 1, so it rounds to 2^52 and the test failed on its own input.)
+
+### Cross-reference with tickets 06 and 07
+
+None of these findings is one the analyzers reported. The nearest: 06's `jobs.c:186` false
+positive (NULL `jobs` in `qwe_jobs_free`) is in the same function as the three `jobs.c`
+casts, but a different defect. 07's findings (`oom_shim.c`, `luaexec.c`, `jobs.c:134`,
+`encrypt.c`) touch none of these lines. Both 07 and this ticket edit `oom_shim.c`/`.h`
+neighbourhoods and `docs/ci-checks.md`, so the second to merge rebases.
+
+### Checks
+
+- `bazel build --keep_going --copt=-Wno-error --host_copt=-Wno-error --copt=-DQWE_WARN_PROBE_<n> //...`:
+  no warnings. The same with `--copt=-O2` over `//src/... //tools/...`, and over `//...`: none.
+- `bazel build --config=fuzz --config=asan|ubsan //src/edge/yaml:transcode_fuzz //src/edge/yaml:chain_fuzz`: builds.
+- `git diff --stat third_party`: empty.
+- `bazel test //...`: 265 passed, 3 skipped. `--config=asan` and `--config=ubsan`: 266 passed, 2 skipped.
+- `--config=valgrind` on the touched tests (`jobs`, `lua_cbor`, `fmt`, `proc`, `sched`, `summary`,
+  `result`, `lifecycle`, `//src/edge/yaml:all`, `//src/cli/...`, the oom sweeps included): 22 passed.
+- `tools/clang-tidy/run.sh`: exit 0 (186 pairs).
+- `bazel run //tools/coverage:check`: every C file at or above 85%; it fails locally on
+  `plugins/builtin/backend-ssh/ssh.lua` (84.7%) and `src/kernel/lua/become.lua` (81.2%)
+  only, as on ticket 07: the devcontainer's ssh target fails host-key verification, so the
+  ssh e2e cases skip. CI's coverage job runs its own sshd.
+- `//tools/ci:workflows_test` passes with the new command and job.

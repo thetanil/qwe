@@ -22,6 +22,8 @@
 #ifndef QWE_KERNEL_OOM_SHIM_H
 #define QWE_KERNEL_OOM_SHIM_H
 
+#include <stddef.h>
+
 /* The nth allocation in this process from now fails; 0 disarms. Resets the counters. */
 void qwe_oom_arm(long n);
 
@@ -50,5 +52,12 @@ struct qwe_oom_outcome {
 };
 
 int qwe_oom_probe(long n, long child_n, int (*fn)(void *), void *arg, struct qwe_oom_outcome *out);
+
+/* The allocators the --wrap flags route malloc, calloc, realloc, strdup and strndup to. */
+void *__wrap_malloc(size_t n);
+void *__wrap_calloc(size_t a, size_t b);
+void *__wrap_realloc(void *p, size_t n);
+char *__wrap_strdup(const char *s);
+char *__wrap_strndup(const char *s, size_t n);
 
 #endif

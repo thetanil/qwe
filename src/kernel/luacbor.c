@@ -6,6 +6,7 @@
 #include "src/edge/yaml/secret_tag.h"
 
 #include <lauxlib.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -168,7 +169,7 @@ static const char *convert(lua_State *L, CborValue *it, int depth)
 	case CborFloatType: {
 		float f;
 		cbor_value_get_float(it, &f);
-		lua_pushnumber(L, f);
+		lua_pushnumber(L, (lua_Number)f);
 		return cbor_value_advance_fixed(it) == CborNoError ? NULL : "malformed float";
 	}
 	default:
@@ -341,6 +342,19 @@ static int encode_table(lua_State *L, int idx, CborEncoder *enc, int depth, cons
 	}
 }
 
+/* 1 if d is a whole number within +-2^53, where a double holds every integer
+ * exactly, so it goes to CBOR as an integer. The range comes first: it turns
+ * away NaN and the infinities, and the int64_t conversion after it is never
+ * asked of a value it cannot hold. */
+static int is_exact_integer(double d)
+{
+	double whole;
+
+	if (!(d >= -(double)MAX_EXACT && d <= (double)MAX_EXACT))
+		return 0;
+	return fpclassify(modf(d, &whole)) == FP_ZERO;
+}
+
 /* Returns 0, CborErrorOutOfMemory (buffer too small; caller retries), or -1
  * with *err set. */
 static int encode_value(lua_State *L, int idx, CborEncoder *enc, int depth, const char **err)
@@ -353,7 +367,7 @@ static int encode_value(lua_State *L, int idx, CborEncoder *enc, int depth, cons
 		break;
 	case LUA_TNUMBER: {
 		double d = lua_tonumber(L, idx);
-		if (d == (double)(long long)d && d <= (double)MAX_EXACT && d >= -(double)MAX_EXACT)
+		if (is_exact_integer(d))
 			e = cbor_encode_int(enc, (int64_t)d);
 		else
 			e = cbor_encode_double(enc, d);
@@ -393,7 +407,7 @@ int qwe_lua_to_cbor(lua_State *L, int idx, uint8_t **out, size_t *len, char *err
 		uint8_t *buf = malloc(cap);
 		CborEncoder enc;
 		const char *msg = "cannot encode value";
-		int r, idx;
+		int r, own;
 
 		if (!buf) {
 			qwe_msg(err, err_size, "out of memory");
@@ -406,10 +420,10 @@ int qwe_lua_to_cbor(lua_State *L, int idx, uint8_t **out, size_t *len, char *err
 		 * such a raise frees it instead of leaking it (ticket
 		 * sca-round3/03, same rule as 02). qwe_lua_own_take gets it back
 		 * once encode_value returns normally, to keep using it as before. */
-		idx = qwe_lua_own_block(L, (void **)&buf);
+		own = qwe_lua_own_block(L, (void **)&buf);
 		r = encode_value(L, abs, &enc, 0, &msg);
-		buf = qwe_lua_own_take(L, idx);
-		lua_remove(L, idx);
+		buf = qwe_lua_own_take(L, own);
+		lua_remove(L, own);
 		if (r == 0) {
 			*len = cbor_encoder_get_buffer_size(&enc, buf);
 			*out = buf;

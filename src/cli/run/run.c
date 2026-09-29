@@ -13,7 +13,7 @@ static int usage(void)
 	return QWE_EXIT_USAGE;
 }
 
-int qwe_cmd_run(int argc, char **argv)
+int qwe_cmd_run(int argc, const char *const *argv)
 {
 	struct qwe_run_options opts = {0};
 	const char *path = NULL;

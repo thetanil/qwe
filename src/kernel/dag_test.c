@@ -5,6 +5,7 @@
 #include <string.h>
 
 void *__real_calloc(size_t a, size_t b);
+void *__wrap_calloc(size_t a, size_t b);
 
 static int fail_calloc; /* armed: every calloc returns NULL */
 

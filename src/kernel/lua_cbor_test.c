@@ -197,6 +197,33 @@ TEST encode_grows_its_buffer(void)
 	PASS();
 }
 
+/* A number is a CBOR integer only when it is whole and within +-2^53, where a double
+ * holds every integer exactly; anything else, including the values a cast to an
+ * integer type could not take (NaN, the infinities, 2^63), is a double (0xfb). */
+TEST encode_integers_at_the_boundaries(void)
+{
+	lua_State *L = qwe_lua_new();
+
+	ASSERT(L != NULL);
+	LUA(L,
+	    "local cbor = require('qwe.cbor')\n"
+	    "local function is_double(x) return assert(cbor.encode(x)):byte(1) == 0xfb end\n"
+	    "assert(cbor.encode(2^53) == '\\x1b\\x00\\x20\\x00\\x00\\x00\\x00\\x00\\x00', '2^53')\n"
+	    "assert(cbor.encode(-2^53) == '\\x3b\\x00\\x1f\\xff\\xff\\xff\\xff\\xff\\xff', '-2^53')\n"
+	    "assert(cbor.encode(2^53 - 1) == '\\x1b\\x00\\x1f\\xff\\xff\\xff\\xff\\xff\\xff', '2^53 - 1')\n"
+	    "assert(cbor.encode(-1) == '\\x20' and cbor.encode(0) == '\\x00')\n"
+	    "assert(cbor.encode(-0.0) == '\\x00', '-0 is the integer 0')\n"
+	    "assert(is_double(2^53 + 2), '2^53 + 2')\n"
+	    "assert(is_double(-2^53 - 2), '-2^53 - 2')\n"
+	    "assert(is_double(2^63) and is_double(-2^63) and is_double(1e300), 'beyond int64')\n"
+	    "assert(is_double(0.5) and is_double(-0.5) and is_double(2^51 + 0.5), 'a fraction')\n"
+	    "assert(is_double(1/0) and is_double(-1/0) and is_double(0/0), 'inf and nan')\n"
+	    "local back = assert(cbor.decode(assert(cbor.encode(2^53 + 2))))\n"
+	    "assert(back == 2^53 + 2)\n");
+	lua_close(L);
+	PASS();
+}
+
 /* A userdata that is not the null sentinel has no CBOR form. */
 TEST encode_refuses_a_light_userdata(void)
 {
@@ -224,6 +251,7 @@ SUITE(lua_cbor)
 	RUN_TEST(encode_refuses_what_it_cannot_hold);
 	RUN_TEST(encode_grows_its_buffer);
 	RUN_TEST(encode_refuses_a_light_userdata);
+	RUN_TEST(encode_integers_at_the_boundaries);
 }
 
 GREATEST_MAIN_DEFS();

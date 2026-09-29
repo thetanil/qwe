@@ -20,6 +20,18 @@ concurrency:
   group: ${{ github.workflow }}-static-analysis-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 jobs:
+  # The compiler's own warnings (.bazelrc, -Werror) at -O2, where the optimisation-dependent
+  # ones (-Wnull-dereference, -Wmaybe-uninitialized, -Wformat-truncation, -Wstringop-*) speak.
+  # The -O0 build every other job does already checks the rest. docs/compiler-warnings.md.
+  compiler-warnings:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          cache-key: warnings-o2
+      # a build, no tests: a warning is an error in this step's own log, nothing to collect
+      - run: bazel build --config=warnings-o2 //src/... //tools/...
   static-analysis:
     runs-on: ubuntu-24.04
     steps:

@@ -49,7 +49,7 @@ static int validate(void *arg)
 {
 	const struct scenario *sc = arg;
 	char path[700], inv[700];
-	char *argv[5] = {"validate", path, "-i", inv, NULL};
+	const char *argv[5] = {"validate", path, "-i", inv, NULL};
 
 	qwe_xfmt(path, sizeof path, "%s/%s", dir, sc->file);
 	qwe_xfmt(inv, sizeof inv, "%s/inventory.yaml", dir);
@@ -57,24 +57,24 @@ static int validate(void *arg)
 }
 
 /* Fails allocation 1, 2, 3 ... until one is past the last the run makes. */
-static enum greatest_test_res sweep(const struct scenario *sc)
+static enum greatest_test_res sweep(struct scenario *sc)
 {
 	struct qwe_oom_outcome base, o;
 	long at;
 
-	ASSERT_EQ(0, qwe_oom_probe(0, 0, validate, (void *)sc, &base));
+	ASSERT_EQ(0, qwe_oom_probe(0, 0, validate, sc, &base));
 	ASSERT(base.exited);
 	ASSERT_EQ_FMT(sc->expect, base.code, "%d");
 	ASSERT(base.count == 0); /* not armed: nothing counted */
 
 	/* The first injected run is armed past the end, to learn how many allocations there are. */
-	ASSERT_EQ(0, qwe_oom_probe(1L << 40, 0, validate, (void *)sc, &o));
+	ASSERT_EQ(0, qwe_oom_probe(1L << 40, 0, validate, sc, &o));
 	ASSERT(o.count > 10);
 	ASSERT_EQ_FMT(sc->expect, o.code, "%d");
 	for (at = 1; at <= o.count; at++) {
 		struct qwe_oom_outcome r;
 
-		ASSERT_EQ(0, qwe_oom_probe(at, 0, validate, (void *)sc, &r));
+		ASSERT_EQ(0, qwe_oom_probe(at, 0, validate, sc, &r));
 		if (!r.exited || (r.code != 0 && r.code != 2) || !r.fired) {
 			qwe_diag("allocation %ld of %ld: exited %d code %d signal %d fired %d\n%s\n",
 			    at, o.count, r.exited, r.code, r.signal, r.fired, r.err);
@@ -104,9 +104,9 @@ static enum greatest_test_res sweep(const struct scenario *sc)
 
 TEST validate_survives_every_injection(void)
 {
-	static const struct scenario valid = {"w.yaml", 0};
-	static const struct scenario cycle = {"cycle.yaml", 2};
-	static const struct scenario dup = {"dup.yaml", 2};
+	static struct scenario valid = {"w.yaml", 0};
+	static struct scenario cycle = {"cycle.yaml", 2};
+	static struct scenario dup = {"dup.yaml", 2};
 
 	CHECK_CALL(sweep(&valid));
 	CHECK_CALL(sweep(&cycle));

@@ -75,9 +75,9 @@ ways wider than `//src/... + //tools/...` in the default configuration:
   `asan` (each adds one `-DQWE_SMOKE_*` build of `sanitizer_smoke_test.c`) and
   `fuzz` (`--define=qwe_fuzz=1`). Measured at `995b7b3`, `fuzz` adds no pair the
   default configuration does not have, and is still enumerated, so a `select()`
-  or `#ifdef` that starts to key on it is linted from that commit. `release` is
-  the one configuration left out: it only adds `-g`, which is not among the
-  flags `run.sh` keeps.
+  or `#ifdef` that starts to key on it is linted from that commit. `release` and
+  `warnings-o2` are the configurations left out: they only add `-g` and `-O2`,
+  which are not among the flags `run.sh` keeps.
 
 A finding is reported once, by `file:line`, with the configurations it appeared
 under (`in: src/kernel/proc.c [coverage] -DQWE_GCOV; ...`), however many pairs

@@ -5,16 +5,17 @@
 #include <stdio.h>
 #include <time.h>
 
+/* The step's strings, except outcome and reason, belong to the result (qwe_jobs_free frees them). */
 struct qwe_step_result {
-	const char *id; /* may be NULL */
+	char *id; /* may be NULL */
 	const char *outcome;
 	const char *reason; /* may be NULL */
 	int changed;
 	char *outputs_json; /* the step's outputs as a JSON object; NULL if it has none */
 	time_t started, ended; /* 0 if it never started */
 	long duration_ms; /* -1 if it never started */
-	const char *name; /* the step's name:, or NULL; not written to result.json (the run summary's id column) */
-	const char *plugin; /* "run", or the step's uses: value; not written to result.json */
+	char *name; /* the step's name:, or NULL; not written to result.json (the run summary's id column) */
+	char *plugin; /* "run", or the step's uses: value; not written to result.json */
 };
 
 struct qwe_job_result {

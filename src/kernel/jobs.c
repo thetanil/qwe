@@ -3,6 +3,7 @@
 #include "src/kernel/put.h"
 
 #include <lauxlib.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,6 +28,16 @@ long qwe_timeout_ms_at(lua_State *L, int idx)
 	}
 	lua_pop(L, 1);
 	return ms;
+}
+
+long qwe_count_from_number(lua_Number v)
+{
+	if (!(v >= 1))
+		return 0;
+	/* LONG_MAX (2^63 - 1) is 2^63 as a double: every v below it fits in a long */
+	if (v >= (lua_Number)LONG_MAX)
+		return LONG_MAX;
+	return (long)v;
 }
 
 static int cmp_job(const void *a, const void *b)
@@ -190,9 +201,9 @@ void qwe_jobs_free(lua_State *L, struct job *jobs, size_t n)
 			free(j->needs[k]);
 		free(j->needs);
 		for (k = 0; k < j->nsteps && j->steps; k++) {
-			free((char *)j->steps[k].id);
-			free((char *)j->steps[k].name);
-			free((char *)j->steps[k].plugin);
+			free(j->steps[k].id);
+			free(j->steps[k].name);
+			free(j->steps[k].plugin);
 			free(j->steps[k].outputs_json);
 		}
 		free(j->steps);

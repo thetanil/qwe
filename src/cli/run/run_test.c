@@ -6,16 +6,16 @@
 TEST option_parsing(void)
 {
 	/* There is one guarantee level: connecting up front is not optional. */
-	char *no_preconnect[] = {"run", "--no-preconnect", "w.yaml"};
-	char *no_preconnect_after[] = {"run", "w.yaml", "--no-preconnect"};
-	char *unknown[] = {"run", "--bogus", "w.yaml"};
-	char *no_file[] = {"run", "--debug"};
-	char *two_files[] = {"run", "a.yaml", "b.yaml"};
-	char *job_needs_id[] = {"run", "w.yaml", "--job"};
-	char *inv_needs_path[] = {"run", "w.yaml", "-i"};
-	char *inv_twice[] = {"run", "w.yaml", "-i", "a.yaml", "-i", "b.yaml"};
-	char *unknown_after_file[] = {"run", "w.yaml", "--job", "a", "--bogus"};
-	char *summary_twice[] = {"run", "w.yaml", "--summary", "a.md", "--summary", "b.md"};
+	const char *no_preconnect[] = {"run", "--no-preconnect", "w.yaml"};
+	const char *no_preconnect_after[] = {"run", "w.yaml", "--no-preconnect"};
+	const char *unknown[] = {"run", "--bogus", "w.yaml"};
+	const char *no_file[] = {"run", "--debug"};
+	const char *two_files[] = {"run", "a.yaml", "b.yaml"};
+	const char *job_needs_id[] = {"run", "w.yaml", "--job"};
+	const char *inv_needs_path[] = {"run", "w.yaml", "-i"};
+	const char *inv_twice[] = {"run", "w.yaml", "-i", "a.yaml", "-i", "b.yaml"};
+	const char *unknown_after_file[] = {"run", "w.yaml", "--job", "a", "--bogus"};
+	const char *summary_twice[] = {"run", "w.yaml", "--summary", "a.md", "--summary", "b.md"};
 
 	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(3, no_preconnect));
 	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(3, no_preconnect_after));
@@ -32,7 +32,7 @@ TEST option_parsing(void)
 
 TEST summary_needs_argument(void)
 {
-	char *no_arg[] = {"run", "w.yaml", "--summary"};
+	const char *no_arg[] = {"run", "w.yaml", "--summary"};
 
 	ASSERT_EQ(QWE_EXIT_USAGE, qwe_cmd_run(3, no_arg));
 	PASS();

@@ -1159,6 +1159,10 @@ static void apply_action(struct run_ctx *ctx, struct job *job, enum qwe_lc_actio
 	case QWE_LC_ACT_END_JOB:
 		job_end(ctx, job);
 		break;
+	default:
+		/* every action is listed above: another value is a corrupt table cell */
+		qwe_diag("qwe: internal error: action %d at %s:%d\n", (int)a, __FILE__, __LINE__);
+		abort();
 	}
 }
 
@@ -1469,7 +1473,7 @@ static long target_max_sessions(lua_State *L, const char *target)
 	lua_pushstring(L, target);
 	lua_call(L, 1, 1);
 	if (lua_isnumber(L, -1))
-		cap = (long)lua_tonumber(L, -1);
+		cap = qwe_count_from_number(lua_tonumber(L, -1));
 	lua_settop(L, top);
 	return cap;
 }
@@ -1669,8 +1673,10 @@ static int run_all(struct run_ctx *ctx, long max_parallel)
 		} while (broadcast_cancel(ctx));
 
 		for (i = 0; i < n; i++) {
-			final += qwe_lc_state_is_final(jobs[i].state);
-			running += qwe_lc_state_is_running(jobs[i].state);
+			if (qwe_lc_state_is_final(jobs[i].state))
+				final++;
+			if (qwe_lc_state_is_running(jobs[i].state))
+				running++;
 		}
 		if (final == n)
 			break;
@@ -1910,7 +1916,7 @@ int qwe_run_workflow(const char *path, const struct qwe_run_options *opts)
 	lua_pushvalue(L, -1);
 	ctx.wf_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	lua_getfield(L, -1, "max-parallel");
-	max_parallel = lua_isnumber(L, -1) ? (long)lua_tonumber(L, -1) : 0;
+	max_parallel = lua_isnumber(L, -1) ? qwe_count_from_number(lua_tonumber(L, -1)) : 0;
 	lua_pop(L, 1);
 	note_disabled(&ctx);
 	preconnect(&ctx);

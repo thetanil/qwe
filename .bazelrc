@@ -1,6 +1,13 @@
 # C99, strict warnings for our own code.
 build --copt=-std=c99 --copt=-Wall --copt=-Wextra --copt=-Werror
-build --host_copt=-std=c99
+# The warnings beyond -Wall -Wextra (sca-round3/08), for everything except third_party/: the
+# vendored code keeps the flags its BUILD files give it, and upstream's style is upstream's.
+# -Wfree-nonheap-object comes after the default toolchain's -Wno-free-nonheap-object, so it
+# turns the diagnostic back on. -Wswitch-enum is ticket 09's.
+build --per_file_copt=.*,-third_party/.*@-Wwrite-strings,-Wcast-qual,-Wsign-conversion,-Wmissing-prototypes,-Wbad-function-cast,-Wfloat-equal,-Wswitch-default,-Wformat=2,-Wpedantic,-Wshadow,-Wconversion,-Warith-conversion,-Wformat-signedness,-Wnull-dereference,-Wduplicated-cond,-Wduplicated-branches,-Wlogical-op,-Wstrict-prototypes,-Wold-style-definition,-Wvla,-Walloca,-Wundef,-Wredundant-decls,-Wcast-align,-Wpointer-arith,-Wjump-misses-init,-Wunused-macros,-Wstrict-overflow=2,-Wdouble-promotion,-Wtrampolines,-Wfree-nonheap-object
+# The exec configuration (tools/bcembed.c, the exec build of errstr.c) gets the same set.
+build --host_copt=-std=c99 --host_copt=-Wall --host_copt=-Wextra --host_copt=-Werror
+build --host_per_file_copt=.*,-third_party/.*@-Wwrite-strings,-Wcast-qual,-Wsign-conversion,-Wmissing-prototypes,-Wbad-function-cast,-Wfloat-equal,-Wswitch-default,-Wformat=2,-Wpedantic,-Wshadow,-Wconversion,-Warith-conversion,-Wformat-signedness,-Wnull-dereference,-Wduplicated-cond,-Wduplicated-branches,-Wlogical-op,-Wstrict-prototypes,-Wold-style-definition,-Wvla,-Walloca,-Wundef,-Wredundant-decls,-Wcast-align,-Wpointer-arith,-Wjump-misses-init,-Wunused-macros,-Wstrict-overflow=2,-Wdouble-promotion,-Wtrampolines,-Wfree-nonheap-object
 
 # The release build: same codegen as the fastbuild default (no --compilation_mode=opt --
 # -O2 miscompiled LuaJIT's unwind path on the CI runner in a way that never reproduced
@@ -9,6 +16,12 @@ build --host_copt=-std=c99
 # rule still strips qwe). release.yml's build and the smoke workflow's build both use
 # this; the full suite runs under it too (05).
 build:release --copt=-g
+
+# The warnings at -O2 (sca-round3/08): -Wnull-dereference, -Wstrict-overflow, -Wmaybe-uninitialized,
+# -Wformat-truncation and the -Wstringop-* family depend on optimisation passes and are close to
+# silent at the default -O0. A build-only check, never shipped (see build:release above); LuaJIT
+# keeps the -O0 of its BUILD copts, which come after these. CI: the compiler-warnings job.
+build:warnings-o2 --copt=-O2
 
 test --test_output=errors
 # ssh e2e tests need the devcontainer's key agent (spec, "Test strategy").
@@ -53,6 +66,10 @@ coverage --copt=-DQWE_GCOV
 # Fuzz targets (quality/06) need clang's libFuzzer. Combine with --config=asan or --config=ubsan.
 build:fuzz --repo_env=CC=clang
 build:fuzz --action_env=CC=clang
+# The warning set above is gcc's: clang has no -Wduplicated-cond, -Wlogical-op,
+# -Wjump-misses-init, -Wtrampolines, -Wduplicated-branches or -Warith-conversion, and
+# under -Werror an unknown -W name is an error. It checks the ones it knows.
+build:fuzz --copt=-Wno-unknown-warning-option --host_copt=-Wno-unknown-warning-option
 # LuaJIT on malloc (third_party/luajit/BUILD), so LeakSanitizer can see into the Lua heap.
 build:fuzz --define=qwe_fuzz=1
 # Coverage feedback for our own code only (src/): third_party (libyaml, LuaJIT) is not fuzzed for now.

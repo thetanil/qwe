@@ -10,7 +10,7 @@
 
 static int run_args(void *arg)
 {
-	char *argv[] = {"run", "--job", "build", "no-such-workflow.yaml", NULL};
+	const char *argv[] = {"run", "--job", "build", "no-such-workflow.yaml", NULL};
 
 	(void)arg;
 	return qwe_cmd_run(4, argv);
