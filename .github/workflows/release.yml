@@ -57,6 +57,11 @@ jobs:
         with:
           name: clang-tidy-evidence-${{ github.sha }}
           path: clang-tidy-evidence
+      - name: Download the GCC analyzer evidence
+        uses: actions/download-artifact@v8
+        with:
+          name: gcc-analyzer-evidence-${{ github.sha }}
+          path: gcc-analyzer-evidence
       - name: Package
         run: |
           set -eu
@@ -67,6 +72,7 @@ jobs:
           # Workflow artifacts expire (90 days, docs/ci-checks.md); a release asset does
           # not, so the static-analysis evidence for this exact commit rides along.
           (cd clang-tidy-evidence && zip -rq "$OLDPWD/dist/clang-tidy-evidence-$v.zip" .)
+          (cd gcc-analyzer-evidence && zip -rq "$OLDPWD/dist/gcc-analyzer-evidence-$v.zip" .)
           file dist/*
           (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
       - name: Attach to the release

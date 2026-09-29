@@ -33,6 +33,7 @@ nightly and release do not call it, and `workflows_test` requires only its badge
 | Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | its own nightly-matching schedule, release and manual | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
 | Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | its own nightly-matching schedule, release and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
 | Static analysis | `static-analysis.yml` | `tools/clang-tidy/run.sh` | every push to main, every pull request, nightly, release and manual | about the plain suite's build, plus one clang-tidy pass per (file, flag set) pair across the default, coverage, valgrind, sanitizer and fuzz configurations (186 pairs, about two and a half minutes with cross-translation-unit analysis), pinned to clang-tidy `20.1.8` and the `clang-extdef-mapping` of the same build (`tools/clang-tidy/pin.env`) | any `clang-analyzer-*`/bugprone/cert/concurrency/performance/portability finding in `src/`, `plugins/` or `tools/`, or a `.c` file there that no pair covers (`tools/clang-tidy/coverage_test.sh`) |
+| GCC analyzer | `static-analysis.yml` (job `gcc-analyzer`) | `tools/gcc-analyzer/run.sh` | every push to main, every pull request, nightly, release and manual | a few seconds on top of the build (`-fanalyzer` on `src/` and `tools/` only: about 4 s for all 86 sources at four jobs, against under 1 s without it), refusing any `gcc-13` but the package version `tools/gcc-analyzer/pin.env` names | any `-Wanalyzer-*` finding in `src/` or `tools/` (`-Werror`), or a `.c` file there or in `plugins/` that is not analyzed and not one of the four the script excludes |
 | Coverage | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main, every pull request | about 35 s warm | any file under `src/`, `plugins/` or `tools/` has less than 85% of its lines covered |
 | Smoke | `smoke.yml` (job `build`, then `smoke` and `perf`) | `./qwe run tests/smoke/smoke_run.yml --debug --summary "$GITHUB_STEP_SUMMARY"` | every push to main, every pull request | build: one `bazel build --config=release //src/cli:qwe`; smoke seconds on a fresh runner; perf about a minute (51 rounds of the candidate only) | smoke: the release binary fails a real smoke workflow or negative case, or is not statically linked (the `--debug` lifecycle traces are kept as the `smoke-runs` artifact). perf: a key regressed against `tools/perf/expected.tsv` (ADR-0016); this fails the job only when gating (`release.yml`, a manual dispatch), and otherwise is a warning with the report in the run summary |
 | Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | its own nightly-matching schedule (3600 s) and manual | hours; four processes in parallel | any crash artifact exists |
@@ -53,6 +54,7 @@ bazel test //...
 bazel test --config=asan //...
 bazel test --config=ubsan //...
 tools/clang-tidy/run.sh
+tools/gcc-analyzer/run.sh
 bazel run //tools/coverage:check
 ./qwe run tests/smoke/smoke_run.yml --debug --summary "$GITHUB_STEP_SUMMARY"
 tools/perf/compare.sh tools/perf/expected.tsv perf-out/samples.tsv tools/perf/allow-list.txt perf-out
@@ -75,7 +77,7 @@ green PR and the user merges. The jobs to require, by the name a check shows on 
 | `tests` | `tests.yml` |
 | `asan` | `asan.yml` |
 | `ubsan` | `ubsan.yml` |
-| `static-analysis` | `static-analysis.yml` |
+| `static-analysis`, `gcc-analyzer` | `static-analysis.yml` |
 | `coverage` | `coverage.yml` |
 | `build`, `smoke` | `smoke.yml` |
 
@@ -95,8 +97,8 @@ named `PR` (Settings, Rules), which applies to the default branch and has no byp
 
 The ruleset does **not** yet have a "Require status checks to pass" rule, so the jobs in the table
 above are gates by this repo's rule (`CLAUDE.md`) and not yet by GitHub's: a red PR can be merged.
-Add the rule to the `PR` ruleset with the seven job names above (`tests`, `asan`, `ubsan`,
-`static-analysis`, `coverage`, `build`, `smoke`), and turn on "Require branches to be up to date
+Add the rule to the `PR` ruleset with the eight job names above (`tests`, `asan`, `ubsan`,
+`static-analysis`, `gcc-analyzer`, `coverage`, `build`, `smoke`), and turn on "Require branches to be up to date
 before merging" only if a stale base should block a merge too. Check the names against a real PR
 first (`gh pr checks <n>`); a required name that no job reports blocks every merge. A new gate
 workflow is added to the table and to that rule in the same PR.

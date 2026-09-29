@@ -525,3 +525,71 @@ Real bugs behind checks that had been excluded as false positives, found by
   `clang-analyzer-optin.taint.TaintedAlloc`. It now refuses a source over
   1 MiB (about 30 times the largest module, luacheck's `parser.lua`) with
   `cannot read <file>: File too large` (`//tools:bcembed_test`).
+
+## GCC's analyzer
+
+```
+tools/gcc-analyzer/run.sh
+```
+
+A second analyzer, independent of the one above: GCC's own `-fanalyzer`, on the
+toolchain the build already uses (`.scratch/sca-round3` ticket 07). It runs as
+the `gcc-analyzer` job in `static-analysis.yml`, beside clang-tidy, so on every
+push, pull request, nightly and release. `.bazelrc`'s `--config=analyzer` adds
+`-fanalyzer` to `src/` and `tools/` only; the global `-Werror` makes any
+`-Wanalyzer-*` finding a failed build. `third_party/` is upstream's, and analyzing
+LuaJIT would be most of the cost. As scoped, the gate adds about 4 s to a
+four-job build of all 86 sources. Four `.c` files are not in the default
+configuration and so not analyzed: two smoke tests that plant a fault for a
+sanitizer or valgrind to catch, and two libFuzzer harnesses that only build with
+clang. The script names them, and fails on any other `.c` under `src/`, `tools/`
+or `plugins/` that the analyzer does not see.
+
+**The pinned version.** Its findings change between GCC releases, so
+`tools/gcc-analyzer/pin.env` names the exact Ubuntu package the zero was measured
+with: `gcc-13` `13.3.0-6ubuntu2~24.04.1` (GCC 13.3.0). The `ubuntu-24.04` runner
+image ships it; CI installs nothing, because the Ubuntu archive keeps only the
+latest `-updates` build of a package, so an apt pin would break rather than hold.
+`run.sh --exact` (what CI runs) refuses any other package version instead, and
+locally `run.sh` enforces only the major. When a runner image moves `gcc-13`
+forward, that refusal is the prompt to re-run, triage what changed, and re-pin.
+
+**Evidence.** `--evidence-dir DIR` writes, pass or fail: `version.txt`
+(`gcc --version` and the package version), `pin.env` and `bazelrc.txt` (the
+config, copied), `files.txt` (every source compiled with `-fanalyzer`, from
+bazel's own command lines), `excluded.txt`, `sha.txt`, `output.txt` (the build's
+full output) and `exit_status.txt`. CI uploads it as
+`gcc-analyzer-evidence-<sha>`, and `release.yml` attaches it to the release as
+`gcc-analyzer-evidence-<version>.zip`. A compile the disk cache already holds is
+not re-analyzed, which is sound: a compile with a finding fails, and a failed
+action is never cached.
+
+**What it found.** Sixteen findings on first run, none of which clang-tidy
+reports. The two `luaexec.c` double-frees the ticket also listed were already
+gone, removed by ticket 02's rewrite. Each is in the ticket's Comments with its
+evidence. In short:
+
+- **One real leak.** `qwe_oom_probe` (`src/kernel/oom_shim.c`) returned -1 with
+  the first pipe open when the second `pipe` failed, and with both open when
+  `fork` failed (4 reports). It now unwinds exactly what is open.
+  `oom_shim_test` covers both paths with `RLIMIT_NOFILE` and `RLIMIT_NPROC`.
+- **Fifteen false positives,** each removed by a code shape the analyzer can
+  follow, with no pragma and no suppression:
+  - `exec_run` (`src/kernel/luaexec.c`, 9 reports): GCC 13 marks a descriptor
+    `pipe2` returned as open without constraining it to `>= 0`, so the false
+    side of every `if (fd >= 0) close(fd)` is, to it, a leak (a three-line
+    probe reproduces it). The parent's pipe ends now carry an `open` flag, and
+    the child's ends and the fork-failure path close unconditionally. The three
+    pipes also live in one `struct pipes`: as three array parameters, the
+    analyzer had to assume they might alias.
+  - `buf_add` (`luaexec.c`, 1): a `memcpy` into NULL on the first append, where
+    `len + n > cap` with `cap == 0` always grows first. The condition now says
+    `!b->data` outright.
+  - `qwe_jobs_load` (`src/kernel/jobs.c`, 1): storing `j->needs[k]` at one
+    symbolic offset dropped the analyzer's binding for `jobs[i].needs` at
+    another, so the `strdup` looked unreachable. The array is filled through a
+    local.
+  - `qwe_cmd_encrypt` (`src/cli/encrypt/encrypt.c`, 1): the analyzer lost
+    `n <= MAX_PLAIN` across `read_stdin`'s loop, so it thought `(ssize_t)n`
+    could come back negative with the buffer handed out. `read_stdin` now
+    returns a status and writes the length separately.
