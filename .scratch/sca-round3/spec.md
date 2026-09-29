@@ -175,4 +175,5 @@ there.
 - [29: closeout: the register, and everything rerun](issues/29-closeout.md)
 - [31: `summary.c`'s `log_tail` sizes a file, then reads it](issues/31-log-tail-size-then-read.md)
 - [32: clang-tidy's evidence bundle on every exit](issues/32-clang-tidy-evidence-on-every-exit.md)
+- [33: `perf-baseline.yml` must not save a cache from the ref it measures](issues/33-perf-baseline-cache-poisoning.md)
 - 30: moved to `.scratch/iso26262-tool-qualification`, since replaced by its 07
