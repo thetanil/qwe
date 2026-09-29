@@ -1,4 +1,6 @@
 | `static-analysis` | the LLVM Static Analyzer and a C ruleset through clang-tidy, pinned to `20.1.8`, and GCC's `-fanalyzer`, pinned to `gcc-13` `13.3.0-6ubuntu2~24.04.1` (`docs/static-analysis.md`); each uploads an evidence artifact every run |# qwe
+| `gcc-analyzer` | GCC's `-fanalyzer`, pinned to `gcc-13` `13.3.0-6ubuntu2~24.04.1` (`docs/static-analysis.md`, "GCC's analyzer"); uploads an evidence artifact every run | every push to `main`, pull requests, by hand, nightly, and in a release |
+| `compiler-warnings` | `src/` and `tools/` built at `-O2` with the `.bazelrc` warning set and `-Werror`, for the warnings that need the optimiser (`docs/compiler-warnings.md`) | every push to `main`, pull requests, by hand, nightly, and in a release |
 
 **qwe** (Qualified Workflow Engine) is a small Linux command-line tool that runs
 a workflow to completion and exits. You describe the work as YAML in the style
@@ -25,7 +27,7 @@ backends).
 | Test | [![tests](https://github.com/thetanil/qwe/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/tests.yml) [![smoke](https://github.com/thetanil/qwe/actions/workflows/smoke.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/smoke.yml) |
 | Sanitizers | [![asan](https://github.com/thetanil/qwe/actions/workflows/asan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/asan.yml) [![ubsan](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/ubsan.yml) [![valgrind](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/valgrind.yml) |
 | Coverage | [![coverage](https://github.com/thetanil/qwe/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/coverage.yml) [![coverage percent](https://img.shields.io/endpoint?url=https://thetanil.com/qwe/coverage.json)](https://thetanil.com/qwe/) |
-| SCA | [![static-analysis](https://github.com/thetanil/qwe/actions/workflows/static-analysis.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/static-analysis.yml) [![codeql](https://github.com/thetanil/qwe/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/codeql.yml) |
+| SCA | [![static-analysis](https://github.com/thetanil/qwe/actions/workflows/static-analysis.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/static-analysis.yml) [![gcc-analyzer](https://github.com/thetanil/qwe/actions/workflows/gcc-analyzer.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/gcc-analyzer.yml) [![compiler-warnings](https://github.com/thetanil/qwe/actions/workflows/compiler-warnings.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/compiler-warnings.yml) [![codeql](https://github.com/thetanil/qwe/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/codeql.yml) |
 | Release gates | [![nightly](https://github.com/thetanil/qwe/actions/workflows/nightly.yml/badge.svg?branch=main)](https://github.com/thetanil/qwe/actions/workflows/nightly.yml) [![fuzz](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/fuzz.yml) [![perf-baseline](https://github.com/thetanil/qwe/actions/workflows/perf-baseline.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/perf-baseline.yml) [![release](https://github.com/thetanil/qwe/actions/workflows/release.yml/badge.svg)](https://github.com/thetanil/qwe/actions/workflows/release.yml) |
 
 ## A first workflow
@@ -273,7 +275,7 @@ what each one fails on.
 | `coverage` | the 85% per-file coverage check, and the HTML report as an artifact | every push to `main`, pull requests |
 | `smoke` | the smoke workflows on the release build, and `perf`'s timing against the stored expected values (`tools/perf/expected.tsv`; reported on a push, gating on a release) | every push to `main`, pull requests |
 | `valgrind` | the unit tests and six e2e cases under valgrind (about 23 minutes) | by hand, its own nightly-matching schedule, and in a release |
-| `nightly` | `tests`, `asan`, `ubsan`, `static-analysis` and `coverage`, plus `smoke`, from fresh caches | 02:17 UTC, and by hand |
+| `nightly` | `tests`, `asan`, `ubsan`, `static-analysis`, `gcc-analyzer`, `compiler-warnings` and `coverage`, plus `smoke`, from fresh caches | 02:17 UTC, and by hand |
 | `fuzz` | both YAML fuzz targets under asan and ubsan, on a persistent corpus | its own nightly-matching schedule (one hour), and by hand |
 | `release` | every gate again (including `valgrind`), plus `smoke`, then builds and publishes | a pushed tag `v*` |
 | `codeql` | GitHub CodeQL code scanning (C and the workflow files); results in the Security tab. Not a gate: nightly and release do not call it | every push to `main`, pull requests, weekly |
@@ -322,12 +324,12 @@ never tags, so a tag that was only created locally does nothing.
 1. Bump `QWE_VERSION` in `src/kernel/qwe.h`, the only place the version is written (the
    `cli_version` e2e case and `tools/release/check_version.sh` read it from there). Run
    `bazel test //...`.
-2. Commit and `git push` to `main`. Wait until the six gates a push runs (`tests`, `asan`, `ubsan`,
-   `static-analysis`, `coverage` and `smoke`) are green **on that commit**. The release reruns all of
+2. Commit and `git push` to `main`. Wait until the eight gates a push runs (`tests`, `asan`, `ubsan`,
+   `static-analysis`, `gcc-analyzer`, `compiler-warnings`, `coverage` and `smoke`) are green **on that commit**. The release reruns all of
    them at the tag, so a red `main` means a failed release. (CodeQL runs on the push too; the release
    does not rerun it.)
    ```
-   gh run list -c "$(git rev-parse HEAD)"     # one row per workflow: six gates plus CodeQL
+   gh run list -c "$(git rev-parse HEAD)"     # one row per workflow: eight gates plus CodeQL
    gh run watch <run id>                      # or follow one of them
    ```
    Then check `smoke`'s perf job, which a push runs **report-only**: a regression against

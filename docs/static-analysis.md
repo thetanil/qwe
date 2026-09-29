@@ -533,9 +533,9 @@ tools/gcc-analyzer/run.sh
 ```
 
 A second analyzer, independent of the one above: GCC's own `-fanalyzer`, on the
-toolchain the build already uses (`.scratch/sca-round3` ticket 07). It runs as
-the `gcc-analyzer` job in `static-analysis.yml`, beside clang-tidy, so on every
-push, pull request, nightly and release. `.bazelrc`'s `--config=analyzer` adds
+toolchain the build already uses (`.scratch/sca-round3` ticket 07). It runs in its
+own `gcc-analyzer.yml` (its own README badge), on every push, pull request,
+nightly and release, like clang-tidy's `static-analysis.yml`. `.bazelrc`'s `--config=analyzer` adds
 `-fanalyzer` to `src/` and `tools/` only; the global `-Werror` makes any
 `-Wanalyzer-*` finding a failed build. `third_party/` is upstream's, and analyzing
 LuaJIT would be most of the cost. As scoped, the gate adds about 4 s to a

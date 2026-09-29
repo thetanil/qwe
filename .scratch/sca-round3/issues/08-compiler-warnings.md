@@ -131,11 +131,10 @@ reproduced for our code, plus two:
   `fmt.h:28` `-Wformat-nonliteral` (`qwe_vfmt` had no `format(printf, 3, 0)`: added) and
   `luacbor.c:172` `-Wdouble-promotion` (a `float` to `lua_pushnumber`: now an explicit
   `(lua_Number)f`).
-- `build:warnings-o2 --copt=-O2`, and a `compiler-warnings` job in `static-analysis.yml`
-  running `bazel build --config=warnings-o2 //src/... //tools/...` (the workflow runs on
-  push, pull request, nightly and release). It is in `docs/ci-checks.md`'s table, "Every
-  push" and the pull request gates (eight names now; ticket 07's PR also counts eight with
-  `gcc-analyzer`, so whichever merges second makes it nine). `docs/compiler-warnings.md` is
+- `build:warnings-o2 --copt=-O2`, and `compiler-warnings.yml` running
+  `bazel build --config=warnings-o2 //src/... //tools/...` on push, pull request, nightly
+  and release. It is in `docs/ci-checks.md`'s table, "Every push" and the pull request
+  gates (nine job names, with 07's `gcc-analyzer`). `docs/compiler-warnings.md` is
   new; `docs/static-analysis.md` and `run.sh` say `warnings-o2` is left out of clang-tidy's
   configurations for the same reason as `release`.
 
@@ -177,7 +176,8 @@ None of these findings is one the analyzers reported. The nearest: 06's `jobs.c:
 positive (NULL `jobs` in `qwe_jobs_free`) is in the same function as the three `jobs.c`
 casts, but a different defect. 07's findings (`oom_shim.c`, `luaexec.c`, `jobs.c:134`,
 `encrypt.c`) touch none of these lines. Both 07 and this ticket edit `oom_shim.c`/`.h`
-neighbourhoods and `docs/ci-checks.md`, so the second to merge rebases.
+neighbourhoods and `docs/ci-checks.md`; this branch was rebased onto 07 once it merged
+(`docs/ci-checks.md` was the one conflict).
 
 ### Checks
 
@@ -194,3 +194,15 @@ neighbourhoods and `docs/ci-checks.md`, so the second to merge rebases.
   only, as on ticket 07: the devcontainer's ssh target fails host-key verification, so the
   ssh e2e cases skip. CI's coverage job runs its own sshd.
 - `//tools/ci:workflows_test` passes with the new command and job.
+
+### Own workflows, own badges
+
+After #10 merged: a README badge is per workflow file, so a job inside `static-analysis.yml`
+had none of its own, and `static-analysis`'s badge went red for any of three different
+checks. `gcc-analyzer` (from ticket 07) and `compiler-warnings` are now their own
+`gcc-analyzer.yml` and `compiler-warnings.yml`, with the same triggers as the other gates
+(push to main, pull request, `workflow_dispatch`, `workflow_call`), each with a badge in the
+README's SCA row. `nightly.yml` and `release.yml` call both, and `release.yml`'s `publish`
+needs both. `//tools/ci:workflows_test` rule 4 now requires nightly to call seven gates and
+release eight. The job names on a PR are unchanged, so the required-check list in
+`docs/ci-checks.md` stays nine names.

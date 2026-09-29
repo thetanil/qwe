@@ -41,6 +41,12 @@ jobs:
   static-analysis:
     needs: refresh-caches
     uses: ./.github/workflows/static-analysis.yml
+  gcc-analyzer:
+    needs: refresh-caches
+    uses: ./.github/workflows/gcc-analyzer.yml
+  compiler-warnings:
+    needs: refresh-caches
+    uses: ./.github/workflows/compiler-warnings.yml
   coverage:
     needs: refresh-caches
     uses: ./.github/workflows/coverage.yml

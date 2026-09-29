@@ -20,18 +20,6 @@ concurrency:
   group: ${{ github.workflow }}-static-analysis-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 jobs:
-  # The compiler's own warnings (.bazelrc, -Werror) at -O2, where the optimisation-dependent
-  # ones (-Wnull-dereference, -Wmaybe-uninitialized, -Wformat-truncation, -Wstringop-*) speak.
-  # The -O0 build every other job does already checks the rest. docs/compiler-warnings.md.
-  compiler-warnings:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-        with:
-          cache-key: warnings-o2
-      # a build, no tests: a warning is an error in this step's own log, nothing to collect
-      - run: bazel build --config=warnings-o2 //src/... //tools/...
   static-analysis:
     runs-on: ubuntu-24.04
     steps:
@@ -60,28 +48,3 @@ jobs:
         uses: ./.github/actions/collect-logs
         with:
           name: static-analysis-logs
-  # GCC's -fanalyzer, a second analyzer independent of clang-tidy's (ticket sca-round3/07,
-  # docs/static-analysis.md "GCC's analyzer"). Its findings change between GCC builds, so
-  # --exact refuses any gcc-13 but the one tools/gcc-analyzer/pin.env names; the runner
-  # image ships it, nothing is installed. A few seconds on top of the build.
-  gcc-analyzer:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-        with:
-          cache-key: gcc-analyzer
-      - name: tools/gcc-analyzer/run.sh
-        run: tools/gcc-analyzer/run.sh --exact --evidence-dir "$RUNNER_TEMP/gcc-analyzer-evidence"
-      # The same kind of evidence as clang-tidy's: gcc --version and the package version,
-      # the config, the analyzed file list, the git SHA, the full output and the exit status.
-      - if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: gcc-analyzer-evidence-${{ github.sha }}
-          path: ${{ runner.temp }}/gcc-analyzer-evidence
-          if-no-files-found: error
-      - if: failure()
-        uses: ./.github/actions/collect-logs
-        with:
-          name: gcc-analyzer-logs

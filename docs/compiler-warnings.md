@@ -60,7 +60,7 @@ nothing else. It builds, it does not ship: the release build stays at fastbuild
 (`.bazelrc`, `build:release`). LuaJIT keeps its `-O0` (its `BUILD` copts come
 after `--copt`).
 
-CI: the `compiler-warnings` job in `static-analysis.yml`, a pull request gate
+CI: `compiler-warnings.yml`, with its own README badge, a pull request gate
 (`docs/ci-checks.md`).
 
 ## Measuring

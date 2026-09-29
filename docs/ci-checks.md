@@ -33,8 +33,8 @@ nightly and release do not call it, and `workflows_test` requires only its badge
 | Valgrind, unit tests | `valgrind.yml` (job `unit`) | `bazel test --config=valgrind //...` | its own nightly-matching schedule, release and manual | about 8 min locally (the three oom sweeps: `oom_test` 486 s); 23 min on a runner | any error, leak or unsuppressed report |
 | Valgrind, e2e | `valgrind.yml` (job `e2e`) | `bazel test --config=valgrind //tests/e2e:valgrind_e2e` | its own nightly-matching schedule, release and manual | about 6 s locally, 2 min on a runner | the same, in qwe and its step children |
 | Static analysis | `static-analysis.yml` | `tools/clang-tidy/run.sh` | every push to main, every pull request, nightly, release and manual | about the plain suite's build, plus one clang-tidy pass per (file, flag set) pair across the default, coverage, valgrind, sanitizer and fuzz configurations (186 pairs, about two and a half minutes with cross-translation-unit analysis), pinned to clang-tidy `20.1.8` and the `clang-extdef-mapping` of the same build (`tools/clang-tidy/pin.env`) | any `clang-analyzer-*`/bugprone/cert/concurrency/performance/portability finding in `src/`, `plugins/` or `tools/`, or a `.c` file there that no pair covers (`tools/clang-tidy/coverage_test.sh`) |
-| GCC analyzer | `static-analysis.yml` (job `gcc-analyzer`) | `tools/gcc-analyzer/run.sh` | every push to main, every pull request, nightly, release and manual | a few seconds on top of the build (`-fanalyzer` on `src/` and `tools/` only: about 4 s for all 86 sources at four jobs, against under 1 s without it), refusing any `gcc-13` but the package version `tools/gcc-analyzer/pin.env` names | any `-Wanalyzer-*` finding in `src/` or `tools/` (`-Werror`), or a `.c` file there or in `plugins/` that is not analyzed and not one of the four the script excludes |
-| Compiler warnings at -O2 | `static-analysis.yml` (job `compiler-warnings`) | `bazel build --config=warnings-o2 //src/... //tools/...` | every push to main, every pull request, nightly, release and manual | about the plain suite's build, cold | any warning of the `.bazelrc` set (`docs/compiler-warnings.md`) in `src/` or `tools/` when compiled at `-O2`; the `-O0` build of every other job already fails on one at `-O0` |
+| GCC analyzer | `gcc-analyzer.yml` | `tools/gcc-analyzer/run.sh` | every push to main, every pull request, nightly, release and manual | a few seconds on top of the build (`-fanalyzer` on `src/` and `tools/` only: about 4 s for all 86 sources at four jobs, against under 1 s without it), refusing any `gcc-13` but the package version `tools/gcc-analyzer/pin.env` names | any `-Wanalyzer-*` finding in `src/` or `tools/` (`-Werror`), or a `.c` file there or in `plugins/` that is not analyzed and not one of the four the script excludes |
+| Compiler warnings at -O2 | `compiler-warnings.yml` | `bazel build --config=warnings-o2 //src/... //tools/...` | every push to main, every pull request, nightly, release and manual | about the plain suite's build, cold | any warning of the `.bazelrc` set (`docs/compiler-warnings.md`) in `src/` or `tools/` when compiled at `-O2`; the `-O0` build of every other job already fails on one at `-O0` |
 | Coverage | `coverage.yml` | `bazel run //tools/coverage:check` | every push to main, every pull request | about 35 s warm | any file under `src/`, `plugins/` or `tools/` has less than 85% of its lines covered |
 | Smoke | `smoke.yml` (job `build`, then `smoke` and `perf`) | `./qwe run tests/smoke/smoke_run.yml --debug --summary "$GITHUB_STEP_SUMMARY"` | every push to main, every pull request | build: one `bazel build --config=release //src/cli:qwe`; smoke seconds on a fresh runner; perf about a minute (51 rounds of the candidate only) | smoke: the release binary fails a real smoke workflow or negative case, or is not statically linked (the `--debug` lifecycle traces are kept as the `smoke-runs` artifact). perf: a key regressed against `tools/perf/expected.tsv` (ADR-0016); this fails the job only when gating (`release.yml`, a manual dispatch), and otherwise is a warning with the report in the run summary |
 | Fuzzing | `fuzz.yml` | `tools/fuzz/nightly.sh [seconds]` | its own nightly-matching schedule (3600 s) and manual | hours; four processes in parallel | any crash artifact exists |
@@ -79,7 +79,9 @@ green PR and the user merges. The jobs to require, by the name a check shows on 
 | `tests` | `tests.yml` |
 | `asan` | `asan.yml` |
 | `ubsan` | `ubsan.yml` |
-| `static-analysis`, `gcc-analyzer`, `compiler-warnings` | `static-analysis.yml` |
+| `static-analysis` | `static-analysis.yml` |
+| `gcc-analyzer` | `gcc-analyzer.yml` |
+| `compiler-warnings` | `compiler-warnings.yml` |
 | `coverage` | `coverage.yml` |
 | `build`, `smoke` | `smoke.yml` |
 
@@ -175,27 +177,27 @@ hardcoded in their `inventory.yaml` files. `.github/actions/setup` with `ssh-tar
 ## Nightly and release
 
 `nightly.yml` runs at 02:17 UTC and on demand. It first deletes every `setup-bazel-*` cache (a saved
-cache key is never rewritten, so the gates' caches go stale), then calls its five gate workflows:
-tests, asan, ubsan, static-analysis and coverage, and `smoke.yml` (build, smoke, and perf reporting against
+cache key is never rewritten, so the gates' caches go stale), then calls its seven gate workflows:
+tests, asan, ubsan, static-analysis, gcc-analyzer, compiler-warnings and coverage, and `smoke.yml` (build, smoke, and perf reporting against
 the stored expected values without gating). They run cold and save fresh caches, which pushes to main then
 restore. `valgrind.yml` and `fuzz.yml` are deliberately not called from here any more -- each has its own
 `schedule` a few minutes after this file's cron instead (see "On demand" above and "Fuzzing" below), so
 its own status badge reflects a real nightly run: a `workflow_call` from a job in this file never updates
 the called workflow's own badge, only a direct trigger does. `refresh-caches` still clears their disk
 caches too, since it deletes every `setup-bazel-*` entry repo-wide, not just the ones this file's job
-graph happens to use. `workflows_test` fails if `nightly.yml` stops calling one of its five gates or
+graph happens to use. `workflows_test` fails if `nightly.yml` stops calling one of its seven gates or
 `smoke.yml`, or starts calling `valgrind.yml` or `fuzz.yml` directly again.
 
 `release.yml` runs on a pushed tag `v*`. Write the release in the GitHub web UI (its notes, and the tag it
-creates on publish), or push the tag yourself. All six gates -- `nightly.yml`'s five (tests, asan, ubsan,
-static-analysis, coverage) plus `valgrind`, which `release.yml` calls directly -- and `smoke.yml` run
+creates on publish), or push the tag yourself. All eight gates -- `nightly.yml`'s seven (tests, asan, ubsan,
+static-analysis, gcc-analyzer, compiler-warnings, coverage) plus `valgrind`, which `release.yml` calls directly -- and `smoke.yml` run
 again at the tagged commit (not the fuzzer, which is never part of a release); `smoke.yml` is called
 with `perf-gate: true`, so a perf regression against
 `tools/perf/expected.tsv` fails the release (on a push and nightly it only reports). Then `qwe` and `qwe-debug` are built,
 `tools/release/check_version.sh` checks that the tag, `QWE_VERSION` in `src/kernel/qwe.h` and
 `qwe --version` agree, and the two binaries, `SHA256SUMS` and the two static-analysis evidence bundles
 (`clang-tidy-evidence-<version>.zip` and `gcc-analyzer-evidence-<version>.zip`, downloaded from
-the `static-analysis` and `gcc-analyzer` jobs' own artifacts,
+the `static-analysis` and `gcc-analyzer` workflows' own artifacts,
 which expire in at most 90 days — see `docs/static-analysis.md`; a release asset does not)
 are attached to the release. The full
 commit hash is appended to the release notes (a release created by the workflow is titled
