@@ -98,7 +98,11 @@ CONFIGS=(default coverage fuzz valgrind ubsan asan)
 config_flags() {
 	case "$1" in
 	default) ;;
-	coverage) sed -n 's/^coverage //p' .bazelrc | tr ' ' '\n' ;;
+	# Only the flags that can change what a CppCompile action looks like
+	# (--copt/--host_copt/--per_file_copt/--define): `coverage`'s .bazelrc lines also
+	# carry --test_env=QWE_LUA_COVERAGE=1, a test-time flag aquery has no compile
+	# action to apply it to and no reason to see.
+	coverage) sed -n 's/^coverage //p' .bazelrc | tr ' ' '\n' | grep -E '^--(copt|host_copt|per_file_copt|define)=' ;;
 	*) echo "--config=$1" ;;
 	esac
 }

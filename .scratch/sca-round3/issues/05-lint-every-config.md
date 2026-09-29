@@ -132,3 +132,14 @@ Copilot review of PR #7, both points taken:
 - The count line counted rows, and a row is one flag set with the configurations that
   share it, not one (file, configuration). It now reads `186 (file, flag set) pairs`
   (`run.sh`, `coverage_test.sh`, the docs).
+
+Second Copilot comment (PR #7, discussion_r4124553232): `config_flags coverage` forwards
+every token off `coverage`'s `.bazelrc` lines to `bazel aquery`, including
+`--test_env=QWE_LUA_COVERAGE=1`, a test-time flag with no compile action for `aquery` to
+apply it to. Checked directly against this repo's Bazel: `aquery` does not reject it
+(`bazel aquery --test_env=... --copt=-DQWE_GCOV ...` and `run.sh --list` both exit 0, the
+186-pair, 93-under-coverage count unaffected) — the claimed failure does not reproduce
+here. The underlying point holds regardless: it worked by `aquery`'s tolerance of a flag
+it has no use for, not by design, so a future test-only flag added to `coverage` could
+break the same query on some other Bazel version without warning. `config_flags` now
+keeps only `--copt`/`--host_copt`/`--per_file_copt`/`--define` from those lines.
