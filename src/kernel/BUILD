@@ -127,6 +127,7 @@ cc_test(
     srcs = ["redact_test.c"],
     deps = [
         ":redact",
+        "//src/testing:owned",
         "//third_party/greatest",
     ],
 )

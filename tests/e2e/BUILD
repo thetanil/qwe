@@ -134,6 +134,10 @@ e2e_test(name = "not_converged")
 
 e2e_test(name = "plugin_segfault_isolated")
 
+e2e_test(name = "plugin_argv_empty")
+
+e2e_test(name = "plugin_argv_not_a_string")
+
 e2e_test(name = "plugin_block_timeout")
 
 e2e_test(name = "run_always_changed")

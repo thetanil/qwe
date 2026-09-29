@@ -84,14 +84,14 @@ TEST helper_aborts_and_names_the_site(void)
 TEST helper_returns_the_block_when_memory_is_available(void)
 {
 	char *p = qwe_xstrdup("abc");
+	/* compared before the realloc: what qwe_own holds must be the final pointer */
+	int copied = strcmp("abc", p) == 0;
 
-	ASSERT_STR_EQ("abc", p);
-	p = qwe_xrealloc(p, 100);
+	p = qwe_own(qwe_xrealloc(p, 100));
+	ASSERT(copied);
 	ASSERT_EQ('a', p[0]);
-	free(p);
-	p = qwe_xcalloc(4, 4);
+	p = qwe_own(qwe_xcalloc(4, 4));
 	ASSERT_EQ(0, p[15]);
-	free(p);
 	PASS();
 }
 
