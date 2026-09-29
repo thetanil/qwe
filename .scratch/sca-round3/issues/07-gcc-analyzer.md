@@ -151,3 +151,34 @@ whole build, so it is a ticket of its own.
   the ssh e2e cases skip. Neither file is touched here, and CI's coverage job runs
   its own sshd.
 - `//tools/ci:workflows_test` passes with the new job and command.
+
+### Copilot review of PR #10
+
+Three findings (<https://github.com/thetanil/qwe/pull/10#pullrequestreview-5346923387>),
+all checked and all real:
+
+- **The disk cache did not know the compiler.** `run.sh`'s header argued "a failed action
+  is never cached", but that does not cover a *passed* action: Bazel's action key covers the
+  command line and the inputs, and `aquery` lists `cc_wrapper.sh` and
+  `builtin_include_directory_paths` as inputs, not `/usr/bin/gcc`. Between two `gcc-13`
+  builds nothing in the key changes, so after a re-pin every unchanged source would come
+  from the `gcc-analyzer` disk cache, analyzed and passed by the old GCC. `run.sh` now adds
+  `--copt=-DQWE_ANALYZER_CC1=<first 16 hex digits of cc1's SHA-256>` to the aquery and the
+  build (cc1 is where `-fanalyzer` runs; hashing the binary, not the pin, also covers local
+  runs, where `--exact` is off). `version.txt` records the digest.
+- **No evidence on a refusal.** The bundle was written after the build, so the major check,
+  `--exact`, the aquery and the source-coverage check exited with none, and the upload
+  (`if-no-files-found: error`) then failed as well: no bundle in exactly the runner-moved
+  case the pin exists for. The directory and `version.txt`, `pin.env`, `bazelrc.txt`,
+  `sha.txt` are written first; refusals go through `refuse`, which also writes
+  `preflight.txt`; an `EXIT` trap copies what exists and always writes `exit_status.txt`.
+  Every evidence write is checked (`set -u` alone ignored a failed `cp`), and a failed one
+  is exit 2. Tried: `--exact` against a fake pin (exit 1, bundle with `preflight.txt`), a
+  bogus `EXCLUDED` entry (exit 1, bundle with `files.txt` too), `--evidence-dir /proc/nope`
+  (exit 2, says so), a clean `--exact` run (exit 0, 86 sources), and `oom_shim.c` put back
+  to `origin/main` (exit 1, the four `analyzer-fd-leak` errors, `exit_status.txt` 1).
+- **Release docs listed one bundle.** `README.md` (twice, plus the workflow table) and
+  `docs/ci-checks.md` now name `gcc-analyzer-evidence-<version>.zip` beside clang-tidy's.
+
+`tools/clang-tidy/run.sh` has the same evidence gap (bundle written only once the lint
+starts; eight earlier exits leave none). It was not in this diff, so it is ticket 32.

@@ -554,15 +554,24 @@ latest `-updates` build of a package, so an apt pin would break rather than hold
 locally `run.sh` enforces only the major. When a runner image moves `gcc-13`
 forward, that refusal is the prompt to re-run, triage what changed, and re-pin.
 
-**Evidence.** `--evidence-dir DIR` writes, pass or fail: `version.txt`
-(`gcc --version` and the package version), `pin.env` and `bazelrc.txt` (the
-config, copied), `files.txt` (every source compiled with `-fanalyzer`, from
-bazel's own command lines), `excluded.txt`, `sha.txt`, `output.txt` (the build's
-full output) and `exit_status.txt`. CI uploads it as
-`gcc-analyzer-evidence-<sha>`, and `release.yml` attaches it to the release as
-`gcc-analyzer-evidence-<version>.zip`. A compile the disk cache already holds is
-not re-analyzed, which is sound: a compile with a finding fails, and a failed
-action is never cached.
+**Evidence.** `--evidence-dir DIR` writes, on every exit: `version.txt`
+(`gcc --version`, the package version and the SHA-256 of `cc1`), `pin.env` and
+`bazelrc.txt` (the config, copied), `sha.txt` and `exit_status.txt`, and as far as
+the run got: `preflight.txt` (why a check before the build refused, such as a GCC
+that is not the pinned one), `files.txt` (every source compiled with `-fanalyzer`,
+from bazel's own command lines), `excluded.txt` and `output.txt` (the build's full
+output). A refused run still leaves a bundle, which is what the upload step needs
+when a runner image moves `gcc-13`; a file that cannot be written fails the run. CI
+uploads it as `gcc-analyzer-evidence-<sha>`, and `release.yml` attaches it to the
+release as `gcc-analyzer-evidence-<version>.zip`.
+
+**The cache knows the compiler.** A compile the disk cache already holds is not
+re-analyzed. That a failed action is never cached is not enough to make that sound:
+Bazel's action key covers the command line and the inputs, and the compiler binary
+is neither, so after a re-pin an unchanged source would be served from an object
+the old GCC analyzed and passed. `run.sh` adds `--copt=-DQWE_ANALYZER_CC1=<the first
+16 hex digits of cc1's SHA-256>` (`cc1` is where `-fanalyzer` runs), so another
+compiler is another action.
 
 **What it found.** Sixteen findings on first run, none of which clang-tidy
 reports. The two `luaexec.c` double-frees the ticket also listed were already

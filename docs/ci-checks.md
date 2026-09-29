@@ -191,9 +191,10 @@ again at the tagged commit (not the fuzzer, which is never part of a release); `
 with `perf-gate: true`, so a perf regression against
 `tools/perf/expected.tsv` fails the release (on a push and nightly it only reports). Then `qwe` and `qwe-debug` are built,
 `tools/release/check_version.sh` checks that the tag, `QWE_VERSION` in `src/kernel/qwe.h` and
-`qwe --version` agree, and the two binaries, `SHA256SUMS` and the static-analysis evidence bundle
-(`clang-tidy-evidence-<version>.zip`, downloaded from the `static-analysis` job's own artifact,
-which expires in at most 90 days — see `docs/static-analysis.md`; a release asset does not)
+`qwe --version` agree, and the two binaries, `SHA256SUMS` and the two static-analysis evidence bundles
+(`clang-tidy-evidence-<version>.zip` and `gcc-analyzer-evidence-<version>.zip`, downloaded from
+the `static-analysis` and `gcc-analyzer` jobs' own artifacts,
+which expire in at most 90 days — see `docs/static-analysis.md`; a release asset does not)
 are attached to the release. The full
 commit hash is appended to the release notes (a release created by the workflow is titled
 `<tag> (<short sha>)`). A release made in the web UI is public while the gates run; if a gate (smoke

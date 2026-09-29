@@ -1,4 +1,4 @@
-# qwe
+| `static-analysis` | the LLVM Static Analyzer and a C ruleset through clang-tidy, pinned to `20.1.8`, and GCC's `-fanalyzer`, pinned to `gcc-13` `13.3.0-6ubuntu2~24.04.1` (`docs/static-analysis.md`); each uploads an evidence artifact every run |# qwe
 
 **qwe** (Qualified Workflow Engine) is a small Linux command-line tool that runs
 a workflow to completion and exits. You describe the work as YAML in the style
@@ -96,8 +96,8 @@ qwe keygen | qwe encrypt | qwe --version
 ## Getting it
 
 qwe is Linux x86_64 only. Each [release](https://github.com/thetanil/qwe/releases) attaches `qwe`,
-`qwe-debug` (the same build with symbols), `SHA256SUMS` and the static-analysis evidence bundle
-(`clang-tidy-evidence-<version>.zip`, `docs/static-analysis.md`). To build it yourself you need Bazel 8.7.0
+`qwe-debug` (the same build with symbols), `SHA256SUMS` and the two static-analysis evidence bundles
+(`clang-tidy-evidence-<version>.zip` and `gcc-analyzer-evidence-<version>.zip`, `docs/static-analysis.md`). To build it yourself you need Bazel 8.7.0
 (the version is pinned in `.bazelversion`); every dependency is vendored in the repository.
 
 ```
@@ -353,9 +353,9 @@ never tags, so a tag that was only created locally does nothing.
    on a regression).
    Only then does `publish` build `qwe` and `qwe-debug`, check that the tag, `QWE_VERSION` and
    `qwe --version` agree, and create the release (title `v<version> (<short hash>)`, generated
-   notes plus the commit hash) with the binaries, `SHA256SUMS` and the static-analysis evidence
-   bundle (`clang-tidy-evidence-<version>.zip`, downloaded from the `static-analysis` job's own
-   run) attached. A tag with a `-` (`v0.3.1-rc1`) is marked a pre-release. Check it with
+   notes plus the commit hash) with the binaries, `SHA256SUMS` and the two static-analysis evidence
+   bundles (`clang-tidy-evidence-<version>.zip` and `gcc-analyzer-evidence-<version>.zip`,
+   downloaded from the `static-analysis` and `gcc-analyzer` jobs' own run) attached. A tag with a `-` (`v0.3.1-rc1`) is marked a pre-release. Check it with
    `gh release view v<version>`.
 5. If a gate or the version check fails: for a pushed tag, no release was created. For a release
    written in the web UI, it is turned back into a draft. Either way, fix `main`, then move the tag
