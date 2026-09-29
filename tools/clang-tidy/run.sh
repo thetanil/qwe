@@ -13,7 +13,8 @@
 # --evidence-dir:  the gate, and also write version.txt (clang-tidy --version),
 #                  .clang-tidy (a copy), files.txt (the (file, flag set) list and
 #                  its count), sha.txt (the git commit), output.txt (every run's full
-#                  clang-tidy output, not --quiet) and exit_status.txt into DIR. CI's
+#                  clang-tidy output, not --quiet), ctu-map.txt (the cross-translation-unit
+#                  definition map, see below) and exit_status.txt into DIR. CI's
 #                  evidence artifact (docs/static-analysis.md, docs/ci-checks.md); a
 #                  human runs it the same way to reproduce what an assessor was shown.
 #
@@ -230,6 +231,60 @@ entry_label() {
 	jq -r '"\(.file) [\(.configs | join(","))]" + (if .variant == "" then "" else " \(.variant)" end)' <<<"$1"
 }
 
+# Cross-translation-unit analysis (.scratch/sca-round3 ticket 06, docs/static-analysis.md
+# "What the analyzer sees"). Without it the analyzer stops at every call into another .c:
+# a buffer a callee frees, a NULL it returns, an fd it closes are all invisible. With it,
+# a call to a function defined in another file of the scope is inlined like a local one.
+# On-demand CTU, no AST dumps and no Python (analyze-build is a Python script): the
+# analyzer parses the other file itself, from two files in $ctu:
+#   externalDefMap.txt  each external function's USR and the file that defines it, from
+#                       clang-extdef-mapping (same LLVM major as clang-tidy). A USR defined
+#                       in more than one file (every main, greatest, the __wrap_ OOM shims,
+#                       a test's stand-in for a library function) is left out: which
+#                       definition a call reaches depends on the binary, so none is linked.
+#   invocations.yml     the flags each file is parsed with: one entry per file, its
+#                       default-configuration flags (fewest extra -D first), as JSON,
+#                       which YAML accepts. Its argv[0] is the real path of the clang-tidy
+#                       being run: the imported file's builtin headers (stddef.h, ...) are
+#                       found relative to it, and with a bare "clang" they came from
+#                       whatever clang was on PATH, or none (CI has only the pinned tree).
+# ctu-import-threshold is the number of files, so no file's imports are cut short (the
+# default, 24, is close to what workflow.c imports). display-ctu-progress prints one
+# "CTU loaded AST file" line per import: the gate fails if no run imported anything,
+# because a broken map or a path mismatch turns CTU off without a word.
+: "${CLANG_EXTDEF_MAPPING:=clang-extdef-mapping}"
+command -v "$CLANG_EXTDEF_MAPPING" >/dev/null 2>&1 || {
+	echo "run.sh: $CLANG_EXTDEF_MAPPING not found (cross-translation-unit analysis needs it)" >&2
+	exit 1
+}
+extdef_line=$("$CLANG_EXTDEF_MAPPING" --version | grep -oE 'version [0-9]+\.[0-9]+\.[0-9]+' | head -1)
+extdef_major=${extdef_line#version }
+extdef_major=${extdef_major%%.*}
+if [ "$extdef_major" != "$CLANG_TIDY_MAJOR" ]; then
+	echo "run.sh: $CLANG_EXTDEF_MAPPING is major version ${extdef_major:-unknown}; clang-tidy is $CLANG_TIDY_MAJOR" >&2
+	exit 1
+fi
+ctu=$tmp/ctu
+mkdir -p "$ctu"
+jq -sc 'group_by(.file) | map(sort_by([(.configs | index("default") == null), (.variant | length)]) | .[0]) | .[]' \
+	"$tmp/entries.jsonl" >"$ctu/chosen.jsonl"
+: >"$ctu/defs.txt"
+while IFS= read -r entry; do
+	entry_flags "$entry"
+	file=$(jq -r .file <<<"$entry")
+	if ! "$CLANG_EXTDEF_MAPPING" "$file" -- "${flags[@]}" >>"$ctu/defs.txt" 2>"$ctu/extdef.err"; then
+		cat "$ctu/extdef.err" >&2
+		echo "run.sh: $CLANG_EXTDEF_MAPPING failed on $file" >&2
+		exit 1
+	fi
+done <"$ctu/chosen.jsonl"
+sort -u "$ctu/defs.txt" | awk '{ n[$1]++; line[$1] = $0 } END { for (u in n) if (n[u] == 1) print line[u] }' |
+	sort >"$ctu/externalDefMap.txt"
+jq -s --arg here "$here" --arg driver "$(readlink -f "$(command -v "$CLANG_TIDY")")" 'map({ key: "\($here)/\(.file)", value: ([$driver] + .flags + ["-c", "\($here)/\(.file)"]) }) | from_entries' \
+	"$ctu/chosen.jsonl" >"$ctu/invocations.yml"
+ctu_args=(-Xclang -analyzer-config -Xclang
+	"experimental-enable-naive-ctu-analysis=true,ctu-dir=$ctu,ctu-invocation-list=$ctu/invocations.yml,ctu-import-threshold=$(wc -l <"$ctu/chosen.jsonl"),display-ctu-progress=true")
+
 if [ "$raw" = 1 ]; then
 	# The groups .clang-tidy enables (its un-negated Checks lines), after a
 	# reset: --checks appends to the config's list, so '-*' drops every
@@ -248,7 +303,7 @@ if [ "$raw" = 1 ]; then
 		entry_flags "$entry"
 		file=$(jq -r .file <<<"$entry")
 		"$CLANG_TIDY" --quiet --config-file="$config" --checks="-*,${groups%,}" \
-			--warnings-as-errors='-*' "$file" -- "${flags[@]}" 2>/dev/null >>"$out" || true
+			--warnings-as-errors='-*' "$file" -- "${flags[@]}" "${ctu_args[@]}" 2>/dev/null >>"$out" || true
 	done <"$tmp/entries.jsonl"
 	# A header finding repeats once per file that includes it, and a file finding
 	# once per flag set: count each file:line:col:check once. Paths are made
@@ -297,15 +352,25 @@ while IFS= read -r entry; do
 	file=$(jq -r .file <<<"$entry")
 	printf '@@RUN\t%s\n' "$(entry_label "$entry")" >>"$tmp/all.out"
 	# shellcheck disable=SC2086 # $quiet is one flag or nothing
-	if ! "$CLANG_TIDY" $quiet "$file" -- "${flags[@]}" >"$tmp/run.out" 2>&1; then
+	if ! "$CLANG_TIDY" $quiet "$file" -- "${flags[@]}" "${ctu_args[@]}" >"$tmp/run.out" 2>&1; then
 		fail=1
 	fi
 	cat "$tmp/run.out" >>"$tmp/all.out"
 done <"$tmp/entries.jsonl"
 
+# CTU that imported nothing is CTU that is off (see the CTU block above).
+ctu_off=0
+ctu_loads=$(grep -c '^CTU loaded AST file: ' "$tmp/all.out" || true)
+if [ "$ctu_loads" -eq 0 ]; then
+	echo "run.sh: cross-translation-unit analysis imported no file in any run: check $CLANG_EXTDEF_MAPPING and the paths in externalDefMap.txt against invocations.yml" >&2
+	ctu_off=1
+fi
+echo "run.sh: cross-translation-unit analysis: $(wc -l <"$ctu/externalDefMap.txt") external definitions, $ctu_loads imports" >&2
+
 [ -n "$evidence" ] && {
 	sed "s|$here/||g" "$tmp/all.out" >"$evidence/output.txt"
-	echo "$fail" >"$evidence/exit_status.txt"
+	sed "s|$here/||g" "$ctu/externalDefMap.txt" >"$evidence/ctu-map.txt"
+	echo $((fail | ctu_off)) >"$evidence/exit_status.txt"
 }
 
 if [ "$fail" = 1 ]; then
@@ -319,7 +384,7 @@ if [ "$fail" = 1 ]; then
 			if (key in idx) { skip = 1; cur = 0; cfg[idx[key]] = cfg[idx[key]] "; " label; next }
 			skip = 0; n++; idx[key] = n; cfg[n] = label; body[n] = $0; cur = n; next
 		}
-		/^[0-9]+ warnings? generated\.$|^Suppressed [0-9]+ warnings|^Use -header-filter|^Use -system-headers|^Error while processing/ { next }
+		/^[0-9]+ warnings? generated\.$|^Suppressed [0-9]+ warnings|^Use -header-filter|^Use -system-headers|^Error while processing|^CTU loaded AST file: / { next }
 		{ if (!skip && cur) body[cur] = body[cur] "\n" $0 }
 		END {
 			for (i = 1; i <= n; i++) { print body[i]; print "  in: " cfg[i] }
@@ -335,4 +400,4 @@ if [ "$fail" = 1 ]; then
 	fi
 fi
 
-exit "$fail"
+exit $((fail | ctu_off))

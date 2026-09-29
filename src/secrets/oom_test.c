@@ -20,11 +20,14 @@ static char sealed[256];
 static int seal_case(void *arg)
 {
 	char *env = qwe_envelope_seal(key, (const uint8_t *)plain, sizeof plain - 1);
+	int rc;
 
 	(void)arg;
 	if (!env)
 		return 0;
-	return strlen(env) == strlen(sealed) && strncmp(env, "qwe:1:xchacha20poly1305:", 24) == 0 ? 1 : 2;
+	rc = strlen(env) == strlen(sealed) && strncmp(env, "qwe:1:xchacha20poly1305:", 24) == 0 ? 1 : 2;
+	free(env);
+	return rc;
 }
 
 static int open_case(void *arg)
@@ -32,11 +35,14 @@ static int open_case(void *arg)
 	uint8_t *out = NULL;
 	size_t n = 0;
 	const char *why = NULL;
+	int rc;
 
 	(void)arg;
 	if (qwe_envelope_open(key, sealed, &out, &n, &why) < 0)
 		return why && strstr(why, "memory") ? 0 : 2;
-	return n == sizeof plain - 1 && memcmp(out, plain, n) == 0 ? 1 : 2;
+	rc = n == sizeof plain - 1 && memcmp(out, plain, n) == 0 ? 1 : 2;
+	free(out);
+	return rc;
 }
 
 static enum greatest_test_res sweep(int (*fn)(void *))

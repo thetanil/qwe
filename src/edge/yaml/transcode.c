@@ -15,6 +15,9 @@ enum { OK = 0, ERR = -1, NOMEM = -2 };
 
 #define ENCRYPTED_TAG "!encrypted"
 
+/* The largest CBOR buffer qwe_yaml_to_cbor grows to. */
+#define CBOR_MAX_SIZE (QWE_YAML_MAX_SIZE * 64)
+
 struct ctx {
 	CborEncoder stack[QWE_YAML_MAX_DEPTH + 1];
 	int depth; /* index of the innermost open encoder; 0 is the document */
@@ -417,7 +420,20 @@ int qwe_yaml_to_cbor(const char *yaml, size_t len, uint8_t **out, size_t *out_le
 	c->err_size = err_size;
 	err[0] = '\0';
 	do {
-		uint8_t *grown = realloc(buf, cap);
+		uint8_t *grown;
+
+		/* The buffer doubles until the document fits. With no aliases, CBOR is a
+		 * small multiple of the YAML (a 9-byte double from ".5,"), so a buffer past
+		 * this bound means encode is not converging, not a document that needs it.
+		 * The check on cap itself is also what shows the analyzer the realloc is
+		 * bounded: it cannot carry len <= QWE_YAML_MAX_SIZE through len * 2 + 64. */
+		if (cap > CBOR_MAX_SIZE) {
+			qwe_msg(err, err_size, "1:1: document is larger than %lu bytes once encoded",
+				(unsigned long)CBOR_MAX_SIZE);
+			rc = ERR;
+			break;
+		}
+		grown = realloc(buf, cap);
 		if (!grown) {
 			qwe_msg(err, err_size, "out of memory");
 			free(buf);

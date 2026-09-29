@@ -5,14 +5,15 @@ tools/clang-tidy/run.sh
 ```
 
 The LLVM/Clang toolchain's own static analysis: `clang-analyzer-*` is the Clang
-Static Analyzer itself (symbolic execution, cross-function), run through
+Static Analyzer itself (symbolic execution, across functions and across files:
+see "What the analyzer sees"), run through
 `clang-tidy` alongside a popular bugprone/cert/concurrency/performance/portability
 ruleset for C. It finds a different class of thing from the sanitizers and
 valgrind: they need a run that exercises the bad path; this reads every path,
 without running anything, at the cost of false positives a runtime check never has.
 It runs in its own `static-analysis.yml`, on every push to main, every pull request,
 nightly, release and by hand (see `docs/ci-checks.md`): unlike valgrind, the gate is
-about two minutes (one clang-tidy run per (file, flag set) pair, 186 of them, see "Scope"),
+about two and a half minutes (one clang-tidy run per (file, flag set) pair, 186 of them, see "Scope"),
 so it gates a pull request rather than waiting for the next nightly run.
 
 ## The pinned version
@@ -36,7 +37,8 @@ non-20 major) exits non-zero without touching Bazel.
 or fails: `version.txt` (`clang-tidy --version`), `.clang-tidy` (a copy of the config as
 run), `files.txt` (the exact (file, flag set) list `bazel aquery` resolved, and its
 count: see "Scope"), `sha.txt` (the git commit), `output.txt` (every run's full output,
-not `--quiet`, each behind a `@@RUN` line naming its pair) and `exit_status.txt`. CI uploads
+not `--quiet`, each behind a `@@RUN` line naming its pair), `ctu-map.txt` (the
+cross-translation-unit definition map, see "What the analyzer sees") and `exit_status.txt`. CI uploads
 this as the `clang-tidy-evidence-<sha>` artifact on every run of `static-analysis.yml`.
 GitHub keeps a workflow artifact for at most 90 days (up to 400 on a private repo), so
 `release.yml` also downloads it and attaches it to the GitHub release as
@@ -158,6 +160,75 @@ named: `//src/...` does not reach them, and a warm disk cache with a fresh outpu
 pull request's CI run) serves the compile actions from the cache without ever writing a
 header nobody asked for. `run.sh` fails if the query finds no genrule, so the list cannot
 silently go empty.
+
+## What the analyzer sees
+
+The analyzer follows every path through a function and into the functions it
+calls, inlining them. Out of the box it does that only inside one translation
+unit: a call to a function defined in another `.c` is a black box, so a buffer a
+callee frees, a pointer it returns NULL, or an fd it closes are invisible.
+`.scratch/sca-round3` ticket 06 measured three ways to make it see more, on this
+tree, and adopted one.
+
+**Cross-translation-unit analysis (CTU): on.** `run.sh` gives every clang-tidy
+run `-Xclang -analyzer-config -Xclang
+experimental-enable-naive-ctu-analysis=true,ctu-dir=...,ctu-invocation-list=...,ctu-import-threshold=<files>,display-ctu-progress=true`.
+A call into another file of the scope is then inlined like a local one. This is
+on-demand CTU: the analyzer parses the other file itself, so there are no AST
+dumps (they would need a `clang` binary matching clang-tidy's exact build), and
+no Python (`analyze-build`, the usual driver, is a Python script). It needs two
+files, built per run into a temporary directory:
+
+- `externalDefMap.txt`: each external function's USR and the file that defines it,
+  from `clang-extdef-mapping` run once per file with the flags below. It comes from
+  the same pinned LLVM release as clang-tidy (`.github/actions/clang-tidy-pin`
+  extracts both; `run.sh` refuses a different major). A USR defined in more than
+  one file is dropped rather than linked to either: every test's `main`,
+  greatest's functions, the `__wrap_*` OOM shims, `LLVMFuzzerTestOneInput` (30
+  names at this commit). Which definition a call reaches depends on the binary,
+  and the analyzer would otherwise pick one at random. 140 definitions remain.
+  CI's evidence keeps it as `ctu-map.txt`.
+- `invocations.yml`: the flags each file is parsed with when imported, one entry
+  per file (its default-configuration pair, fewest extra `-D` first), written as
+  JSON, which YAML accepts.
+
+`ctu-import-threshold` is the number of files in the map, so no run's imports
+are cut short: the default, 24, is close to the 20 files `workflow.c` imports
+today, and past it the analyzer would quietly go back to black boxes.
+CTU fails silently too: a map whose paths do not match the invocation list
+imports nothing and reports nothing. So every run prints `CTU loaded AST file:`
+per import, and `run.sh` fails if no run imported anything (it prints the
+count, 314 imports at this commit). It does not apply to `third_party/`:
+LuaJIT, libyaml and libsodium are not in the map, so calls into them stay
+black boxes, as they are to the sanitizer scope. The gate takes about 30 seconds
+longer with it.
+
+**POSIX modelling: already on, nothing added.**
+`unix.StdCLibraryFunctions:ModelPOSIX` teaches the analyzer the return
+conventions of `open`, `read`, `write`, `close`, `pipe`, `dup2`, `fcntl`. It has
+defaulted to `true` since clang 19. A file that passes an unchecked `open()` to
+`dup2()` is reported with the default and with `ModelPOSIX: true`, and not with
+`false`, so clang-tidy 20 already runs with it; the `dup2` finding in "What the
+gate found on first run" was this model at work.
+
+**Path-sensitivity limits: the defaults stand.** The analyzer runs in `deep`
+mode, so `ipa` is already `dynamic-bifurcate`, `max-inlinable-size` is 100
+basic blocks and `max-nodes` is 225,000 per top-level function. On this tree,
+raising `max-inlinable-size` to 1,000 found nothing new, with or without CTU.
+Raising `max-nodes` to 2,000,000 found nothing without CTU. With CTU it found
+one false positive: a NULL `jobs` array with `n > 0` in `qwe_run_workflow`,
+where `select_jobs` (which only shrinks `n`) is not inlined, the same class as
+the `qwe_jobs_free` report above. It also more than doubled the run time.
+Neither is adopted: a wider limit that finds nothing real costs every pull
+request time and buys nothing, and it can be measured again when the code grows.
+Lowering either to save time would make the analyzer see less and is not an
+option. `crosscheck-with-z3=true` (re-checking each report's path constraints
+with the Z3 solver, to drop infeasible paths) is not available: neither the
+pinned LLVM release nor Ubuntu's `clang-tidy-20` is built with Z3, and asking
+for it aborts clang-tidy (`LLVM was not compiled with Z3 support`).
+
+The analyzer's `alpha.*` checkers are not reachable through clang-tidy, which
+lists none of them; running `clang --analyze` with them is outside this gate.
 
 ## The ruleset, and every exclusion
 
@@ -283,6 +354,62 @@ A throwaway `atoi` (`cert-err34-c`) proves each newly covered branch is live: in
 under `#ifdef QWE_GCOV`, each fails the gate and each is reported under the pair
 that compiles it, `(default)`, `(default) -DQWE_NO_STRERRORNAME_NP ...` and
 `(coverage) -DQWE_GCOV`.
+
+## What cross-translation-unit analysis found
+
+Turning CTU on (`.scratch/sca-round3` ticket 06, see "What the analyzer sees")
+produced 15 findings the per-file analyzer could not see. Every one is fixed in
+code, none with a `NOLINT`:
+
+- **A plugin whose `argv` returned `{}` crashed its step's child.** `child_argv`
+  (`src/kernel/workflow.c`) built an argv of length 0 and the child called
+  `execvp(NULL, argv)`, undefined behaviour; the step was recorded as a failed
+  command (`exit-code`) with nothing in its log. It now fails with
+  `plugin-error` and `qwe: the plugin returned an empty argv`
+  (`tests/e2e/plugin_argv_empty`). Found by
+  `clang-analyzer-core.NonNullParamChecker`, seen from `workflow.c` through
+  `qwe_proc_spawn` in `proc.c`. The same loop passed `lua_tostring` of each
+  element to `strdup`, and `lua_tostring` is NULL for anything but a string or a
+  number: `{"echo", {}}` crashed the child in `strdup` with nothing in the log.
+  The analyzer cannot see that one (`lua_tostring` is LuaJIT's, outside the
+  map); it was fixed with the other, and now fails with `argument 2 of the
+  plugin's argv is a table, not a string` (`tests/e2e/plugin_argv_not_a_string`).
+- **Nine test leaks on a failed assertion**, in `alloc_test.c`,
+  `redact_test.c` and `envelope_test.c`: each freed, after an `ASSERT`, memory
+  that a function in another file had allocated (`qwe_xstrdup`,
+  `qwe_redact_feed`'s output buffer, `qwe_envelope_open`), which "Test code:
+  same checks, two idioms" rules out. Without CTU the analyzer did not know the
+  callee allocated. They go through `qwe_own()` now, except `envelope_test`'s
+  decrypted plaintext, which is compared, wiped with `sodium_memzero` and freed
+  before the asserts, as it was meant to be. `secrets/oom_test.c`'s probe cases
+  (`seal_case`, `open_case`) leaked their result on success; they free it.
+  (`clang-analyzer-unix.Malloc`; `env.got` in two reports is greatest's name for
+  the value inside `ASSERT_MEM_EQ`.)
+
+Four were false positives, each removed by making the invariant visible in the
+code rather than suppressed:
+
+- `qwe_redact_feed` (`src/kernel/redact.c`), two reports: a `realloc` of 0
+  bytes and a `memcpy` into a null `held`, both on a path where
+  `total - i == 0` inside `while (i < total)`. The range solver cannot derive
+  one from the other when both are symbols. The loop now counts the bytes left,
+  `rest`, and `rest > 0` is its condition, which is also easier to read.
+  (`clang-analyzer-optin.portability.UnixAPI`,
+  `clang-analyzer-core.NonNullParamChecker`)
+- `qwe_jobs_free` (`src/kernel/jobs.c`) on a NULL array with `n > 0`: the
+  analyzer did not inline `select_jobs`, so `n` came back from it unknown
+  while the array a workflow with no jobs loads stayed NULL. It now returns
+  early on a NULL array, as `free(NULL)` does.
+  (`clang-analyzer-core.NullDereference`)
+- `qwe_yaml_to_cbor` (`src/edge/yaml/transcode.c`): once `read_file`'s bytes
+  are known to come from `fread`, the output buffer's `realloc(buf, len * 2 +
+  64)` is sized by input the analyzer could not see bounded, though `len` is
+  checked against `QWE_YAML_MAX_SIZE` just above: the solver does not carry a
+  bound through `* 2 + 64`. The buffer now has a ceiling of its own,
+  64 times `QWE_YAML_MAX_SIZE`, checked on `cap` before every `realloc`. With
+  no aliases the CBOR is a small multiple of the YAML (a 9-byte double from
+  `.5,`), so no document reaches it; it also ends the doubling loop, which
+  had no ceiling. (`clang-analyzer-optin.taint.TaintedAlloc`)
 
 ## What re-enabling excluded checks found
 

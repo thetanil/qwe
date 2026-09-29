@@ -99,7 +99,8 @@ static int could_start(const char *p, size_t n)
 
 int qwe_redact_feed(struct qwe_redactor *r, const void *in, size_t n, struct qwe_redact_buf *out)
 {
-	size_t total = r->held_len + n, i = 0;
+	size_t total = r->held_len + n, rest;
+	const char *p;
 	char *buf;
 
 	if (nset == 0 && r->held_len == 0)
@@ -112,32 +113,37 @@ int qwe_redact_feed(struct qwe_redactor *r, const void *in, size_t n, struct qwe
 	if (n)
 		memcpy(buf + r->held_len, in, n);
 	r->held_len = 0;
-	while (i < total) {
-		size_t m = match_at(buf + i, total - i);
+	/* rest, the bytes not yet consumed, is the loop condition itself: the analyzer
+	 * then knows it is never 0 below (from i < total it could not tell that
+	 * total - i is not) */
+	for (p = buf, rest = total; rest > 0;) {
+		size_t m = match_at(p, rest);
 
 		if (m) {
 			if (buf_add(out, MASK, sizeof MASK - 1) < 0)
 				goto fail;
-			i += m;
+			p += m;
+			rest -= m;
 			continue;
 		}
 		/* the rest might be the start of a secret that the next bytes finish */
-		if (could_start(buf + i, total - i)) {
-			if (total - i > r->held_cap) {
-				char *grown = realloc(r->held, total - i);
+		if (could_start(p, rest)) {
+			if (rest > r->held_cap) {
+				char *grown = realloc(r->held, rest);
 
 				if (!grown)
 					goto fail;
 				r->held = grown;
-				r->held_cap = total - i;
+				r->held_cap = rest;
 			}
-			memcpy(r->held, buf + i, total - i);
-			r->held_len = total - i;
+			memcpy(r->held, p, rest);
+			r->held_len = rest;
 			break;
 		}
-		if (buf_add(out, buf + i, 1) < 0)
+		if (buf_add(out, p, 1) < 0)
 			goto fail;
-		i++;
+		p++;
+		rest--;
 	}
 	free(buf);
 	return 0;

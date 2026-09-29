@@ -18,31 +18,34 @@ static const uint8_t key[QWE_KEY_BYTES] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
 TEST roundtrip(void)
 {
 	static const char plain[] = "hunter2 \n with \0 nul";
-	char *env = qwe_envelope_seal(key, (const uint8_t *)plain, sizeof plain - 1);
+	char *env = qwe_own(qwe_envelope_seal(key, (const uint8_t *)plain, sizeof plain - 1));
 	uint8_t *back;
 	size_t n;
 	const char *why;
+	int same;
 
 	ASSERT(env != NULL);
 	ASSERT(strncmp(env, "qwe:1:xchacha20poly1305:", 24) == 0);
 	ASSERT(strstr(env, "hunter2") == NULL);
 	ASSERT_EQ(0, qwe_envelope_check(env, &why));
 	ASSERT_EQ(0, qwe_envelope_open(key, env, &back, &n, &why));
-	ASSERT_EQ(sizeof plain - 1, n);
-	ASSERT_MEM_EQ(plain, back, n);
+	/* compared, then wiped and freed before any assert can return past it */
+	same = n == sizeof plain - 1 && memcmp(plain, back, n) == 0;
 	sodium_memzero(back, n);
 	free(back);
-	free(env);
+	ASSERT_EQ(sizeof plain - 1, n);
+	ASSERT(same);
 	PASS();
 }
 
 TEST fresh_nonce_each_time(void)
 {
-	char *a = qwe_envelope_seal(key, (const uint8_t *)"x", 1), *b = qwe_envelope_seal(key, (const uint8_t *)"x", 1);
+	char *a = qwe_own(qwe_envelope_seal(key, (const uint8_t *)"x", 1));
+	char *b = qwe_own(qwe_envelope_seal(key, (const uint8_t *)"x", 1));
 
+	ASSERT(a != NULL);
+	ASSERT(b != NULL);
 	ASSERT(strcmp(a, b) != 0);
-	free(a);
-	free(b);
 	PASS();
 }
 

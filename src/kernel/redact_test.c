@@ -1,9 +1,11 @@
 #include "greatest.h"
 #include "src/kernel/redact.h"
+#include "src/testing/owned.h"
 
 #include <string.h>
 
-/* Feeds the pieces in order, flushes, and returns the whole output. */
+/* Feeds the pieces in order, flushes, and returns the whole output, owned by the
+ * test (src/testing/owned.h). */
 static void run(const char *const *pieces, size_t n, struct qwe_redact_buf *out)
 {
 	struct qwe_redactor r = {0};
@@ -13,6 +15,7 @@ static void run(const char *const *pieces, size_t n, struct qwe_redact_buf *out)
 		qwe_redact_feed(&r, pieces[i], strlen(pieces[i]), out);
 	qwe_redact_flush(&r, out);
 	qwe_redactor_free(&r);
+	qwe_own(out->data);
 }
 
 #define OUT_EQ(want, out)                                          \
@@ -30,7 +33,6 @@ TEST masks_a_secret(void)
 	qwe_redact_add("hunter2", 7);
 	run(p, 1, &out);
 	OUT_EQ("token=*** and *** again\n", out);
-	qwe_redact_buf_free(&out);
 	PASS();
 }
 
@@ -52,7 +54,6 @@ TEST split_across_chunks(void)
 		memcpy(b, whole + cut, strlen(whole + cut) + 1); /* whole is 13 bytes, b is 32 */
 		run(p, 2, &out);
 		OUT_EQ("aa *** bb", out);
-		qwe_redact_buf_free(&out);
 	}
 	{
 		struct qwe_redactor r = {0};
@@ -62,9 +63,9 @@ TEST split_across_chunks(void)
 		for (; *s; s++)
 			qwe_redact_feed(&r, s, 1, &out);
 		qwe_redact_flush(&r, &out);
-		OUT_EQ("aa *** bb", out);
-		qwe_redact_buf_free(&out);
 		qwe_redactor_free(&r);
+		qwe_own(out.data);
+		OUT_EQ("aa *** bb", out);
 	}
 	PASS();
 }
@@ -78,7 +79,6 @@ TEST a_near_miss_is_not_held_forever(void)
 	qwe_redact_add("hunter2", 7);
 	run(p, 2, &out);
 	OUT_EQ("hunter3 done", out);
-	qwe_redact_buf_free(&out);
 	PASS();
 }
 
@@ -91,7 +91,6 @@ TEST held_tail_is_flushed_at_the_end(void)
 	qwe_redact_add("hunter2", 7);
 	run(p, 1, &out);
 	OUT_EQ("ends with hunt", out);
-	qwe_redact_buf_free(&out);
 	PASS();
 }
 
@@ -107,9 +106,9 @@ TEST longest_secret_wins_and_new_ones_apply_later(void)
 	qwe_redact_add("late", 4); /* a secret output that arrived meanwhile */
 	qwe_redact_feed(&r, "late\n", 5, &out);
 	qwe_redact_flush(&r, &out);
-	OUT_EQ("*** *** late\n***\n", out);
-	qwe_redact_buf_free(&out);
 	qwe_redactor_free(&r);
+	qwe_own(out.data);
+	OUT_EQ("*** *** late\n***\n", out);
 	PASS();
 }
 
@@ -121,7 +120,6 @@ TEST no_secrets_is_a_plain_copy(void)
 	qwe_redact_clear();
 	run(p, 2, &out);
 	OUT_EQ("nothing to hide", out);
-	qwe_redact_buf_free(&out);
 	PASS();
 }
 
@@ -130,6 +128,7 @@ GREATEST_MAIN_DEFS();
 int main(int argc, char **argv)
 {
 	GREATEST_MAIN_BEGIN();
+	SET_TEARDOWN(qwe_release_owned, NULL);
 	RUN_TEST(masks_a_secret);
 	RUN_TEST(split_across_chunks);
 	RUN_TEST(a_near_miss_is_not_held_forever);

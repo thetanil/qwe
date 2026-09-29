@@ -159,9 +159,21 @@ static char **child_argv(void *arg, int result_fd)
 	/* Built before "exec" is sent: a failure here reports itself, and the parent
 	 * never sees a step that started. */
 	n = lua_objlen(L, -2);
+	/* argv[0] is what execvp runs: an empty argv would hand it NULL */
+	if (n == 0) {
+		qwe_diag("qwe: the plugin returned an empty argv\n");
+		return NULL;
+	}
 	argv = calloc(n + 1, sizeof *argv);
 	for (i = 0; argv && i < n; i++) {
 		lua_rawgeti(L, -2, (int)i + 1);
+		/* lua_tostring is NULL for anything but a string or a number */
+		if (!lua_isstring(L, -1)) {
+			qwe_diag("qwe: argument %zu of the plugin's argv is a %s, not a string\n", i + 1,
+				 luaL_typename(L, -1));
+			free_argv(argv, i);
+			return NULL;
+		}
 		argv[i] = strdup(lua_tostring(L, -1));
 		lua_pop(L, 1);
 		if (!argv[i])

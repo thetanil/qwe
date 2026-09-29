@@ -180,6 +180,9 @@ void qwe_jobs_free(lua_State *L, struct job *jobs, size_t n)
 {
 	size_t i, k;
 
+	/* no jobs were loaded (a workflow with none): nothing to free, whatever n says */
+	if (!jobs)
+		return;
 	for (i = 0; i < n; i++) {
 		struct job *j = &jobs[i];
 

@@ -1,8 +1,9 @@
 name: clang-tidy-pin
 description: >
-  Installs the exact clang-tidy tools/clang-tidy/pin.env pins (LLVM's own GitHub release
-  tarball, verified against its published sha256) and puts it first on PATH. Cached by the
-  pinned version and hash, which never change, so only the very first run downloads it.
+  Installs the exact clang-tidy tools/clang-tidy/pin.env pins, and clang-extdef-mapping from
+  the same build (run.sh builds its cross-translation-unit map with it), from LLVM's own GitHub
+  release tarball, verified against its published sha256, and puts them first on PATH. Cached by
+  the pinned version and hash, which never change, so only the very first run downloads it.
 runs:
   using: composite
   steps:
@@ -41,6 +42,9 @@ runs:
       # found", and the resulting broken preprocessing produced unrelated bogus findings
       # downstream (run 36317103321). Both directories come from the ~2 GB tarball, but
       # together are a few hundred MB, not the whole tree, and that's what gets cached.
+      # bin/clang-extdef-mapping (same libm/libz/libc needs) is run.sh's cross-translation-
+      # unit map builder: taken from the same build so its USRs match what clang-tidy's
+      # analyzer looks up (.scratch/sca-round3 ticket 06).
       # The member paths are built from CLANG_TIDY_TARBALL_ROOT (pin.env), not discovered
       # by listing the archive first: `tar -tJf` on this single-stream xz tarball has to
       # decompress everything up to the last entry it prints, and piping that into
@@ -59,9 +63,11 @@ runs:
         echo "$CLANG_TIDY_SHA256  $tmp/llvm.tar.xz" | sha256sum -c -
         tar -xJf "$tmp/llvm.tar.xz" -C "$tmp" \
           "$CLANG_TIDY_TARBALL_ROOT/bin/clang-tidy" \
+          "$CLANG_TIDY_TARBALL_ROOT/bin/clang-extdef-mapping" \
           "$CLANG_TIDY_TARBALL_ROOT/lib/clang/$CLANG_TIDY_MAJOR/include"
         mkdir -p "$dir/bin" "$dir/lib/clang/$CLANG_TIDY_MAJOR"
         install -m 0755 "$tmp/$CLANG_TIDY_TARBALL_ROOT/bin/clang-tidy" "$dir/bin/clang-tidy"
+        install -m 0755 "$tmp/$CLANG_TIDY_TARBALL_ROOT/bin/clang-extdef-mapping" "$dir/bin/clang-extdef-mapping"
         cp -r "$tmp/$CLANG_TIDY_TARBALL_ROOT/lib/clang/$CLANG_TIDY_MAJOR/include" \
           "$dir/lib/clang/$CLANG_TIDY_MAJOR/include"
     - name: Save the pinned clang-tidy to cache
@@ -81,5 +87,10 @@ runs:
         got=$(clang-tidy --version | grep -oE 'version [0-9]+\.[0-9]+\.[0-9]+' | head -1 | cut -d' ' -f2)
         [ "$got" = "$CLANG_TIDY_VERSION" ] || {
           echo "clang-tidy-pin: got $got, tools/clang-tidy/pin.env pins $CLANG_TIDY_VERSION" >&2
+          exit 1
+        }
+        got=$(clang-extdef-mapping --version | grep -oE 'version [0-9]+\.[0-9]+\.[0-9]+' | head -1 | cut -d' ' -f2)
+        [ "$got" = "$CLANG_TIDY_VERSION" ] || {
+          echo "clang-tidy-pin: clang-extdef-mapping is $got, tools/clang-tidy/pin.env pins $CLANG_TIDY_VERSION" >&2
           exit 1
         }
