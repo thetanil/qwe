@@ -38,6 +38,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           cache-key: release
+          cache-save: "false"
       - run: bazel build --config=release //src/cli:qwe
       - run: |
           mkdir out

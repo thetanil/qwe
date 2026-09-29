@@ -7,6 +7,9 @@ inputs:
   cache-key:
     description: Names the config the disk cache belongs to (tests, asan, ...).
     required: true
+  cache-save:
+    description: "'auto' (default): save on non-PR events; 'true'/'false': force cache save on or off."
+    default: "auto"
   ssh-target:
     description: "true: start sshd on 172.18.0.1 for the needs-ssh e2e cases and require them to run."
     default: "false"
@@ -19,7 +22,7 @@ runs:
         disk-cache: ${{ inputs.cache-key }}
         repository-cache: true
         cache-version: 2
-        cache-save: ${{ github.event_name != 'pull_request' }}
+        cache-save: ${{ inputs.cache-save == 'auto' && github.event_name != 'pull_request' || inputs.cache-save == 'true' }}
         bazelrc: |
           test --test_output=errors
     - name: Bazel is the pinned version
