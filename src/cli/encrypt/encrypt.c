@@ -12,8 +12,11 @@
 
 #define MAX_PLAIN ((size_t)64 * 1024)
 
-/* Reads all of stdin into a malloc'd buffer. Returns its length, or -1. */
-static ssize_t read_stdin(uint8_t **out)
+/* Reads all of stdin into a malloc'd buffer, *out, of *len bytes. Returns 0,
+ * -1 on a read or allocation failure, or -2 when stdin is longer than
+ * MAX_PLAIN; *out is set only on 0. The status is kept apart from the length,
+ * so no path returns a failure with the buffer already handed out. */
+static int read_stdin(uint8_t **out, size_t *len)
 {
 	uint8_t *buf = malloc(MAX_PLAIN + 1);
 	size_t n = 0;
@@ -38,7 +41,8 @@ static ssize_t read_stdin(uint8_t **out)
 		}
 	}
 	*out = buf;
-	return (ssize_t)n;
+	*len = n;
+	return 0;
 }
 
 /* The plaintext is read from stdin, never from an argument: an argument is in
@@ -48,7 +52,8 @@ int qwe_cmd_encrypt(int argc, char **argv)
 {
 	char err[512], *envelope;
 	uint8_t key[QWE_KEY_BYTES], *plain = NULL;
-	ssize_t n;
+	size_t n = 0;
+	int rc;
 
 	(void)argv;
 	if (argc != 1) {
@@ -64,9 +69,9 @@ int qwe_cmd_encrypt(int argc, char **argv)
 		qwe_diag("qwe encrypt: %s\n", err);
 		return QWE_EXIT_USAGE;
 	}
-	n = read_stdin(&plain);
-	if (n < 0) {
-		if (n == -2)
+	rc = read_stdin(&plain, &n);
+	if (rc < 0) {
+		if (rc == -2)
 			qwe_diag("qwe encrypt: the secret is longer than %lu bytes\n", (unsigned long)MAX_PLAIN);
 		else
 			qwe_diag("qwe encrypt: cannot read stdin\n");
@@ -75,7 +80,7 @@ int qwe_cmd_encrypt(int argc, char **argv)
 	}
 	if (n > 0 && plain[n - 1] == '\n')
 		n--;
-	envelope = qwe_envelope_seal(key, plain, (size_t)n);
+	envelope = qwe_envelope_seal(key, plain, n);
 	sodium_memzero(plain, MAX_PLAIN + 1);
 	sodium_memzero(key, sizeof key);
 	free(plain);

@@ -5,7 +5,9 @@
 #include "src/kernel/oom_shim.h"
 #include "src/testing/env.h"
 
+#include <fcntl.h>
 #include <signal.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -127,6 +129,81 @@ TEST forked_child_fails_its_nth_allocation_and_logs_it(void)
 	PASS();
 }
 
+static int return_zero(void *arg)
+{
+	(void)arg;
+	return 0;
+}
+
+static int fd_is_open(int fd)
+{
+	return fcntl(fd, F_GETFD) >= 0;
+}
+
+/* The two lowest free descriptors into free2, and the soft RLIMIT_NOFILE that
+ * leaves exactly those two for the process to open: one pipe, not two. */
+static int limit_to_one_pipe(int free2[2], rlim_t *lim)
+{
+	int fd, got = 0;
+
+	for (fd = 0; fd < 1024 && got < 2; fd++)
+		if (!fd_is_open(fd))
+			free2[got++] = fd;
+	if (got < 2)
+		return -1;
+	/* an open descriptor at or above the limit still counts as open, but
+	 * does not let the process open another: only free2 can be taken */
+	*lim = (rlim_t)free2[1] + 1;
+	return 0;
+}
+
+/* qwe_oom_probe's first pipe opens and its second fails (EMFILE): the probe
+ * fails, and closes the first pipe's two ends before it says so (ticket
+ * sca-round3/07, GCC's -Wanalyzer-fd-leak). */
+TEST probe_closes_the_first_pipe_when_the_second_fails(void)
+{
+	struct qwe_oom_outcome o;
+	struct rlimit old, lim;
+	int free2[2], rc;
+
+	ASSERT_EQ(0, getrlimit(RLIMIT_NOFILE, &old));
+	ASSERT_EQ(0, limit_to_one_pipe(free2, &lim.rlim_cur));
+	lim.rlim_max = old.rlim_max;
+	ASSERT_EQ(0, setrlimit(RLIMIT_NOFILE, &lim));
+	rc = qwe_oom_probe(0, 0, return_zero, NULL, &o);
+	ASSERT_EQ(0, setrlimit(RLIMIT_NOFILE, &old));
+	ASSERT_EQ(-1, rc);
+	ASSERTm("the first pipe's read end is closed", !fd_is_open(free2[0]));
+	ASSERTm("the first pipe's write end is closed", !fd_is_open(free2[1]));
+	PASS();
+}
+
+/* fork fails (EAGAIN, RLIMIT_NPROC of 0): the probe fails and closes all four
+ * pipe ends. RLIMIT_NPROC does not bind root, so as root it is skipped. */
+TEST probe_closes_its_pipes_when_fork_fails(void)
+{
+	struct qwe_oom_outcome o;
+	struct rlimit old, lim;
+	int before[4], fd, got = 0, rc;
+
+	if (geteuid() == 0)
+		SKIPm("RLIMIT_NPROC does not bind root");
+	for (fd = 0; fd < 1024 && got < 4; fd++)
+		if (!fd_is_open(fd))
+			before[got++] = fd;
+	ASSERT_EQ(4, got);
+	ASSERT_EQ(0, getrlimit(RLIMIT_NPROC, &old));
+	lim.rlim_cur = 0;
+	lim.rlim_max = old.rlim_max;
+	ASSERT_EQ(0, setrlimit(RLIMIT_NPROC, &lim));
+	rc = qwe_oom_probe(0, 0, return_zero, NULL, &o);
+	ASSERT_EQ(0, setrlimit(RLIMIT_NPROC, &old));
+	ASSERT_EQ(-1, rc);
+	for (got = 0; got < 4; got++)
+		ASSERTm("every pipe end the probe opened is closed", !fd_is_open(before[got]));
+	PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv)
@@ -134,5 +211,7 @@ int main(int argc, char **argv)
 	GREATEST_MAIN_BEGIN();
 	RUN_TEST(probe_timeout_defaults_can_be_overridden);
 	RUN_TEST(forked_child_fails_its_nth_allocation_and_logs_it);
+	RUN_TEST(probe_closes_the_first_pipe_when_the_second_fails);
+	RUN_TEST(probe_closes_its_pipes_when_fork_fails);
 	GREATEST_MAIN_END();
 }

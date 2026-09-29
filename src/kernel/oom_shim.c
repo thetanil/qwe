@@ -152,11 +152,14 @@ int qwe_oom_probe(long n, long child_n, int (*fn)(void *), void *arg, struct qwe
 	pid_t pid;
 
 	memset(out, 0, sizeof *out);
-	if (pipe(errp) < 0 || pipe(cntp) < 0)
+	/* each failure closes exactly what is open by then (ticket sca-round3/07) */
+	if (pipe(errp) < 0)
 		return -1;
+	if (pipe(cntp) < 0)
+		goto close_errp;
 	pid = fork();
 	if (pid < 0)
-		return -1;
+		goto close_cntp;
 	if (pid == 0) {
 		int nul = open("/dev/null", O_RDONLY), rc;
 
@@ -204,4 +207,12 @@ int qwe_oom_probe(long n, long child_n, int (*fn)(void *), void *arg, struct qwe
 		out->signal = WTERMSIG(status);
 	}
 	return 0;
+
+close_cntp:
+	close(cntp[0]);
+	close(cntp[1]);
+close_errp:
+	close(errp[0]);
+	close(errp[1]);
+	return -1;
 }

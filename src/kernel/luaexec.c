@@ -25,7 +25,10 @@ struct buf {
 
 static int buf_add(struct buf *b, const char *src, size_t n)
 {
-	if (b->len + n > b->cap) {
+	/* An empty buf (data NULL, cap 0) always grows first: said outright,
+	 * since GCC 13's analyzer does not derive it from len + n > cap and
+	 * reports a memcpy into NULL (ticket sca-round3/07). */
+	if (!b->data || n > b->cap - b->len) {
 		size_t cap = b->cap ? b->cap : 4096;
 		char *grown;
 
@@ -42,11 +45,63 @@ static int buf_add(struct buf *b, const char *src, size_t n)
 	return 0;
 }
 
-static void close_fd(int *fd)
+/* The parent's end of a pipe to the command. Whether it is still open is a
+ * flag of its own, not a -1 in fd: GCC 13's analyzer does not know that a
+ * descriptor pipe2 returned is >= 0, so every "if (fd >= 0) close(fd)" was,
+ * to it, a path that leaks (ticket sca-round3/07). */
+struct end {
+	int fd, open;
+};
+
+static void end_close(struct end *e)
 {
-	if (*fd >= 0)
-		close(*fd);
-	*fd = -1;
+	if (e->open)
+		close(e->fd);
+	e->open = 0;
+}
+
+/* The three pipes to a command, in one struct: as three separate array
+ * parameters the analyzer must assume they may alias, and then a pipe2 into
+ * one may overwrite -- leak -- the descriptors in another. */
+struct pipes {
+	int in[2], out[2], err[2];
+};
+
+static void close_pipe(int fd[2])
+{
+	close(fd[0]);
+	close(fd[1]);
+}
+
+/* All three pipes, or -1 with errno set and none of them open. */
+static int open_pipes(struct pipes *p)
+{
+	int saved;
+
+	if (pipe2(p->in, O_CLOEXEC) < 0)
+		return -1;
+	if (pipe2(p->out, O_CLOEXEC) < 0)
+		goto close_in;
+	if (pipe2(p->err, O_CLOEXEC) < 0)
+		goto close_out;
+	return 0;
+
+close_out:
+	saved = errno;
+	close_pipe(p->out);
+	errno = saved;
+close_in:
+	saved = errno;
+	close_pipe(p->in);
+	errno = saved;
+	return -1;
+}
+
+static void close_pipes(struct pipes *p)
+{
+	close_pipe(p->in);
+	close_pipe(p->out);
+	close_pipe(p->err);
 }
 
 static int force_raise_at; /* see luaexec_testhook.h; 0 outside a test */
@@ -70,7 +125,8 @@ static int exec_run(lua_State *L)
 	size_t n, i, in_len = 0, in_off = 0;
 	const char *in = NULL;
 	char **argv;
-	int in_p[2] = {-1, -1}, out_p[2] = {-1, -1}, err_p[2] = {-1, -1};
+	struct pipes pipes;
+	struct end to_in, from_out, from_err;
 	struct buf out = {0}, err = {0};
 	struct sigaction ign, old_pipe;
 	pid_t pid;
@@ -125,7 +181,7 @@ static int exec_run(lua_State *L)
 	}
 	lua_pop(L, (int)n);
 
-	if (pipe2(in_p, O_CLOEXEC) < 0 || pipe2(out_p, O_CLOEXEC) < 0 || pipe2(err_p, O_CLOEXEC) < 0) {
+	if (open_pipes(&pipes) < 0) {
 		saved = errno;
 		goto spawn_failed;
 	}
@@ -138,6 +194,7 @@ static int exec_run(lua_State *L)
 	if (pid < 0) {
 		saved = errno;
 		sigaction(SIGPIPE, &old_pipe, NULL);
+		close_pipes(&pipes);
 		goto spawn_failed;
 	}
 	if (pid == 0) {
@@ -147,9 +204,9 @@ static int exec_run(lua_State *L)
 		sigemptyset(&none);
 		pthread_sigmask(SIG_SETMASK, &none, NULL);
 		sigaction(SIGPIPE, &old_pipe, NULL);
-		dup2(in_p[0], 0);
-		dup2(out_p[1], 1);
-		dup2(err_p[1], 2);
+		dup2(pipes.in[0], 0);
+		dup2(pipes.out[1], 1);
+		dup2(pipes.err[1], 2);
 		if (detach || background) {
 			/* no output of its own; a detached command also gets a session of its own, out of every step's group */
 			int nul = open("/dev/null", O_WRONLY);
@@ -165,11 +222,15 @@ static int exec_run(lua_State *L)
 		execvp(argv[0], argv);
 		_exit(127);
 	}
-	close_fd(&in_p[0]);
-	close_fd(&out_p[1]);
-	close_fd(&err_p[1]);
+	close(pipes.in[0]);
+	close(pipes.out[1]);
+	close(pipes.err[1]);
+	to_in.fd = pipes.in[1];
+	from_out.fd = pipes.out[0];
+	from_err.fd = pipes.err[0];
+	to_in.open = from_out.open = from_err.open = 1;
 	if (in_len == 0)
-		close_fd(&in_p[1]);
+		end_close(&to_in);
 	/* Nothing after the fork needs argv (the child already has its own copy
 	 * across the fork): freeing it here, before any further Lua call, keeps
 	 * it off the list of things a later raise could leak. */
@@ -178,34 +239,35 @@ static int exec_run(lua_State *L)
 	free(argv);
 	if (background) {
 		/* fire and forget: the caller never waits, the parent's child reaper collects it */
-		close_fd(&in_p[1]);
-		close_fd(&out_p[0]);
-		close_fd(&err_p[0]);
+		end_close(&to_in);
+		end_close(&from_out);
+		end_close(&from_err);
 		sigaction(SIGPIPE, &old_pipe, NULL);
 		lua_pushinteger(L, (lua_Integer)pid);
 		return 1;
 	}
 	t0 = qwe_mono_now();
-	fcntl(in_p[1], F_SETFL, O_NONBLOCK);
+	if (to_in.open)
+		fcntl(to_in.fd, F_SETFL, O_NONBLOCK);
 
-	while (out_p[0] >= 0 || err_p[0] >= 0 || in_p[1] >= 0) {
+	while (from_out.open || from_err.open || to_in.open) {
 		struct pollfd pf[3];
 		char chunk[16384];
 		int np = 0, k;
 		int which[3], w = -1;
 
-		if (in_p[1] >= 0) {
-			pf[np].fd = in_p[1];
+		if (to_in.open) {
+			pf[np].fd = to_in.fd;
 			pf[np].events = POLLOUT;
 			which[np++] = 0;
 		}
-		if (out_p[0] >= 0) {
-			pf[np].fd = out_p[0];
+		if (from_out.open) {
+			pf[np].fd = from_out.fd;
 			pf[np].events = POLLIN;
 			which[np++] = 1;
 		}
-		if (err_p[0] >= 0) {
-			pf[np].fd = err_p[0];
+		if (from_err.open) {
+			pf[np].fd = from_err.fd;
 			pf[np].events = POLLIN;
 			which[np++] = 2;
 		}
@@ -228,33 +290,33 @@ static int exec_run(lua_State *L)
 		}
 		for (k = 0; k < np; k++) {
 			struct buf *dst = which[k] == 1 ? &out : &err;
-			int *fd = which[k] == 0 ? &in_p[1] : which[k] == 1 ? &out_p[0] : &err_p[0];
+			struct end *e = which[k] == 0 ? &to_in : which[k] == 1 ? &from_out : &from_err;
 			ssize_t got;
 
 			if (!pf[k].revents)
 				continue;
 			if (which[k] == 0) {
-				got = write(*fd, in + in_off, in_len - in_off);
+				got = write(e->fd, in + in_off, in_len - in_off);
 				if (got > 0)
 					in_off += (size_t)got;
 				if (got < 0 && errno != EAGAIN && errno != EINTR)
-					close_fd(fd); /* the command stopped reading */
+					end_close(e); /* the command stopped reading */
 				if (in_off == in_len)
-					close_fd(fd);
+					end_close(e);
 				continue;
 			}
-			got = read(*fd, chunk, sizeof chunk);
+			got = read(e->fd, chunk, sizeof chunk);
 			if (got > 0) {
 				if (buf_add(dst, chunk, (size_t)got) < 0)
 					failed = 1;
 			} else if (got == 0 || (errno != EAGAIN && errno != EINTR)) {
-				close_fd(fd);
+				end_close(e);
 			}
 		}
 	}
-	close_fd(&in_p[1]);
-	close_fd(&out_p[0]);
-	close_fd(&err_p[0]);
+	end_close(&to_in);
+	end_close(&from_out);
+	end_close(&from_err);
 	/* Its output is closed, but it may still be running: the bound covers the wait too. */
 	while (timeout_ms >= 0 && !timed_out) {
 		struct timespec now;
@@ -306,13 +368,7 @@ reaped:
 	}
 	return 3;
 
-spawn_failed:
-	close_fd(&in_p[0]);
-	close_fd(&in_p[1]);
-	close_fd(&out_p[0]);
-	close_fd(&out_p[1]);
-	close_fd(&err_p[0]);
-	close_fd(&err_p[1]);
+spawn_failed: /* no pipe is open by here */
 	for (i = 0; i < n; i++)
 		free(argv[i]);
 	free(argv);
