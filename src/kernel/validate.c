@@ -122,6 +122,7 @@ static int cmp_problem(const void *a, const void *b)
 static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, struct problems *ps)
 {
 	char **ids = NULL;
+	char ***needs_of = NULL; /* jobs[i].needs, owned: the dag sees them read-only */
 	struct qwe_dag_job *jobs = NULL;
 	size_t n = 0, cap = 0, i, k, ptr_size;
 	struct qwe_dag_error err;
@@ -153,9 +154,12 @@ static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, st
 	jobs = calloc(n ? n : 1, sizeof *jobs);
 	if (!jobs)
 		goto nomem;
+	needs_of = calloc(n ? n : 1, sizeof *needs_of);
+	if (!needs_of)
+		goto nomem;
 	for (i = 0; i < n; i++) {
 		size_t nn = 0;
-		const char **needs = NULL;
+		char **needs = NULL;
 
 		jobs[i].id = ids[i];
 		lua_getfield(L, -1, ids[i]);
@@ -165,7 +169,8 @@ static void check_dag(lua_State *L, int doc, const struct qwe_positions *pos, st
 			needs = calloc(nn ? nn : 1, sizeof *needs);
 			if (!needs)
 				goto nomem;
-			jobs[i].needs = needs;
+			needs_of[i] = needs;
+			jobs[i].needs = (const char *const *)needs;
 			jobs[i].nneeds = nn;
 			for (k = 0; k < nn; k++) {
 				lua_rawgeti(L, -1, (int)k + 1);
@@ -204,11 +209,12 @@ out:
 	lua_settop(L, base);
 	free(tok);
 	free(ptr);
-	for (i = 0; jobs && i < n; i++) {
+	for (i = 0; needs_of && i < n; i++) {
 		for (k = 0; k < jobs[i].nneeds; k++)
-			free((char *)jobs[i].needs[k]);
-		free((void *)jobs[i].needs);
+			free(needs_of[i][k]);
+		free(needs_of[i]);
 	}
+	free(needs_of);
 	for (i = 0; i < n; i++)
 		free(ids[i]);
 	free(jobs);

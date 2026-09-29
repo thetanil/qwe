@@ -60,8 +60,9 @@ static char *written(const char *workflow_file, const char *overall_outcome, lon
 
 TEST heading_jobs_and_steps(void)
 {
+	char id[] = "s1", plugin[] = "run";
 	struct qwe_step_result step = {
-		.id = "s1", .outcome = "success", .changed = 1, .duration_ms = 12, .plugin = "run",
+		.id = id, .outcome = "success", .changed = 1, .duration_ms = 12, .plugin = plugin,
 	};
 	struct qwe_job_result job = {
 		.id = "j", .outcome = "success", .duration_ms = 34, .steps = &step, .nsteps = 1,
@@ -91,9 +92,10 @@ TEST skipped_job_has_no_steps_table(void)
 /* success with changed false reports "unchanged"; a failed step's cell is blank. */
 TEST changed_column(void)
 {
+	char a[] = "a", b[] = "b";
 	struct qwe_step_result steps[2] = {
-		{.id = "a", .outcome = "success", .changed = 0, .duration_ms = 1},
-		{.id = "b", .outcome = "failed", .reason = "exit-code", .duration_ms = 2},
+		{.id = a, .outcome = "success", .changed = 0, .duration_ms = 1},
+		{.id = b, .outcome = "failed", .reason = "exit-code", .duration_ms = 2},
 	};
 	struct qwe_job_result job = {
 		.id = "j", .outcome = "failed", .duration_ms = 3, .steps = steps, .nsteps = 2,
@@ -192,7 +194,8 @@ static ssize_t flaky_write(void *cookie, const char *buf, size_t size)
  * ferror. */
 TEST mid_stream_write_failure_fails(void)
 {
-	struct qwe_step_result step = {.id = "s", .outcome = "success", .duration_ms = 1};
+	char s[] = "s";
+	struct qwe_step_result step = {.id = s, .outcome = "success", .duration_ms = 1};
 	struct qwe_job_result jobs[80];
 	cookie_io_functions_t io = {.write = flaky_write};
 	FILE *fp;
@@ -215,7 +218,7 @@ TEST mid_stream_write_failure_fails(void)
  * (escaped) bytes is cut with an ellipsis appended. */
 TEST cell_escaping(void)
 {
-	char long_id[250];
+	char long_id[250], pipe_and_newline[] = "a|b\nc";
 	struct qwe_step_result step;
 	struct qwe_job_result job;
 	char *out;
@@ -228,7 +231,7 @@ TEST cell_escaping(void)
 	ASSERT(strstr(out, "\xE2\x80\xA6")); /* the cut cell's ellipsis */
 	ASSERT_EQ(NULL, strstr(out, long_id)); /* the full, uncut id never appears */
 
-	step = (struct qwe_step_result){.id = "a|b\nc", .outcome = "success", .duration_ms = 1};
+	step = (struct qwe_step_result){.id = pipe_and_newline, .outcome = "success", .duration_ms = 1};
 	job = (struct qwe_job_result){.id = "j", .outcome = "success", .steps = &step, .nsteps = 1};
 	out = qwe_own(written("w.yaml", "success", 1, &job, 1));
 	ASSERT(strstr(out, "| a\\|b c | run |"));
@@ -244,8 +247,9 @@ TEST log_tail_block(void)
 	char logpath[64];
 	char *out;
 	FILE *fp;
-	struct qwe_step_result step = {.id = "s", .outcome = "failed", .reason = "exit-code", .duration_ms = 1};
-	struct qwe_step_result ok_step = {.id = "t", .outcome = "success", .duration_ms = 1};
+	char s[] = "s", t[] = "t";
+	struct qwe_step_result step = {.id = s, .outcome = "failed", .reason = "exit-code", .duration_ms = 1};
+	struct qwe_step_result ok_step = {.id = t, .outcome = "success", .duration_ms = 1};
 	struct qwe_job_result jobs[2];
 	int i;
 
@@ -284,7 +288,8 @@ TEST log_tail_block(void)
 TEST log_tail_missing_file_is_silent(void)
 {
 	char dir[] = "/tmp/qwe-summary-test-dir-XXXXXX";
-	struct qwe_step_result step = {.id = "s", .outcome = "failed", .reason = "exit-code"};
+	char s[] = "s";
+	struct qwe_step_result step = {.id = s, .outcome = "failed", .reason = "exit-code"};
 	struct qwe_job_result job = {.id = "j", .outcome = "failed", .steps = &step, .nsteps = 1};
 	char *out;
 
@@ -301,7 +306,8 @@ TEST log_tail_without_trailing_newline(void)
 {
 	char dir[] = "/tmp/qwe-summary-test-dir-XXXXXX";
 	char logpath[64];
-	struct qwe_step_result step = {.id = "s", .outcome = "failed", .reason = "exit-code"};
+	char s[] = "s";
+	struct qwe_step_result step = {.id = s, .outcome = "failed", .reason = "exit-code"};
 	struct qwe_job_result job = {.id = "j", .outcome = "failed", .steps = &step, .nsteps = 1};
 	FILE *fp;
 	char *out;

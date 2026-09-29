@@ -44,7 +44,8 @@ size_t qwe_sched_pass(const struct qwe_sched_job *jobs, size_t n, long max_paral
 		return count;
 
 	for (i = 0; i < n; i++)
-		running += qwe_lc_state_is_running(*jobs[i].state);
+		if (qwe_lc_state_is_running(*jobs[i].state))
+			running++;
 	for (i = 0; i < n; i++) {
 		if (*jobs[i].state != QWE_LC_READY)
 			continue;

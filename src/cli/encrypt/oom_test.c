@@ -18,7 +18,7 @@
 
 static int encrypt_stdin(void *arg)
 {
-	char *argv[] = {"encrypt", NULL};
+	const char *argv[] = {"encrypt", NULL};
 
 	(void)arg;
 	return qwe_cmd_encrypt(1, argv);

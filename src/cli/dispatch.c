@@ -40,7 +40,7 @@ static int usage(void)
 	return QWE_EXIT_USAGE;
 }
 
-int qwe_dispatch(int argc, char **argv)
+int qwe_dispatch(int argc, const char *const *argv)
 {
 	const struct qwe_subcommand *cmd;
 

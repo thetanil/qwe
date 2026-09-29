@@ -50,8 +50,8 @@
 #     skips them, so they are named, and printed as they are added;
 #   - every .bazelrc configuration in CONFIGS below that changes what the preprocessor
 #     sees: coverage (-DQWE_GCOV), valgrind and the sanitizers (a smoke test keys on
-#     them), fuzz (--define=qwe_fuzz=1). `release` is left out: it only adds -g,
-#     which is not among the kept flags. A configuration that adds no new pair still
+#     them), fuzz (--define=qwe_fuzz=1). `release` and `warnings-o2` are left out: they only
+#     add -g and -O2, which are not among the kept flags. A configuration that adds no new pair still
 #     runs the aquery and shows up in the configuration column of the pairs it shares.
 # A finding is reported once, by file:line, with the configurations it appeared under.
 set -euo pipefail

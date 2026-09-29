@@ -10,8 +10,8 @@
 #  1. every .github/workflows/<w>.yml has a badge in README.md, and every badge names a workflow file
 #  2. every command in the "Every push" and "On demand" code blocks of docs/ci-checks.md
 #     appears in some workflow file
-#  4. nightly.yml calls its five gate workflows (tests asan ubsan static-analysis coverage);
-#     release.yml calls all six (those five plus valgrind)
+#  4. nightly.yml calls its seven gate workflows (tests asan ubsan static-analysis gcc-analyzer
+#     compiler-warnings coverage); release.yml calls all eight (those seven plus valgrind)
 #  5. valgrind.yml and fuzz.yml each have their own schedule trigger and no push trigger, and
 #     nightly.yml does not call either of them by workflow_call (each schedules itself instead,
 #     a few minutes after nightly.yml's own cron, so its badge reflects a real nightly run --
@@ -66,13 +66,13 @@ check_repo() {
 		fi
 	done
 	! grep -q "uses: ./.github/workflows/fuzz.yml" .github/workflows/release.yml 2>/dev/null || { echo "rule 5: release.yml must not call fuzz.yml" >&2; bad=1; }
-	for g in tests asan ubsan static-analysis coverage; do
+	for g in tests asan ubsan static-analysis gcc-analyzer compiler-warnings coverage; do
 		if ! grep -q "uses: ./.github/workflows/$g.yml" .github/workflows/nightly.yml 2>/dev/null; then
 			echo "rule 4: nightly.yml does not call $g.yml" >&2
 			bad=1
 		fi
 	done
-	for g in tests asan ubsan valgrind static-analysis coverage; do
+	for g in tests asan ubsan valgrind static-analysis gcc-analyzer compiler-warnings coverage; do
 		if ! grep -q "uses: ./.github/workflows/$g.yml" .github/workflows/release.yml 2>/dev/null; then
 			echo "rule 4: release.yml does not call $g.yml" >&2
 			bad=1

@@ -64,7 +64,8 @@ static size_t count_running(const struct graph *g)
 	size_t i, r = 0;
 
 	for (i = 0; i < g->n; i++)
-		r += qwe_lc_state_is_running(g->state[i]);
+		if (qwe_lc_state_is_running(g->state[i]))
+			r++;
 	return r;
 }
 

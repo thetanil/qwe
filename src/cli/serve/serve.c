@@ -1,7 +1,7 @@
 #include "src/cli/serve/serve.h"
 #include "src/kernel/qwe.h"
 
-int qwe_cmd_serve(int argc, char **argv)
+int qwe_cmd_serve(int argc, const char *const *argv)
 {
 	(void)argc;
 	(void)argv;

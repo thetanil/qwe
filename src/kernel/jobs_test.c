@@ -2,6 +2,8 @@
 #include "src/kernel/jobs.h"
 
 #include <lauxlib.h>
+#include <limits.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,6 +13,10 @@ void *__real_calloc(size_t a, size_t b);
 char *__real_strdup(const char *s);
 void __real_free(void *p);
 void *__real_realloc(void *p, size_t n);
+void *__wrap_calloc(size_t a, size_t b);
+char *__wrap_strdup(const char *s);
+void *__wrap_realloc(void *p, size_t n);
+void __wrap_free(void *p);
 
 /* Allocation number fail_at (1-based, over calloc, strdup and realloc) returns NULL; 0 = never. */
 static int fail_at, calls;
@@ -115,6 +121,29 @@ TEST timeout_conversion_is_total(void)
 	PASS();
 }
 
+/* max-parallel: and max-sessions: at the edges of a long, and past them. */
+TEST count_conversion_is_total(void)
+{
+	ASSERT_EQ(1, qwe_count_from_number(1));
+	ASSERT_EQ(1, qwe_count_from_number(1.9)); /* truncated, as the cast did */
+	ASSERT_EQ(8, qwe_count_from_number(8));
+	ASSERT_EQ(1L << 62, qwe_count_from_number(ldexp(1, 62)));
+	/* the largest double below 2^63, and a long */
+	ASSERT_EQ(LONG_MAX - 1023, qwe_count_from_number(ldexp(1, 63) - 1024));
+	/* 2^63 and up is clamped: the cast would be undefined */
+	ASSERT_EQ(LONG_MAX, qwe_count_from_number(ldexp(1, 63)));
+	ASSERT_EQ(LONG_MAX, qwe_count_from_number(1e300));
+	ASSERT_EQ(LONG_MAX, qwe_count_from_number(HUGE_VAL));
+	/* the schema refuses these; they are 0, never a negative count */
+	ASSERT_EQ(0, qwe_count_from_number(0.5));
+	ASSERT_EQ(0, qwe_count_from_number(0));
+	ASSERT_EQ(0, qwe_count_from_number(-1));
+	ASSERT_EQ(0, qwe_count_from_number(-1e300));
+	ASSERT_EQ(0, qwe_count_from_number(-HUGE_VAL));
+	ASSERT_EQ(0, qwe_count_from_number(nan("")));
+	PASS();
+}
+
 TEST jobs_free_releases_everything(void)
 {
 	lua_State *L = luaL_newstate();
@@ -216,6 +245,7 @@ SUITE(jobs)
 	RUN_TEST(jobs_free_handles_partial_load);
 	RUN_TEST(jobs_free_releases_everything);
 	RUN_TEST(timeout_conversion_is_total);
+	RUN_TEST(count_conversion_is_total);
 }
 
 GREATEST_MAIN_DEFS();

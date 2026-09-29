@@ -48,7 +48,7 @@ static int read_stdin(uint8_t **out, size_t *len)
 /* The plaintext is read from stdin, never from an argument: an argument is in
  * the shell's history and in `ps` for every user. One trailing newline is not
  * part of the secret (echo adds it); use printf %s to be exact about the rest. */
-int qwe_cmd_encrypt(int argc, char **argv)
+int qwe_cmd_encrypt(int argc, const char *const *argv)
 {
 	char err[512], *envelope;
 	uint8_t key[QWE_KEY_BYTES], *plain = NULL;

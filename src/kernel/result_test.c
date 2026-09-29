@@ -66,8 +66,9 @@ TEST escaping(void)
 /* Ids, reasons and detail come from authored YAML: all of them go through the escaper. */
 TEST hostile_text_in_a_result(void)
 {
+	char id[] = "s\"1";
 	struct qwe_step_result step = {
-		.id = "s\"1", .outcome = "failed", .reason = "bad\nreason", .changed = 0, .outputs_json = NULL,
+		.id = id, .outcome = "failed", .reason = "bad\nreason", .changed = 0, .outputs_json = NULL,
 	};
 	struct qwe_job_result job = {
 		.id = "j\\1", .outcome = "cancelled", .reason = "r\"", .detail = "d\x01",
@@ -97,11 +98,12 @@ TEST hostile_text_in_a_result(void)
  * (never started). */
 TEST duration_written(void)
 {
+	char s[] = "s", t[] = "t";
 	struct qwe_step_result step = {
-		.id = "s", .outcome = "success", .changed = 0, .duration_ms = 5,
+		.id = s, .outcome = "success", .changed = 0, .duration_ms = 5,
 	};
 	struct qwe_step_result skipped_step = {
-		.id = "t", .outcome = "skipped", .duration_ms = -1,
+		.id = t, .outcome = "skipped", .duration_ms = -1,
 	};
 	struct qwe_step_result steps[2];
 	struct qwe_job_result job = {

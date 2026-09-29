@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 void *__real_calloc(size_t a, size_t b);
+void *__wrap_calloc(size_t a, size_t b);
 
 static pid_t parent_pid;
 

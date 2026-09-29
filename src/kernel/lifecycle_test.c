@@ -271,10 +271,10 @@ static enum qwe_lc_state walk(enum qwe_lc_state s, const struct step *steps, siz
 #define SCENARIO(name, start, end, ...) \
 	TEST scenario_##name(void) \
 	{ \
-		static const struct step steps[] = {__VA_ARGS__}; \
+		const struct step steps[] = {__VA_ARGS__}; \
 		enum qwe_lc_state got = walk(start, steps, sizeof steps / sizeof *steps, where, sizeof where); \
 		ASSERTm(where, got != QWE_LC_NSTATES); \
-		ASSERT_EQ_FMT((enum qwe_lc_state)end, got, "%d"); \
+		ASSERT_EQ_FMT((enum qwe_lc_state)end, got, "%u"); \
 		PASS(); \
 	}
 

@@ -75,9 +75,9 @@ ways wider than `//src/... + //tools/...` in the default configuration:
   `asan` (each adds one `-DQWE_SMOKE_*` build of `sanitizer_smoke_test.c`) and
   `fuzz` (`--define=qwe_fuzz=1`). Measured at `995b7b3`, `fuzz` adds no pair the
   default configuration does not have, and is still enumerated, so a `select()`
-  or `#ifdef` that starts to key on it is linted from that commit. `release` is
-  the one configuration left out: it only adds `-g`, which is not among the
-  flags `run.sh` keeps.
+  or `#ifdef` that starts to key on it is linted from that commit. `release` and
+  `warnings-o2` are the configurations left out: they only add `-g` and `-O2`,
+  which are not among the flags `run.sh` keeps.
 
 A finding is reported once, by `file:line`, with the configurations it appeared
 under (`in: src/kernel/proc.c [coverage] -DQWE_GCOV; ...`), however many pairs
@@ -533,9 +533,9 @@ tools/gcc-analyzer/run.sh
 ```
 
 A second analyzer, independent of the one above: GCC's own `-fanalyzer`, on the
-toolchain the build already uses (`.scratch/sca-round3` ticket 07). It runs as
-the `gcc-analyzer` job in `static-analysis.yml`, beside clang-tidy, so on every
-push, pull request, nightly and release. `.bazelrc`'s `--config=analyzer` adds
+toolchain the build already uses (`.scratch/sca-round3` ticket 07). It runs in its
+own `gcc-analyzer.yml` (its own README badge), on every push, pull request,
+nightly and release, like clang-tidy's `static-analysis.yml`. `.bazelrc`'s `--config=analyzer` adds
 `-fanalyzer` to `src/` and `tools/` only; the global `-Werror` makes any
 `-Wanalyzer-*` finding a failed build. `third_party/` is upstream's, and analyzing
 LuaJIT would be most of the cost. As scoped, the gate adds about 4 s to a

@@ -129,7 +129,7 @@ TEST unbalanced_end_is_refused(void)
 
 TEST embedded_nul_is_text(void)
 {
-	static const char value[] = "null\0x"; /* 6 bytes: a prefix match would call it null */
+	static const yaml_char_t value[] = "null\0x"; /* 6 bytes: a prefix match would call it null */
 	yaml_event_t ev[4];
 	uint8_t *out;
 	size_t out_len, len = 0;
@@ -139,7 +139,7 @@ TEST embedded_nul_is_text(void)
 
 	yaml_document_start_event_initialize(&ev[0], NULL, NULL, NULL, 1);
 	yaml_sequence_start_event_initialize(&ev[1], NULL, NULL, 1, YAML_BLOCK_SEQUENCE_STYLE);
-	yaml_scalar_event_initialize(&ev[2], NULL, NULL, (yaml_char_t *)value, 6, 1, 1, YAML_PLAIN_SCALAR_STYLE);
+	yaml_scalar_event_initialize(&ev[2], NULL, NULL, value, 6, 1, 1, YAML_PLAIN_SCALAR_STYLE);
 	yaml_sequence_end_event_initialize(&ev[3]);
 	ASSERT_EQ(0, qwe_yaml_events_for_test(ev, 4, &out, &out_len, err, sizeof err));
 	ASSERT_EQ(CborNoError, cbor_parser_init(out, out_len, 0, &parser, &it));

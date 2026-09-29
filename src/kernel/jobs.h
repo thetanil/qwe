@@ -81,6 +81,12 @@ struct job {
  * conversion never overflows and never turns a real limit into "none". */
 long qwe_timeout_ms_at(lua_State *L, int idx);
 
+/* A count the schema gives as an integer of at least 1 (max-parallel:, max-sessions:),
+ * as a long. The cast only sees a value a long holds, since (long) on a double
+ * out of range is undefined: from 2^63 up it is LONG_MAX; below 1, and NaN, which
+ * the schema refuses, it is 0. */
+long qwe_count_from_number(lua_Number v);
+
 /* Reads the jobs out of the decoded workflow (on top of L's stack) into a
  * list sorted by id, and refuses what the engine cannot run yet. Returns the
  * job count, or -1 after printing why. */

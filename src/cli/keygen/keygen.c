@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int qwe_cmd_keygen(int argc, char **argv)
+int qwe_cmd_keygen(int argc, const char *const *argv)
 {
 	char path[1024], err[512];
 

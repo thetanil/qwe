@@ -108,12 +108,15 @@ void qwe_positions_finish(struct qwe_positions *p)
 	qsort(p->e, p->n, sizeof *p->e, cmp);
 }
 
+/* bsearch's key is the pointer string itself: cmp's order, by pointer first. */
+static int cmp_key(const void *key, const void *elem)
+{
+	return strcmp(key, ((const struct entry *)elem)->pointer);
+}
+
 static const struct entry *find(const struct qwe_positions *p, const char *pointer)
 {
-	struct entry probe = {0};
-
-	probe.pointer = (char *)pointer;
-	return bsearch(&probe, p->e, p->n, sizeof *p->e, cmp);
+	return bsearch(pointer, p->e, p->n, sizeof *p->e, cmp_key);
 }
 
 int qwe_positions_value(const struct qwe_positions *p, const char *pointer, struct qwe_pos *out)

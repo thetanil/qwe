@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 int __real_clock_gettime(clockid_t clk, struct timespec *ts);
+int __wrap_clock_gettime(clockid_t clk, struct timespec *ts);
 
 static int fail_clock;
 

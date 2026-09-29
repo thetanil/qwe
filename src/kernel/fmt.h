@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static inline int qwe_vfmt(char *buf, size_t size, const char *fmt, va_list ap) __attribute__((format(printf, 3, 0)));
 static inline int qwe_vfmt(char *buf, size_t size, const char *fmt, va_list ap)
 {
 	int n = vsnprintf(buf, size, fmt, ap);

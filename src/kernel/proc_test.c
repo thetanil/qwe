@@ -20,7 +20,8 @@
 
 static char **argv_true(void *arg, int result_fd)
 {
-	static char *argv[] = {"sh", "-c", "exit 0", NULL};
+	static char sh[] = "sh", c[] = "-c", script[] = "exit 0";
+	static char *argv[] = {sh, c, script, NULL};
 	(void)arg;
 	(void)result_fd;
 	return argv;
@@ -99,7 +100,8 @@ static int stat_group_session(const char *line, long *pgrp, long *sid)
 
 static char **argv_sleep_long(void *arg, int result_fd)
 {
-	static char *argv[] = {"sleep", "1000", NULL};
+	static char cmd[] = "sleep", secs[] = "1000";
+	static char *argv[] = {cmd, secs, NULL};
 	(void)arg;
 	(void)result_fd;
 	return argv;
@@ -152,7 +154,8 @@ TEST master_outside_step_groups(void)
 
 static char **argv_two_sleeps(void *arg, int result_fd)
 {
-	static char *argv[] = {"sh", "-c", "sleep 1000 & sleep 1000", NULL};
+	static char sh[] = "sh", c[] = "-c", script[] = "sleep 1000 & sleep 1000";
+	static char *argv[] = {sh, c, script, NULL};
 	(void)arg;
 	(void)result_fd;
 	return argv;
@@ -254,7 +257,8 @@ static char **argv_orphan(void *arg, int result_fd)
 {
 	/* The leader starts a background sleep, prints its pid and exits: the
 	 * sleep is an orphan in the leader's group. */
-	static char *argv[] = {"sh", "-c", "sleep 1000 & echo $!; exit 0", NULL};
+	static char sh[] = "sh", c[] = "-c", script[] = "sleep 1000 & echo $!; exit 0";
+	static char *argv[] = {sh, c, script, NULL};
 	(void)arg;
 	(void)result_fd;
 	return argv;
@@ -308,7 +312,7 @@ TEST subreaper_reaps_orphans(void)
 
 /* A spawn that cannot get its pipes says which pipe call failed, with errno,
  * and leaks no descriptor. The limit is set to leave room for 0, 1 or 2 new fds. */
-static int spawn_with_fd_room(int room, struct qwe_proc *p, int *open_before, int *open_after)
+static int spawn_with_fd_room(rlim_t room, struct qwe_proc *p, int *open_before, int *open_after)
 {
 	struct rlimit lim, old;
 	int first = dup(0), rc, again;
@@ -355,7 +359,8 @@ static char **argv_none(void *arg, int result_fd)
 
 static char **argv_missing(void *arg, int result_fd)
 {
-	static char *argv[] = {"/nonexistent/qwe-no-such-program", NULL};
+	static char missing[] = "/nonexistent/qwe-no-such-program";
+	static char *argv[] = {missing, NULL};
 	(void)arg;
 	(void)result_fd;
 	return argv;

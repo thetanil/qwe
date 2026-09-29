@@ -21,9 +21,12 @@ TEST fmt_reports_truncation(void)
 /* qwe_msg cuts a message short and still terminates it. */
 TEST msg_cuts(void)
 {
+	/* volatile: a cut the compiler can prove is a -Wformat-truncation error at -O2,
+	 * and the cut is what this tests */
+	const char *volatile text = "error 42";
 	char buf[4];
 
-	qwe_msg(buf, sizeof buf, "error %d", 42);
+	qwe_msg(buf, sizeof buf, "%s", text);
 	ASSERT_STR_EQ("err", buf);
 	PASS();
 }

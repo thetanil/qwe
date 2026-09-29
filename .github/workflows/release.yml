@@ -23,6 +23,10 @@ jobs:
     uses: ./.github/workflows/valgrind.yml
   static-analysis:
     uses: ./.github/workflows/static-analysis.yml
+  gcc-analyzer:
+    uses: ./.github/workflows/gcc-analyzer.yml
+  compiler-warnings:
+    uses: ./.github/workflows/compiler-warnings.yml
   coverage:
     uses: ./.github/workflows/coverage.yml
     permissions: # the called workflow's pages job asks for these, though it only runs on a push to main
@@ -36,7 +40,7 @@ jobs:
     with:
       perf-gate: true
   publish:
-    needs: [tests, asan, ubsan, valgrind, static-analysis, coverage, smoke]
+    needs: [tests, asan, ubsan, valgrind, static-analysis, gcc-analyzer, compiler-warnings, coverage, smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

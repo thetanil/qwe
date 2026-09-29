@@ -11,7 +11,7 @@ static int usage(void)
 	return QWE_EXIT_USAGE;
 }
 
-int qwe_cmd_validate(int argc, char **argv)
+int qwe_cmd_validate(int argc, const char *const *argv)
 {
 	const char *path = NULL, *inventory = NULL;
 	int i;
