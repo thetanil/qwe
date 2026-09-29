@@ -122,12 +122,19 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 		lua_getfield(L, -1, "needs");
 		if (lua_istable(L, -1)) {
 			size_t nn = lua_objlen(L, -1);
+			/* Filled through this local, not j->needs: j is jobs[i], so
+			 * j->needs sits at a symbolic offset, and GCC 13's analyzer
+			 * drops that binding when needs[k] (another symbolic offset)
+			 * is stored, reporting the strdup as leaked (ticket
+			 * sca-round3/07). Nothing leaks: j->needs owns the array
+			 * before the first strdup, and qwe_jobs_free frees it. */
+			char **needs = calloc(nn ? nn : 1, sizeof *needs);
 
-			j->needs = calloc(nn ? nn : 1, sizeof *j->needs);
-			if (!j->needs)
+			if (!needs)
 				goto nomem;
+			j->needs = needs;
 			j->nneeds = nn;
-			for (k = 0; k < j->nneeds; k++) {
+			for (k = 0; k < nn; k++) {
 				const char *s;
 
 				lua_rawgeti(L, -1, (int)k + 1);
@@ -141,8 +148,8 @@ long qwe_jobs_load(lua_State *L, const char *path, struct job **out)
 					bad = refuse(path, "job", j->id, "needs", "must be strings");
 					break;
 				}
-				j->needs[k] = strdup(s);
-				if (!j->needs[k])
+				needs[k] = strdup(s);
+				if (!needs[k])
 					goto nomem;
 				lua_pop(L, 1);
 			}

@@ -74,3 +74,9 @@ build:fuzz --copt=-Wno-unknown-warning-option --host_copt=-Wno-unknown-warning-o
 build:fuzz --define=qwe_fuzz=1
 # Coverage feedback for our own code only (src/): third_party (libyaml, LuaJIT) is not fuzzed for now.
 build:fuzz --per_file_copt=^src/.*@-fsanitize=fuzzer-no-link
+
+# GCC's static analyzer (ticket sca-round3/07), a second analyzer independent of
+# clang-tidy's. Our own code only: third_party is upstream's, and analyzing LuaJIT
+# is most of the cost. -Werror above makes any -Wanalyzer-* finding fail the build.
+# tools/gcc-analyzer/run.sh runs it against the GCC pinned in tools/gcc-analyzer/pin.env.
+build:analyzer --per_file_copt=^src/.*,^tools/.*@-fanalyzer
