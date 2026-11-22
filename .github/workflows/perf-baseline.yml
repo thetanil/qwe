@@ -35,9 +35,23 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      - uses: ./.github/actions/setup
+      # Nothing after the checkout of inputs.ref may come from the workspace (`uses: ./...`) or
+      # save a cache: the ref supplies its own action.yml and build rules, and a cache saved here
+      # lands in the default branch's scope, which every gate restores. So setup-bazel is called
+      # directly, pinned as in .github/actions/setup, with every cache off. The cold build costs
+      # a few minutes, and a release binary built from scratch is the better thing to measure.
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          cache-key: release
+          bazelisk-cache: false
+          disk-cache: false
+          repository-cache: false
+          cache-save: false
+      - name: Bazel is the pinned version
+        run: |
+          want=$(cat .bazelversion)
+          got=$(bazel --version)
+          echo "$got"
+          [ "$got" = "bazel $want" ] || { echo "want bazel $want" >&2; exit 1; }
       - run: bazel build --config=release //src/cli:qwe
       - run: |
           mkdir out

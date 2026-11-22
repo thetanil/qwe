@@ -1,6 +1,6 @@
 # 33: `perf-baseline.yml` must not save a cache from the ref it measures
 
-Status: ready-for-agent
+Status: in-progress (PR open; criteria 3 and 4 need the fix on main and a dispatch run from the branch)
 Category: bug
 Type: task
 
@@ -46,16 +46,31 @@ while there, and say so in the Comments.
 
 ## Acceptance criteria
 
-- [ ] No step in `perf-baseline.yml` that runs after the checkout of `inputs.ref` comes from
+- [x] No step in `perf-baseline.yml` that runs after the checkout of `inputs.ref` comes from
       the workspace (`uses: ./...`) or saves an Actions cache. `manual: read the workflow`
-- [ ] The build job still pins Bazel to `.bazelversion`. `manual`
+- [x] The build job still pins Bazel to `.bazelversion`. `manual`
 - [ ] Code scanning alert #11 is closed by the fix (not dismissed).
       `manual: gh api repos/thetanil/qwe/code-scanning/alerts/11 --jq .state`
 - [ ] A manual `perf-baseline` run from the branch builds, measures and opens its proposal
       PR, and the Actions cache list shows no entry saved by that run.
       `manual: gh workflow run perf-baseline.yml --ref <branch> -f version=... ; gh cache list`
       (the proposal PR it opens is closed unmerged)
-- [ ] `//tools/ci:workflows_test` passes (rule 7: perf-baseline stays dispatch-only and
+- [x] `//tools/ci:workflows_test` passes (rule 7: perf-baseline stays dispatch-only and
       uncalled).
 
 ## Comments
+
+- `build` now calls `bazel-contrib/setup-bazel@0.19.0` directly (same pin as
+  `.github/actions/setup`) with `bazelisk-cache`, `disk-cache`, `repository-cache` and
+  `cache-save` all `false`, and keeps the "Bazel is the pinned version" step as a direct step.
+  Nothing after the checkout of `inputs.ref` is `uses: ./...` any more, and nothing saves a cache.
+  `docs/ci-checks.md` says why.
+- Confirmed by reading the workflow: `measure` uses no cache and runs under the top-level
+  `contents: read`; `propose` checks out the default branch, not `inputs.ref`.
+- `bazel test //tools/ci:workflows_test` passes. `bazel test //...` is green (265 passed, 3
+  skipped) only with `--spawn_strategy=local` in this devcontainer: under the default sandbox 16
+  secret/encrypt e2e cases fail on `chmod ... Read-only file system`, and they fail the same way
+  on a clean `main`, so it is the environment and not this change.
+- Still open: criterion 3 (alert #11 closes when the fix is on `main` and CodeQL rescans) and
+  criterion 4 (a manual `perf-baseline` run from this branch, then `gh cache list`, then the
+  proposal PR closed unmerged).
