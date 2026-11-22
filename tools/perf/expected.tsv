@@ -1,53 +1,53 @@
-# version: v0.3.0-m2
-# Measured by .github/workflows/perf-baseline.yml run 36308620510: main (f359b9b4337d18c28a145aec47097955b1abc51b), the release build, 51 rounds on each of five GitHub-hosted ubuntu-24.04 runners.
-# perf-samples-1: 4 vCPU, AMD EPYC 7763 64-Core Processor, 6.17.0-1022-azure
-# perf-samples-2: 4 vCPU, AMD EPYC 9V45 96-Core Processor, 6.17.0-1022-azure
-# perf-samples-3: 4 vCPU, AMD EPYC 9V74 80-Core Processor, 6.17.0-1022-azure
-# perf-samples-4: 4 vCPU, AMD EPYC 9V74 80-Core Processor, 6.17.0-1022-azure
-# perf-samples-5: 4 vCPU, Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz, 6.17.0-1022-azure
-# source: perf-samples-1/samples.tsv bins=B rows=2040
-# source: perf-samples-2/samples.tsv bins=B rows=2040
-# source: perf-samples-3/samples.tsv bins=B rows=2040
-# source: perf-samples-4/samples.tsv bins=B rows=2040
-# source: perf-samples-5/samples.tsv bins=B rows=2040
+# version: v0.0.0-ticket33
+# Measured by .github/workflows/perf-baseline.yml run 45014976300: main (34f108395c4abab9fc1e2769610b76261a75992e), the release build, 11 rounds on each of five GitHub-hosted ubuntu-24.04 runners.
+# perf-samples-1: 4 vCPU, AMD EPYC 7763 64-Core Processor, 7.0.0-1017-azure
+# perf-samples-2: 4 vCPU, AMD EPYC 9V74 80-Core Processor, 7.0.0-1017-azure
+# perf-samples-3: 4 vCPU, Intel(R) Xeon(R) 6975P-C, 7.0.0-1014-aws
+# perf-samples-4: 4 vCPU, AMD EPYC 7763 64-Core Processor, 7.0.0-1017-azure
+# perf-samples-5: 4 vCPU, AMD EPYC 7763 64-Core Processor, 7.0.0-1017-azure
+# source: perf-samples-1/samples.tsv bins=B rows=440
+# source: perf-samples-2/samples.tsv bins=B rows=440
+# source: perf-samples-3/samples.tsv bins=B rows=440
+# source: perf-samples-4/samples.tsv bins=B rows=440
+# source: perf-samples-5/samples.tsv bins=B rows=440
 key	median_us	p90_us	n
-smoke_run/wall	66304	89187	255
-smoke_run/run	7000	11000	255
-smoke_run/run/0	2000	3000	255
-smoke_run/run/1	1000	2000	255
-smoke_run/run/2	0	0	255
-smoke_run/run/3	0	0	255
-smoke_run/run/4	1000	2000	255
-smoke_run/run/5	0	0	255
-smoke_file/wall	135524	164864	255
-smoke_file/file	71000	86000	255
-smoke_file/file/0	14000	17000	255
-smoke_file/file/1	6000	8000	255
-smoke_file/file/2	0	0	255
-smoke_file/file/3	0	0	255
-smoke_file/file/4	0	0	255
-smoke_file/file/5	0	0	255
-smoke_file/file/6	14000	17000	255
-smoke_file/file/7	4000	5000	255
-smoke_file/file/8	6000	8000	255
-smoke_file/file/9	0	0	255
-smoke_file/file/10	14000	17000	255
-smoke_file/file/11	6000	8000	255
-smoke_file/file/12	0	0	255
-smoke_graph/wall	64927	86540	255
-smoke_graph/a	3000	5000	255
-smoke_graph/b	2000	3000	255
-smoke_graph/c	2000	3000	255
-smoke_graph/d	1000	2000	255
-smoke_graph/a/0	2000	2000	255
-smoke_graph/a/1	1000	2000	255
-smoke_graph/b/0	2000	3000	255
-smoke_graph/c/0	2000	3000	255
-smoke_graph/d/0	1000	2000	255
-smoke_project_plugin/wall	72192	92168	255
-smoke_project_plugin/first	3000	4000	255
-smoke_project_plugin/second	9000	12000	255
-smoke_project_plugin/first/0	3000	3000	255
-smoke_project_plugin/second/0	2000	3000	255
-smoke_project_plugin/second/1	6000	8000	255
-smoke_project_plugin/second/2	0	0	255
+smoke_run/wall	80178	91341	55
+smoke_run/run	10000	13000	55
+smoke_run/run/0	2000	3000	55
+smoke_run/run/1	2000	2000	55
+smoke_run/run/2	0	1000	55
+smoke_run/run/3	0	1000	55
+smoke_run/run/4	2000	3000	55
+smoke_run/run/5	0	1000	55
+smoke_file/wall	167142	190681	55
+smoke_file/file	93000	109000	55
+smoke_file/file/0	18000	21000	55
+smoke_file/file/1	8000	10000	55
+smoke_file/file/2	0	1000	55
+smoke_file/file/3	0	1000	55
+smoke_file/file/4	0	1000	55
+smoke_file/file/5	0	1000	55
+smoke_file/file/6	18000	20000	55
+smoke_file/file/7	5000	6000	55
+smoke_file/file/8	8000	10000	55
+smoke_file/file/9	0	1000	55
+smoke_file/file/10	18000	20000	55
+smoke_file/file/11	8000	10000	55
+smoke_file/file/12	0	1000	55
+smoke_graph/wall	79419	91678	55
+smoke_graph/a	5000	6000	55
+smoke_graph/b	3000	3000	55
+smoke_graph/c	3000	3000	55
+smoke_graph/d	2000	2000	55
+smoke_graph/a/0	2000	3000	55
+smoke_graph/a/1	2000	3000	55
+smoke_graph/b/0	3000	3000	55
+smoke_graph/c/0	3000	3000	55
+smoke_graph/d/0	2000	2000	55
+smoke_project_plugin/wall	85803	93921	55
+smoke_project_plugin/first	3000	4000	55
+smoke_project_plugin/second	12000	15000	55
+smoke_project_plugin/first/0	3000	4000	55
+smoke_project_plugin/second/0	3000	3000	55
+smoke_project_plugin/second/1	8000	9000	55
+smoke_project_plugin/second/2	0	1000	55
