@@ -139,6 +139,11 @@ pools the samples with `tools/perf/expect.sh`, and opens a pull request that rep
 value. Merge it like any other change. Doing so expires the `tools/perf/allow-list.txt` lines for
 the old version.
 
+The build job runs the code of `ref`, which can be any branch, tag or commit, so it saves no
+cache and loads nothing from the checked-out workspace: it calls `setup-bazel` directly with every
+cache off instead of `.github/actions/setup` (whose `action.yml` the ref would supply), and
+builds cold. A cache it saved would land in the default branch's scope, which every gate restores.
+
 Run it when code got faster or slower on purpose, when the report on pushes to `main` has been
 drifting for no code reason (GitHub moved its runners to other CPUs), or before a release whose
 perf gate would otherwise fail on a change you accept. The PR needs the repo setting "Allow GitHub
